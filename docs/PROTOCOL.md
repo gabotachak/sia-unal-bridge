@@ -60,7 +60,12 @@ De la respuesta extraes:
 
 Guarda las cookies (`PortalJSESSION` y las `OAM*`).
 
-Costo: **~7 s y 1.1 MB**. Es de lejos lo más caro. Una vez por sesión, nunca por carrera.
+Costo: **muy variable, entre 0.15 s / 52 KB y ~7 s / 4.5 MB**, sin depender del UA ni
+del `Accept`. Sigue siendo lo más caro del flujo. Una vez por sesión, nunca por carrera.
+Ver [GOTCHAS.md §25](GOTCHAS.md).
+
+Y **no parsees la tabla de esta respuesta**: puede llegar poblada con el resultado de
+otra sesión ([GOTCHAS.md §22](GOTCHAS.md)).
 
 ---
 
@@ -141,7 +146,10 @@ pasos: ADF rechazaría `soc2=8` porque esa opción todavía no existe en su mode
 | 4 | valueChange | `pt1:r1:0:soc3` | carrera → puebla tipología |
 | 5 | action | `pt1:r1:0:cb1` | botón **Mostrar** → resultados |
 
-`soc4` (tipología) es opcional aquí: mándalo en `0`.
+`soc4` (tipología) puede ir vacío o en `0` — son equivalentes. Pero **`0` no significa
+"sin filtro"**: es `TODAS MENOS  LIBRE ELECCIÓN`. Este listado **nunca** trae las
+asignaturas de libre elección del plan; para esas hace falta §5.
+Ver [GOTCHAS.md §21](GOTCHAS.md).
 
 ### Cambiar de carrera es barato
 
@@ -226,30 +234,55 @@ Nunca la posición. Ver [GOTCHAS.md](GOTCHAS.md) §4.
 La sesión está en una de dos regiones:
 
 ```
-pt1:r1:0   buscador + tabla de resultados     ← operan cb1 y los cl2
-pt1:r1:1   detalle de una asignatura          ← opera cb4 (Volver)
+pt1:r1:0     buscador + tabla de resultados   ← operan cb1 y los cl2
+pt1:r1:<N>   detalle de una asignatura        ← opera cb4 (Volver)
 ```
 
-Tras abrir un detalle quedas en la región 1. **Cualquier** acción de la región 0
+Tras abrir un detalle quedas en la de detalle. **Cualquier** acción de la región 0
 —una búsqueda nueva o el detalle de otra asignatura— devuelve ~895 B vacíos hasta
-que salgas con Volver:
+que salgas con Volver.
+
+### `<N>` no es 1: crece con cada detalle
+
+Lo que más código rompe de todo este documento. El índice de la región de detalle
+**sube en cada detalle abierto** dentro de la misma sesión:
 
 ```
-event                       = pt1:r1:1:cb4
-event.pt1:r1:1:cb4          = <payload action>
-oracle.adf.view.rich.PROCESS= pt1:r1,pt1:r1:1:cb4
+1.er detalle → pt1:r1:1     2.º detalle → pt1:r1:2     98.º detalle → pt1:r1:98
 ```
 
-→ ~250 KB, re-renderiza la tabla. **Los `_afrRK` se renumeran aquí.**
+Con `pt1:r1:1:cb4` fijo, el segundo Volver devuelve 893 B y **todo lo posterior también**
+—búsquedas incluidas—, así que parece una sesión caducada que no lo está.
+Ver [GOTCHAS.md §20](GOTCHAS.md).
+
+Léelo de la respuesta del propio detalle:
+
+```
+id="pt1:r1:<N>:cb4"
+```
+
+y úsalo en el POST:
+
+```
+event                       = pt1:r1:<N>:cb4
+event.pt1:r1:<N>:cb4        = <payload action>
+oracle.adf.view.rich.PROCESS= pt1:r1,pt1:r1:<N>:cb4
+```
+
+→ ~257 KB, re-renderiza la tabla. **Los `_afrRK` se renumeran aquí.**
 
 ### Bucle para varias asignaturas
 
 ```
 por cada asignatura:
-    POST Volver            (~250 KB)   ─┐
-    re-parsear _afrRK                   │  ~1.5 s
-    POST click             (~48 KB)    ─┘
+    POST click             (~48 KB)    ─┐
+    leer N de id="pt1:r1:N:cb4"         │  ~1.0 s
+    POST Volver a pt1:r1:N:cb4 (~257 KB)│
+    re-parsear _afrRK                  ─┘
 ```
+
+Medido con el índice dinámico: **98 asignaturas de un plan, 201 POSTs, 99 s, 31 MB,
+cero atascos.**
 
 ---
 
@@ -326,11 +359,54 @@ Cupos disponibles: 32
 ...
 ```
 
-Los grupos se delimitan con `^\(\d+\)\s*Grupo`.
 `Cupos disponibles` es **por grupo**; no hay cupo a nivel de asignatura.
 
 **El conjunto de grupos depende de la carrera desde la que consultas.** Ver
 [GOTCHAS.md](GOTCHAS.md) §16.
+
+### Delimitar los grupos: `^\(\d+\)\s*Grupo` NO basta
+
+Los grupos PEAMA llevan otra cabecera y ese regex los descarta en silencio (son ~20 %
+de los observados). Ver [GOTCHAS.md §24](GOTCHAS.md):
+
+```
+(1) Grupo 1                            ← formato normal
+(TUMA-01) Peama - Tumaco - Grupo 1
+(ORIN-01) Peama-Orinoquia Grupo 1
+(SUMA-01) Grupo 1
+(CARI-01) PEAMA- PAET Caribe Grupo 1
+```
+
+Usa algo tolerante: `\([^)\n]{1,20}\)[^\n]{0,60}?Grupo\s*\S+`.
+
+Un grupo PEAMA además trae su propia sede (`Facultad: SEDE TUMACO`), distinta de la del
+plan desde el que consultas.
+
+### El detalle trae dos bloques más que no estaban documentados
+
+**Prerrequisitos** (en 22 de 36 asignaturas muestreadas), después de los grupos:
+
+```
+Prerrequisitos Condición 1 Tipo M ¿Todas? [N] Número asignaturas [1]
+1000004-B Cálculo diferencial
+2016377 Cálculo diferencial en una variable
+```
+
+`Tipo` es un enum que el propio SIA explica en la página: `M` no se puede matricular sin
+superarlo · `O` se matricula pero no se califica · `E` se puede cursar en simultáneo ·
+`A` anulación por incompatibilidad.
+
+**Contenido de la asignatura** (en 31 de 36), antes de los grupos, con los componentes:
+
+```
+Contenido de la asignatura
+CLASE TEORICA 2015555 (2015555)
+```
+
+Ninguno de los dos está en `DATA-MODEL.md`. Son gratis: vienen en el mismo POST del
+detalle. Si interesan, se modelan sin coste de red adicional.
+
+Otro marcador útil: `Horarios/Aula: No informado` para grupos sin horario asignado.
 
 ---
 
@@ -338,13 +414,18 @@ Los grupos se delimitan con `^\(\d+\)\s*Grupo`.
 
 | Operación | Tamaño | Tiempo |
 |---|---|---|
-| Bootstrap | 1.1 MB | ~7 s |
+| Bootstrap | 52 KB – 4.5 MB | 0.15 – 7 s |
 | Cascada, dropdown dependiente (`soc9`, `soc10`) | ~2 KB | ~470 ms |
 | Cascada, re-render de panel (resto) | ~33 KB | ~470 ms |
 | Consulta `cb1`, 98 filas | 241 KB | ~470 ms |
 | Consulta `cb1`, 240 filas | 514 KB | ~1 s |
 | Consulta `cb1` con `it11` | 15–27 KB | ~470 ms |
-| Volver | ~250 KB | ~470 ms |
-| Detalle (1 POST) | 48 KB–260 KB | ~500 ms |
+| Volver | ~257 KB | ~470 ms |
+| Detalle (1 POST) | 8 KB–264 KB | ~500 ms |
+| Censo de dropdowns (nivel × sede × facultad) | 131 MB | 142 POSTs / 78 s |
 
-Una carrera completa (98 asignaturas con detalle) ≈ **2.5 min y ~30 MB**.
+Una carrera completa (98 asignaturas con detalle) = **201 POSTs, 99 s, 31 MB**, medido
+de punta a punta con el Volver dinámico de §7.
+
+El SIA aguanta **8 sesiones concurrentes** sin errores ni throttling, y la latencia por
+búsqueda no se degrada (0.5-0.9 s con N=1 y con N=8).

@@ -25,7 +25,7 @@ Los ids llevan al menos desde marzo de 2026 sin cambiar, pero son frágiles por 
 | `pt1:r1:0:cb1` | button | **Mostrar** | dispara la consulta |
 | `pt1:r1:0:t4` | table | tabla de resultados | selección de fila |
 | `pt1:r1:0:t4:{RK}:cl2` | link | código de la fila `{RK}` | abre el detalle |
-| `pt1:r1:1:cb4` | button | **Volver** | sale del detalle (región 1) |
+| `pt1:r1:<N>:cb4` | button | **Volver** | sale del detalle; **`N` sube con cada detalle**, léelo de la respuesta ([GOTCHAS §20](GOTCHAS.md)) |
 | `pt1:r1` | region | región raíz | valor de `PROCESS` |
 
 Ocultos del formulario:
@@ -96,7 +96,26 @@ Las opciones dependen de `soc10`; hay que releerlas tras cada cambio de sede.
 Vienen **vacías** en la página inicial. Se pueblan al disparar el dropdown anterior.
 Hay que leer sus opciones de la respuesta de ese paso.
 
-Valor conocido de `soc4`: **`7` = LIBRE ELECCIÓN**.
+### `soc4` — Tipología (se puebla al elegir carrera)
+
+| Valor | Etiqueta | Filas en Ing. Sistemas y Comp. |
+|---|---|---|
+| *(vacío)* | — | 98 (idéntico a `0`) |
+| `0` | **TODAS MENOS  LIBRE ELECCIÓN** | 98 |
+| `1` | DISCIPLINAR OPTATIVA | 38 |
+| `2` | FUND. OBLIGATORIA | 5 |
+| `3` | FUND. OPTATIVA | 20 |
+| `4` | TRABAJO DE GRADO | 3 |
+| `5` | DISCIPLINAR OBLIGATORIA | 13 |
+| `6` | NIVELACIÓN | 19 |
+| `7` | **LIBRE ELECCIÓN** → activa el segundo buscador | — |
+
+Los subfiltros parten exactamente el total (38+5+20+3+13+19 = 98). Que `0` excluya las
+libres es la trampa: el listado "completo" de un plan no lo es.
+Ver [GOTCHAS.md §21](GOTCHAS.md).
+
+En **doctorado y postgrado** (`soc1` = 1 o 2) la opción `LIBRE ELECCIÓN` no existe: el
+buscador de electivas es solo de pregrado.
 
 ### `soc3` — Carreras de Ingeniería (nivel=0, sede=2, facultad=8)
 
@@ -121,6 +140,34 @@ Ojo: hay **nombres repetidos con código institucional distinto** (`2A74` y `287
 ambos "Ingeniería de Sistemas y Computación"; `2544` y `2983`, ambos "Eléctrica").
 Son versiones curriculares distintas. Resolver por nombre es ambiguo — guarda el
 índice **y** el nombre completo con su código institucional.
+
+Y al revés: el **mismo código institucional aparece en varias sedes** (PEAMA). El
+código solo tampoco identifica. Ver [GOTCHAS.md §26](GOTCHAS.md).
+
+### Censo completo de los dropdowns (2026-08-15)
+
+Recorriendo `soc1 × soc9 × soc2 × soc3`: **142 POSTs, 78 s, 1380 entradas de programa**.
+
+| Nivel | Facultades | Entradas de programa |
+|---|---|---|
+| Pregrado (`0`) | 55 | 665 |
+| Doctorado (`1`) | 25 | 82 |
+| Postgrados y másteres (`2`) | 32 | 633 |
+
+Pregrado por sede:
+
+```
+BOGOTÁ     13 fac ·  65      AMAZONIA    5 fac · 125
+MEDELLÍN   11 fac ·  55      CARIBE      3 fac · 121
+MANIZALES   6 fac ·  26      ORINOQUIA   6 fac · 128
+PALMIRA     4 fac ·  12      TUMACO      5 fac · 126
+LA PAZ      2 fac ·   7
+```
+
+Las sedes de presencia nacional listan **más** programas que Bogotá porque reexponen los
+de otras sedes. Dentro de ellas hay una **facultad comodín con código terminado en
+`000`** (`6000 SEDE AMAZONIA`, `7000 SEDE ORINOQUIA`, `8000 SEDE CARIBE`,
+`9000 SEDE TUMACO`, y también `2000`, `4000`) que agrupa todo lo reexpuesto.
 
 ### `it10` / `it11` — filtros de texto
 
@@ -191,7 +238,7 @@ Texto plano tras quitar etiquetas del CDATA. Por grupo:
 
 | Campo | Marcador |
 |---|---|
-| Grupo | `(N) Grupo X` — delimita el bloque |
+| Grupo | `(N) Grupo X` — delimita el bloque; **hay más formatos**, ver abajo |
 | Profesor | tras `Profesor:` |
 | Cupos | tras `Cupos disponibles:` |
 | Jornada | tras `Jornada:` (`DIURNO`, ...) |
@@ -203,3 +250,45 @@ Texto plano tras quitar etiquetas del CDATA. Por grupo:
 
 Cabecera del detalle: `Algoritmos (2016696)`, luego `Tipología:`, `Créditos:`,
 nombre del plan y `Facultad:`.
+
+### Formatos de cabecera de grupo
+
+233 cabeceras observadas en 36 asignaturas:
+
+| Veces | Formato |
+|---|---|
+| 187 | `(N) Grupo N` |
+| 11 | `(TUMA-N) Peama - Tumaco - Grupo N` |
+| 10 | `(ORIN-N) Peama-Orinoquia Grupo N` |
+| 9 | `(SUMA-N) Grupo N` |
+| 5 | `(AMAZ-N) Peama-Amazonia Grupo N` |
+| 3 | `(TUMA-N) Peama- Tumaco -Grupo N` |
+| 3 | `(SUMA-N) Peama Sumapaz - Grupo N` |
+| 2 | `(CARI-N) Peama-Caribe Grupo N` |
+| 1 | `(CARI-N) PEAMA- PAET Caribe Grupo N` |
+| 1 | `(ORIN-N) Peama Grupo N` |
+| 1 | `(N) Grupo N-` |
+
+El prefijo entre paréntesis es el **sitio PEAMA** (`TUMA`, `ORIN`, `AMAZ`, `CARI`,
+`SUMA`), y el grupo trae su propia `Facultad: SEDE TUMACO`. Un grupo PEAMA de una
+asignatura de Bogotá se imparte en otra sede — para el estudiante de Bogotá no es
+inscribible, así que conviene conservar el prefijo, no solo el número.
+
+### Bloques extra del detalle
+
+| Bloque | Frecuencia | Contenido |
+|---|---|---|
+| `Prerrequisitos` | 22/36 | `Condición N Tipo M ¿Todas? [N] Número asignaturas [1]` + lista `código nombre` |
+| `Contenido de la asignatura` | 31/36 | componentes: `CLASE TEORICA 2015555 (2015555)` |
+
+Tipos de prerrequisito, según explica la propia página:
+
+| Tipo | Significado |
+|---|---|
+| `M` | no se puede matricular la asignatura sin superar el prerrequisito |
+| `O` | puede matricular, pero no ser calificado sin superarlo |
+| `E` | lo matricula en simultáneo, o lo ha matriculado alguna vez |
+| `A` | anulación por incompatibilidad |
+
+Ninguno de los dos bloques está en `DATA-MODEL.md`. Llegan en el mismo POST del detalle:
+modelarlos no cuesta red, solo parser.

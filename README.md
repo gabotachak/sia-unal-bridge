@@ -28,10 +28,12 @@ servidor en producción** (2026-08-15). Sin código todavía.
 | Documento | Contenido |
 |---|---|
 | [ARCH.md](ARCH.md) | Arquitectura: puertos, flujo read-through, pool de sesiones, alcance |
+| [docs/API.md](docs/API.md) | Contrato HTTP: endpoints, IDs públicos, frescura, errores |
+| [docs/LAYOUT.md](docs/LAYOUT.md) | Árbol de paquetes Go y librerías. **Propuesta, sin implementar** |
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | Esquema Postgres, structs de Go, casos borde |
 | [docs/PROTOCOL.md](docs/PROTOCOL.md) | Handshake completo con cuerpos de petición reales |
 | [docs/FIELDS.md](docs/FIELDS.md) | Componentes ADF y opciones de cada dropdown |
-| [docs/GOTCHAS.md](docs/GOTCHAS.md) | 19 trampas verificadas. **Léelo antes de codear.** |
+| [docs/GOTCHAS.md](docs/GOTCHAS.md) | 27 trampas verificadas. **Léelo antes de codear.** |
 | [docs/OPEN-QUESTIONS.md](docs/OPEN-QUESTIONS.md) | Qué está probado y qué no. Experimentos pendientes |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Entorno con Docker, fixtures, orden sugerido para arrancar |
 | [bruno/](bruno/sia-catalogo/) | Colección Bruno para ejecutar el flujo a mano |
@@ -61,7 +63,9 @@ Los literales que vienen del SIA se conservan tal cual (`Cupos disponibles:`,
 Dos advertencias que salen de los datos reales:
 
 - El listado devuelve **ofertas, no asignaturas**: los códigos se repiten. Clave
-  natural `(code, term, number)`.
+  natural `(code, term, key)`, donde `key` es el token entre paréntesis del grupo
+  (`1`, `AMAZ-07`, `TUMA-01`). El número de grupo solo no identifica: se repite entre
+  los grupos regulares y los PEAMA.
 - El conjunto de grupos visibles **depende de la carrera** desde la que consultas.
   Los cupos, en cambio, son globales.
 

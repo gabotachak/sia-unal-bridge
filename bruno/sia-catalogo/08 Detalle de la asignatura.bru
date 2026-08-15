@@ -28,6 +28,16 @@ script:post-response {
          || b.match(/javax\.faces\.ViewState"\s+value="([^"]+)"/);
   if (m) { bru.setVar("viewState", m[1]); console.log("ViewState -> " + m[1]); }
   else { console.log("!! ViewState no encontrado"); }
+
+  // La region de detalle CRECE con cada detalle abierto: pt1:r1:1, :2, :3...
+  // El paso 14 (Volver) tiene que apuntar a esta, no a la 1 fija.
+  const r = [...b.matchAll(/id="pt1:r1:(\d+):cb4"/g)].map(x => x[1]);
+  if (r.length) {
+    bru.setVar("regionDetalle", r[r.length - 1]);
+    console.log("regionDetalle -> " + r[r.length - 1]);
+  } else {
+    console.log("!! sin region de detalle: " + b.length + " B (no-op?)");
+  }
 }
 
 assert {

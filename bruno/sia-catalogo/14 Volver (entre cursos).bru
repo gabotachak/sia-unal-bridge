@@ -19,7 +19,7 @@ headers {
 }
 
 body:text {
-  pt1:r1:0:soc1={{nivel}}&pt1:r1:0:soc9={{sede}}&pt1:r1:0:soc2={{facultad}}&pt1:r1:0:soc3={{carrera}}&pt1:r1:0:soc4={{tipologia}}&pt1:r1:0:soc5={{modo}}&pt1:r1:0:soc10={{sedeElect}}&pt1:r1:0:soc6={{facElect}}&pt1:r1:0:soc7=&pt1:r1:0:it10=&pt1:r1:0:it11={{nombre}}&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={{windowId}}&Adf-Page-Id={{pageId}}&javax.faces.ViewState={{viewState}}&event=pt1%3Ar1%3A1%3Acb4&event.pt1:r1:1:cb4=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&oracle.adf.view.rich.PROCESS=pt1%3Ar1%2Cpt1%3Ar1%3A1%3Acb4
+  pt1:r1:0:soc1={{nivel}}&pt1:r1:0:soc9={{sede}}&pt1:r1:0:soc2={{facultad}}&pt1:r1:0:soc3={{carrera}}&pt1:r1:0:soc4={{tipologia}}&pt1:r1:0:soc5={{modo}}&pt1:r1:0:soc10={{sedeElect}}&pt1:r1:0:soc6={{facElect}}&pt1:r1:0:soc7=&pt1:r1:0:it10=&pt1:r1:0:it11={{nombre}}&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={{windowId}}&Adf-Page-Id={{pageId}}&javax.faces.ViewState={{viewState}}&event=pt1%3Ar1%3A{{regionDetalle}}%3Acb4&event.pt1:r1:{{regionDetalle}}:cb4=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&oracle.adf.view.rich.PROCESS=pt1%3Ar1%2Cpt1%3Ar1%3A{{regionDetalle}}%3Acb4
 }
 
 script:post-response {
@@ -41,9 +41,18 @@ docs {
   OBLIGATORIO entre un detalle y el siguiente. Sin esto quedas atrapado en la
   vista de detalle y el siguiente click devuelve 893 B vacios.
 
-  ~250 KB: re-renderiza la tabla completa.
+  ~257 KB: re-renderiza la tabla completa.
 
-  OJO: los _afrRK SE RENUMERAN aqui. Hay que re-parsear la tabla antes de
+  OJO 1: el boton NO es pt1:r1:1:cb4 fijo. La region de detalle se numera y
+  CRECE con cada detalle abierto (1er detalle -> pt1:r1:1, 2o -> pt1:r1:2,
+  98o -> pt1:r1:98). Por eso el cuerpo usa {{regionDetalle}}, que el paso 08
+  captura solo de la respuesta del detalle.
+
+  Con el id fijo, el segundo Volver de la sesion devuelve 893 B y a partir de
+  ahi TODO devuelve 893 B, busquedas incluidas: parece sesion caducada y no lo
+  esta. Ver docs/GOTCHAS.md §20.
+
+  OJO 2: los _afrRK SE RENUMERAN aqui. Hay que re-parsear la tabla antes de
   pedir el siguiente curso. Ejemplo real: 2016353 estaba en _afrRK=101 y
   tras Volver quedo en _afrRK=8.
 }

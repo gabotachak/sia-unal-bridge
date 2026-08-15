@@ -5,6 +5,10 @@ Varios contradicen lo que asumía el proyecto anterior (`BetterCampus/sia-scrape
 
 Léelo antes de escribir código.
 
+> §20-§27 salen de la segunda ronda de experimentos (2026-08-15, tarde). Las dos caras
+> de descubrir por tu cuenta son la §20 —se disfraza de sesión colgada— y la §27, que
+> no se nota nunca: simplemente faltan grupos.
+
 ---
 
 ## 1. El User-Agent NO puede parecer un navegador
@@ -22,6 +26,10 @@ Medido, misma URL, único cambio el UA:
 
 Con UA de navegador recibes `AdfLoopbackUtils.runLoopback(...)`, que calcula
 `_afrLoop` y `Adf-Window-Id` en JS y recarga. Sin motor JS te quedas ahí.
+
+Lo que **sí** depende del UA es esa frontera: navegador → 6 998 B de loopback, cualquier
+otra cosa → página utilizable. Los tamaños concretos de la columna derecha no son
+estables entre peticiones (§25); no los uses como firma.
 
 **Contraintuitivo:** intentar "parecer navegador" es exactamente lo que rompe el
 scraper. Deja que Go mande su `Go-http-client/2.0`.
@@ -74,15 +82,20 @@ en la segunda — que es el patrón normal.
 
 ---
 
-## 5. `_rowCount` está stale
+## 5. `_rowCount` miente a veces — y esa es la parte mala
 
 ```
-Búsqueda 1:  _rowCount="98"   filas reales = 98
-Búsqueda 2:  _rowCount="98"   filas reales = 71
-Búsqueda 3:  _rowCount="98"   filas reales = 57
+Búsqueda 1 (plan A):  _rowCount="98"   filas reales = 98   ✓
+Búsqueda 2 (plan B):  _rowCount="98"   filas reales = 67   ✗
+Búsqueda 3 (plan C):  _rowCount="1"    filas reales =  1   ✓
+Búsqueda 4 (plan D):  _rowCount="98"   filas reales = 59   ✗
+Búsqueda 5 (electivas): _rowCount="240" filas reales = 240 ✓
 ```
 
-Conserva el valor de la primera búsqueda de la sesión. **Cuenta los `<tr>`.**
+No es "se queda con el primer valor": acierta unas veces y falla otras dentro de la
+misma sesión, sin patrón útil. Peor que estar siempre mal, porque parece fiable.
+
+**Cuenta los `<tr>`.** Siempre.
 
 ---
 
@@ -96,21 +109,35 @@ Conserva el valor de la primera búsqueda de la sesión. **Cuenta los `<tr>`.**
 | Electivas sin disparar `soc10` antes de `soc6` | basura: keys duplicados |
 
 Ni error, ni mensaje de validación. Solo no hace nada. Si recibes ~900 B donde
-esperabas datos: falta un paso, o estás en la región 1 (§10), o expiró la sesión.
+esperabas datos: falta un paso, o estás en la región de detalle (§10, §20), o expiró
+la sesión (§7).
 
 ---
 
-## 7. La sesión expira a los 5 minutos
+## 7. La sesión expira a los ~4.2 minutos, no a los 5
 
-`AdfPage.PAGE.__initializeSessionTimeoutTimer(300000, 120000, ...)`
+El timer de JS declara `__initializeSessionTimeoutTimer(300000, 120000, ...)` — 5 min.
+**Medido, es menos:**
 
-Se renueva con cada petición, así que un scraper activo la mantiene viva sola.
+| Inactividad | Resultado |
+|---|---|
+| 250 s (4.2 min) | viva |
+| 270 s (4.5 min) | **muerta** |
+| 300 s / 310 s / 340 s | muerta |
 
-Respuesta típica de sesión caducada:
+Sí se renueva con cada petición: sesiones con ping cada 60, 120 y 180 s llegaron a los
+**30 min** (tope de la prueba) sin degradarse, y una hizo 201 POSTs seguidos sin morir.
+Pero el margen real es de ~4 min, no de 5: **usa un keepalive de ≤3 min.**
+
+Y hay **dos firmas de muerte**, no una:
 
 ```
-Because of inactivity, your session has timed out and is no longer active.
+justo al expirar    ~1 200 B   no-op mudo, idéntico al de cascada incompleta (§6)
+más tarde              419 B   "Because of inactivity, your session has timed out..."
 ```
+
+La primera es la traicionera: no dice nada. Si un POST que debería traer datos devuelve
+~1 KB, la sesión es sospechosa aunque no haya mensaje.
 
 ---
 
@@ -142,13 +169,15 @@ Cuando el `selection` parecía obligatorio era porque `DELTAS` no llevaba la cla
 
 ## 10. "Volver" antes de CUALQUIER acción de la región 0
 
-La sesión está en `pt1:r1:0` (buscador+tabla) o en `pt1:r1:1` (detalle).
+La sesión está en `pt1:r1:0` (buscador+tabla) o en la región de detalle.
 
-Tras abrir un detalle quedas en la región 1. Verificado limpio: desde ahí, tanto una
+Tras abrir un detalle quedas en la de detalle. Verificado limpio: desde ahí, tanto una
 **búsqueda nueva** como el **detalle de otra asignatura** devuelven ~895 B.
 
 No es solo "entre detalles": es antes de cualquier cosa en la región 0.
 Tu pool tiene que llevar ese estado por sesión.
+
+**Pero el id de esa región no es `pt1:r1:1` fijo.** Cambia con cada detalle: ver §20.
 
 ---
 
@@ -189,15 +218,25 @@ filas). Solo aparecen en el buscador de electivas.
 
 ---
 
-## 14. Posible tope de 1000 filas (sin confirmar)
+## 14. El tope de 1000 filas existe en el código, pero no se alcanza
 
 En una consulta malformada vi `_rowCount="2114"` con exactamente **1000 filas**
 devueltas — igual al `fetchSize: 1000` que declara el `AdfRichTable`.
 
-No pude confirmarlo: `_rowCount` no es fiable (§5) y `startRow`/`rows` en `DELTAS` no
-tuvieron efecto. Con consultas bien formadas (98, 240 filas) nunca se alcanza.
+Barrido posterior de ~120 consultas bien formadas (electivas con comodín de sede en 4
+sedes × 2 modos × todas las facultades, más listados regulares en varios niveles):
 
-**Pendiente de verificar.**
+```
+máximo global      644 filas   Medellín, comodín de sede, desde un plan de Arquitectura
+máximo en Bogotá   319 filas
+listado regular     98 filas   típico
+```
+
+Y `viewportSize` / `rows` dentro de `DELTAS` **no cambian nada**: 25, 100, 250, 999,
+2000 y 5000 devuelven las mismas filas. No hay paginado, ni hace falta.
+
+**Regla práctica:** no lo vas a tocar. Deja una aserción por si acaso — exactamente
+1000 filas = sospecha de truncamiento, no un resultado.
 
 ---
 
@@ -248,10 +287,23 @@ detalle:  ELEGIBLES
 Misma cosa, dicha distinto. Normaliza a un enum en el dominio y guarda el literal
 crudo aparte.
 
-**No confirmado** que la tipología varíe entre carreras: `1000004-B` es
-`FUND. OPTATIVA` tanto en Sistemas como en Industrial, y las 6 asignaturas de cálculo
-salieron iguales en ambos listados. Aun así vive en `course_program`, porque revertirlo
-después es trivial y al revés no.
+**Confirmado que la tipología varía entre carreras.** Se comparó la celda `c6` de 15
+planes de Bogotá: de los 22 códigos presentes en más de un plan, **8 divergen**.
+
+```
+1000003-B   INGENIERÍA AGRÍCOLA  = FUND. OBLIGATORIA (B)
+            BIOLOGÍA             = FUND. OPTATIVA (O)
+2017538     INGENIERÍA AGRÍCOLA  = FUND. OBLIGATORIA (B)
+            BIOLOGÍA             = DISCIPLINAR OPTATIVA (T)
+2015701     INGENIERÍA AGRÍCOLA  = FUND. OPTATIVA (O)
+            ADMÓN. DE EMPRESAS   = DISCIPLINAR OPTATIVA (T)
+```
+
+Y cruzando con el buscador de electivas, `2027992` y `2025196` son
+`DISCIPLINAR OPTATIVA (T)` en su plan madre y `LIBRE ELECCIÓN (L)` desde otro.
+
+Por eso `typology` vive en `course_program`. Colgarla de `course` la machaca en cada
+scrapeo de otra carrera, en silencio.
 
 ---
 
@@ -277,17 +329,261 @@ el resultado anterior — que se parece mucho a un éxito. Cuidado.
 
 ---
 
+## 20. La región de detalle se NUMERA, y el número crece
+
+**La peor de todas. Se disfraza de sesión colgada.**
+
+`PROTOCOL.md` decía que Volver es `pt1:r1:1:cb4`. Eso es cierto **solo para el primer
+detalle de la sesión**. El índice de la región sube con cada detalle abierto:
+
+```
+1.er detalle → la región es pt1:r1:1  → Volver = pt1:r1:1:cb4
+2.º  detalle → la región es pt1:r1:2  → Volver = pt1:r1:2:cb4
+98.º detalle → la región es pt1:r1:98 → Volver = pt1:r1:98:cb4
+```
+
+Con el id fijo, el síntoma es este:
+
+```
+detalle 1 → 157 KB ✓     Volver (pt1:r1:1:cb4) → 257 KB, 98 filas ✓
+detalle 2 →  20 KB ✓     Volver (pt1:r1:1:cb4) →   893 B, 0 filas  ✗
+                         Volver otra vez        →   893 B          ✗
+                         búsqueda nueva         →   893 B          ✗
+```
+
+La sesión **parece muerta y no lo está**: sigue en la región de detalle, y como el
+botón que le mandas no existe, todo lo demás es no-op (§6, §10). Con el índice correcto
+revive al instante. Medido: reintentar `pt1:r1:2:cb4` desde ese estado devuelve los
+257 KB de siempre.
+
+Sin el arreglo, cada asignatura a partir de la segunda cuesta un re-bootstrap de 7 s.
+Con el arreglo:
+
+```
+98 detalles seguidos en UNA sesión · 201 POSTs · 99 s · 31 MB · 0 fallos
+```
+
+**Regla:** lee el índice de la respuesta del detalle y úsalo para el Volver. Nunca lo
+hardcodees, nunca lo derives de un contador propio.
+
+```go
+// de la respuesta del detalle:
+//   id="pt1:r1:<N>:cb4"
+re := regexp.MustCompile(`id="pt1:r1:(\d+):cb4"`)
+```
+
+No se le vio techo en 98 iteraciones.
+
+---
+
+## 21. `soc4=0` no es "sin filtro": es "todas MENOS libre elección"
+
+El dropdown de tipología completo:
+
+| Valor | Etiqueta |
+|---|---|
+| `0` | **TODAS MENOS  LIBRE ELECCIÓN** |
+| `1` | DISCIPLINAR OPTATIVA |
+| `2` | FUND. OBLIGATORIA |
+| `3` | FUND. OPTATIVA |
+| `4` | TRABAJO DE GRADO |
+| `5` | DISCIPLINAR OBLIGATORIA |
+| `6` | NIVELACIÓN |
+| `7` | LIBRE ELECCIÓN |
+
+Mandarlo vacío es idéntico a mandar `0` (98 filas en ambos casos, mismo reparto). Y los
+subfiltros parten exactamente el total:
+
+```
+20 FUND. OPTATIVA + 5 FUND. OBLIGATORIA + 38 DISCIPLINAR OPTATIVA
++ 13 DISCIPLINAR OBLIGATORIA + 19 NIVELACIÓN + 3 TRABAJO DE GRADO = 98
+```
+
+**Consecuencia:** el listado regular de un plan **nunca** incluye sus asignaturas de
+libre elección. Las libres solo salen por el buscador de electivas (§5 de
+`PROTOCOL.md`), que es campus-wide y no por plan. Si asumes que "1 POST = el programa
+entero", te falta una parte del catálogo del estudiante.
+
+Ojo también: en doctorado y postgrado (`soc1` = 1 o 2) **no existe la opción LIBRE
+ELECCIÓN**, así que el buscador de electivas es exclusivo de pregrado.
+
+---
+
+## 22. El bootstrap puede llegar con la tabla de OTRA sesión
+
+La página inicial no siempre trae la tabla vacía. En 8 bootstraps limpios:
+
+```
+4 de 8   tabla vacía
+4 de 8   tabla poblada con 78, 97 y hasta 98 filas ajenas
+```
+
+Los códigos que aparecen no tienen nada que ver con la consulta que vas a hacer:
+`5000844 Agroindustria de alimentos balanceados` (posgrado, agro) en una sesión recién
+abierta. Es estado de otra consulta reciente contra el mismo nodo.
+
+Dos consecuencias:
+
+- **Nunca parsees la tabla de la respuesta del bootstrap.** Son datos de alguien más.
+- **Desplaza el origen de `_afrRK`.** Con la tabla poblada, tu primera búsqueda propia
+  empieza en `rk=78` o `rk=98`, no en `0`. Otra razón para no asumir nunca que las
+  claves arrancan en cero (§4).
+
+---
+
+## 23. En la página completa cada `<tr>` aparece 5 veces
+
+Solo en el HTML completo del GET inicial, no en las respuestas parciales:
+
+```
+página completa    390 <tr>   →   78 filas reales, cada una repetida ×5
+respuesta parcial   98 <tr>   →   98 filas reales
+```
+
+ADF renderiza la tabla partida en varias sub-tablas (columnas fijas, scroll, etc.).
+Si alguna vez parseas el HTML completo, cuentas 5 veces todo.
+
+**Regla:** parsea siempre el CDATA de `<update id="pt1:r1:0:pb3">` de una respuesta
+parcial, nunca el documento del bootstrap. Que es, además, lo que dice §22.
+
+---
+
+## 24. Las cabeceras de grupo no siempre son `(N) Grupo N`
+
+El regex documentado (`^\(\d+\)\s*Grupo`) se come los grupos PEAMA. De 233 cabeceras
+observadas en 36 asignaturas:
+
+```
+187   (N) Grupo N                          ← el formato "normal"
+ 11   (TUMA-N) Peama - Tumaco - Grupo N
+ 10   (ORIN-N) Peama-Orinoquia Grupo N
+  9   (SUMA-N) Grupo N
+  5   (AMAZ-N) Peama-Amazonia Grupo N
+  3   (TUMA-N) Peama- Tumaco -Grupo N      ← mismos espacios, distintos
+  3   (SUMA-N) Peama Sumapaz - Grupo N
+  2   (CARI-N) Peama-Caribe Grupo N
+  1   (CARI-N) PEAMA- PAET Caribe Grupo N
+  1   (ORIN-N) Peama Grupo N
+  1   (N) Grupo N-
+```
+
+Un 20 % de los grupos son PEAMA y el regex viejo los ignora **en silencio**:
+`2015555` parecía tener 0 grupos y tiene 1, con sus cupos.
+
+```go
+// tolerante a las variantes de arriba
+var groupRe = regexp.MustCompile(`\([^)\n]{1,20}\)[^\n]{0,60}?Grupo\s*\S+`)
+```
+
+Esos grupos traen además su propia sede (`Facultad: SEDE TUMACO`), distinta de la del
+plan desde el que consultas.
+
+---
+
+## 25. El coste del bootstrap es muy variable, y no depende del UA
+
+`PROTOCOL.md` decía "~7 s y 1.1 MB". Es un punto de una distribución ancha. Mismo
+request, sesiones nuevas, seguidas:
+
+```
+59 050 B / 0.33 s      685 160 B / 6.0 s      1 363 133 B / 6.4 s
+59 050 B / 0.26 s      843 245 B / 6.2 s      4 849 783 B / ~7 s
+```
+
+El eje no es el User-Agent: `Go-http-client/2.0` dio 59 KB en una tirada y 843 KB en
+otra. Lo único determinista es la regla del §1 — UA de navegador → 6 998 B de loopback,
+cualquier otro → página utilizable. Buena parte de la varianza es la tabla ajena del
+§22.
+
+Reusar cookies sí abarata: el mismo GET dentro de una sesión ya abierta baja a
+~52 KB / 0.14 s.
+
+**Para el diseño:** no presupuestes 7 s fijos de bootstrap, pero tampoco cuentes con
+los 0.3 s. Es entre 0.15 y 7 s, y no lo controlas.
+
+---
+
+## 26. `program.code` NO es único entre sedes
+
+`DATA-MODEL.md` daba por verificado que sí. El censo completo (1380 entradas de
+programa) dice lo contrario:
+
+| Clave candidata | Claves distintas | Colisiones |
+|---|---|---|
+| `code` | 852 | **136** |
+| `(campus_code, code)` | 1333 | **46** |
+| `(campus_code, faculty_code, code)` | 1380 | **0** |
+
+El mecanismo es PEAMA: las sedes de presencia nacional reexponen programas de otras
+sedes con **el mismo código institucional**.
+
+```
+2A41 ADMINISTRACIÓN DE EMPRESAS
+  1101 SEDE BOGOTÁ    · 2051 FACULTAD DE CIENCIAS ECONÓMICAS
+  1124 SEDE ORINOQUIA · 7000 SEDE ORINOQUIA
+  1125 SEDE AMAZONIA  · 6000 SEDE AMAZONIA
+  1126 SEDE CARIBE    · 8000 SEDE CARIBE
+  9920 SEDE TUMACO    · 9000 SEDE TUMACO
+```
+
+Y dentro de una misma sede un programa puede colgar de dos facultades: la real y una
+**facultad comodín cuyo código acaba en `000`** (`2000`, `4000`, `6000`, `7000`, `8000`,
+`9000`), que agrupa lo reexpuesto.
+
+**Identidad de programa = `(campus_code, faculty_code, code)`.** Con `UNIQUE (code)`,
+el crawl de fase 2 hace UPSERT de Orinoquia sobre Bogotá: corrupción silenciosa.
+
+---
+
+## 27. La identidad de un grupo NO es `Grupo N`
+
+Una asignatura mezcla grupos regulares y grupos PEAMA de otras sedes, y **la numeración
+se repite entre unos y otros**:
+
+```
+1000004-B  Cálculo diferencial · 32 grupos
+  (1) Grupo 1 · (2) Grupo 2 · … · (26) Grupo 26
+  (AMAZ-01) Peama-Amazonia Grupo 1     ← "Grupo 1" otra vez
+  (AMAZ-07) Peama-Amazonia Grupo 1     ← y otra
+  (TUMA-01) Peama - Tumaco - Grupo 1   ← y otra
+  (CARI-01) Peama-Caribe Grupo 1       ← y otra
+```
+
+Medido sobre 88 grupos de 10 asignaturas:
+
+| Clave | Valores distintos | Veredicto |
+|---|---|---|
+| `Grupo N` | 78 de 88 | **pierde 10 grupos** |
+| token entre paréntesis | 88 de 88 | identidad |
+
+Con `(code, term, number)` como clave, esos 10 hacen UPSERT unos sobre otros: la
+asignatura queda con menos oferta de la real y con horarios y cupos mezclados. Otro
+fallo silencioso.
+
+**La clave es el token entre paréntesis, verbatim:** `1`, `10`, `AMAZ-07`, `TUMA-01`.
+`number` se guarda porque es lo que el estudiante lee, pero no identifica.
+
+Los grupos PEAMA además traen su propia sede (`Facultad: SEDE TUMACO`) y **su propio
+calendario** (`24/08/2026` frente al `27/08/2026` de Bogotá).
+
+---
+
 ## Resumen para el diseño en Go
 
 ```go
 // 1. UA que no parezca navegador (el default de Go sirve)
 // 2. Adf-Window-Id = "winnoloop" constante
 // 3. cookiejar obligatorio; ViewState de la misma sesión
-// 4. Re-parsear _afrRK antes de CADA uso. Nunca cachear.
+// 4. Re-parsear _afrRK antes de CADA uso. Nunca cachear. No empieza en 0.
 // 5. Contar los <tr>; ignorar _rowCount
-// 6. Respuesta de ~900 B = paso faltante, región 1, o sesión caducada
-// 7. Llevar el estado (parkedAt, inDetail) por conexión
+// 6. Respuesta de ~900 B = paso faltante, región de detalle, o sesión caducada
+// 7. Llevar el estado (parkedAt, detailRegion) por conexión
 // 8. Un bootstrap por sesión, no por carrera
 // 9. Dedupear el listado por código
-// 10. Clave natural de oferta: (code, term, number)
+// 10. Clave natural de oferta: (code, term, key); key = token entre parentesis
+//     (1, AMAZ-07, TUMA-01). NUNCA (code, term, number): colisiona.
+// 11. El Volver es pt1:r1:<N>:cb4 con N leído del detalle, nunca 1 fijo
+// 12. soc4=0 excluye libre elección; las libres van por el buscador de electivas
+// 13. Keepalive <= 3 min (el timeout real es ~4.2 min, no 5)
+// 14. Identidad de programa: (campus_code, faculty_code, code)
 ```

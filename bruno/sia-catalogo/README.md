@@ -57,6 +57,7 @@ elección de todas las facultades de la sede.
 | `fila` | `0` | **row key `_afrRK` real**, no la posición |
 | `windowId` | `winnoloop` | constante |
 | `viewState` | *(vacío)* | lo llena el script de cada petición |
+| `regionDetalle` | `1` | lo llena el script del paso 08; **sube con cada detalle** |
 
 `nivel-sede-facultad-carrera` = el "career code" `0-2-8-3`.
 
@@ -68,11 +69,18 @@ elección de todas las facultades de la sede.
 7 KB de bootstrap JS que exige ejecutar JavaScript. El UA de Bruno funciona.
 
 **Respuesta de ~900 B = algo falta.** O te saltaste un paso de la cascada, o estás en
-la vista de detalle sin haber hecho Volver, o expiró la sesión (5 min). Los scripts de
-la colección te lo avisan en la consola.
+la vista de detalle sin haber hecho Volver, o expiró la sesión (~4.2 min de
+inactividad). Los scripts de la colección te lo avisan en la consola.
 
 **Tras un detalle, "Volver" (14) es obligatorio antes de *cualquier* cosa** — otra
 búsqueda o el detalle de otra asignatura. No es solo entre detalles.
+
+**El Volver no apunta siempre al mismo sitio.** La región de detalle se numera y crece:
+1.er detalle `pt1:r1:1`, 2.º `pt1:r1:2`, y así. El paso 08 captura el número en
+`regionDetalle` y el 14 lo usa. Verificado en la colección: `08 → 14 → 08 → 14 → 08 →
+14` da `regionDetalle` 1, 2, 3 y 98 filas en cada Volver. Con el `1` fijo que tenía
+antes, el segundo Volver devolvía 893 B y la sesión parecía muerta.
+Ver [`GOTCHAS.md §20`](../../docs/GOTCHAS.md).
 
 **`nombre` (`it11`) filtra en el servidor.** Substring, insensible a acentos.
 Baja el payload de 241 KB a 15-27 KB. La ruta más rápida para una asignatura concreta
@@ -82,8 +90,11 @@ es `06` con `nombre` puesto, y luego `08`.
 **se renumeran** tras cada "Volver". Lee el `_afrRK` del `<tr>` en la respuesta del
 paso 06/13 justo antes de usarlo en 07/08.
 
-**Cuenta los `<tr>`, ignora `_rowCount`.** Ese atributo se queda con el valor de la
-primera búsqueda de la sesión.
+**Cuenta los `<tr>`, ignora `_rowCount`.** Acierta unas veces y se queda con un valor
+viejo otras, dentro de la misma sesión y sin patrón útil.
+
+**`tipologia = 0` no es "sin filtro": es "todas menos libre elección".** El paso 06
+nunca devuelve las asignaturas de libre elección del plan; para esas es el flujo B.
 
 **El paso 11 (soc10) no es opcional.** Saltarlo en el flujo B produce basura silenciosa.
 

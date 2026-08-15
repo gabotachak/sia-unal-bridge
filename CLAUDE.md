@@ -21,29 +21,35 @@ está completa y verificada contra producción (2026-08-15).
 
 ## Antes de escribir código
 
-Lee **`docs/GOTCHAS.md`** completo. No es opcional. Son 19 trampas verificadas contra
+Lee **`docs/GOTCHAS.md`** completo. No es opcional. Son 27 trampas verificadas contra
 el servidor real, varias de las cuales fallan **en silencio** (devuelven datos
 plausibles pero equivocados). El proyecto anterior murió por asumir mal cuatro de ellas.
 
-Las tres que más código han roto:
+Las cuatro que más código han roto:
 
-1. **El User-Agent no puede parecer navegador.** Con un UA de Chrome el servidor
+1. **La región de detalle está numerada y el número sube.** Volver es
+   `pt1:r1:<N>:cb4`, con `N` leído de la respuesta del detalle. Con `1` fijo, la
+   segunda asignatura de la sesión la deja inservible y **parece sesión caducada**.
+2. **El User-Agent no puede parecer navegador.** Con un UA de Chrome el servidor
    devuelve 7 KB de bootstrap JS en vez de la página. El default de Go funciona; no lo
    "mejores".
-2. **`_afrRK` se acumula entre búsquedas y se renumera en cada re-render.** Nunca
+3. **`_afrRK` se acumula entre búsquedas y se renumera en cada re-render.** Nunca
    enumeres posicionalmente, nunca caches la lista de row keys. Re-parsea siempre.
-3. **Una respuesta de ~900 B no es un error HTTP, es un no-op.** Significa que falta un
-   paso de la cascada, que estás en la región de detalle, o que caducó la sesión.
-   Trátala como error explícito.
+   Tampoco empieza en 0: el bootstrap puede llegar con la tabla de otra sesión.
+4. **Una respuesta de ~900 B no es un error HTTP, es un no-op.** Significa que falta un
+   paso de la cascada, que estás en la región de detalle, o que caducó la sesión
+   (~4.2 min de inactividad, no 5). Trátala como error explícito.
 
 ## Mapa del repo
 
 | Ruta | Qué hay |
 |---|---|
 | `ARCH.md` | Arquitectura: puertos, read-through, pool de sesiones, alcance |
+| `docs/API.md` | Contrato HTTP: endpoints, IDs públicos, frescura, errores |
+| `docs/LAYOUT.md` | Árbol de paquetes Go y librerías — propuesta, sin implementar |
 | `docs/PROTOCOL.md` | Handshake ADF completo con cuerpos de petición reales |
 | `docs/FIELDS.md` | Componentes ADF, opciones de cada dropdown, mapeo a columnas |
-| `docs/GOTCHAS.md` | Las 19 trampas |
+| `docs/GOTCHAS.md` | Las 27 trampas |
 | `docs/DATA-MODEL.md` | Esquema Postgres + structs de Go |
 | `docs/OPEN-QUESTIONS.md` | Qué está verificado y qué no. Léelo antes de asumir |
 | `docs/DEVELOPMENT.md` | Entorno: Docker, Postgres, cómo replicar el flujo |
@@ -68,28 +74,39 @@ Un miss de catálogo llena el programa entero al mismo costo. El detalle es
 irreductiblemente unitario: no hay forma de traer los grupos de varias asignaturas en
 una petición.
 
+Con un matiz medido: ese POST de catálogo trae **todas menos las de libre elección**
+(`soc4=0` significa eso literalmente). Las libres del plan salen del buscador de
+electivas, que es por sede. El catálogo de un plan son dos consultas.
+
 ## `SIASource` no es un cliente HTTP
 
 Es un **pool de conexiones ADF con estado**. Cada conexión:
 
-- muere a los 5 min de inactividad
+- muere a los **~4.2 min** de inactividad; con ping ≤3 min vive indefinidamente
 - es **estrictamente secuencial**: una petición en vuelo a la vez
 - está parqueada en un `(level, campus, faculty, program)`; moverla cuesta 2 POSTs
-- está en la región del buscador **o** en la del detalle; salir cuesta 1 POST
+- está en la región del buscador **o** en una región de detalle **numerada**; salir
+  cuesta 1 POST al id correcto (`pt1:r1:<N>:cb4`, `N` creciente)
 
-N requests concurrentes ⇒ N conexiones. Fase 1: pool de 1-2 con mutex.
+N requests concurrentes ⇒ N conexiones. Fase 1: pool de 1-2 con mutex; medido, el SIA
+aguanta 8 en paralelo sin errores ni throttling.
 
-Los campos de estado (`parkedAt`, `inDetail`) son lo que ahorra POSTs: si la conexión
-ya está donde toca, son 2 POSTs en vez de 6 (~1.3 s en vez de ~10 s).
+Los campos de estado (`parkedAt`, `detailRegion`) son lo que ahorra POSTs: si la
+conexión ya está donde toca, son 2 POSTs en vez de 6 (~1.3 s en vez de ~10 s).
 
-## Modelado: tres cosas que no son obvias
+## Modelado: cinco cosas que no son obvias
 
 - El listado devuelve **ofertas, no asignaturas**. Los códigos se repiten (hasta ×131).
-  Clave natural `(code, term, number)`, nunca `code` solo. Pero las filas duplicadas
+  Clave natural `(code, term, key)` — `key` es el token entre paréntesis del grupo,
+  porque `Grupo N` se repite entre regulares y PEAMA. Nunca `code` solo. Las filas duplicadas
   **sí** se pueden dedupear: su detalle es byte-idéntico.
 - **Los grupos visibles dependen del programa** (relación de subconjunto estricto);
   **los cupos son globales**. Por eso `section` es global y `section_program` es la
   tabla de visibilidad, y una sola medición de cupos sirve para todos los programas.
+- **La tipología depende del programa** — probado, no supuesto: 8 códigos divergen
+  entre planes de Bogotá. Vive en `course_program`.
+- **`program.code` no identifica.** Se repite entre sedes (PEAMA): 136 colisiones de
+  852 códigos. La identidad es `(campus_code, faculty_code, code)`.
 - `group` es **palabra reservada en SQL**. Se usa `section`. Ver la tabla de colisiones
   en `docs/DATA-MODEL.md`.
 

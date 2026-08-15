@@ -67,7 +67,7 @@ uso. Cuando se implemente, el adaptador de `SIASource` ya estará probado.
 ## Flujo principal: read-through
 
 ```
-GET /courses/2016696
+GET /v1/programs/2A74/courses/2016696
         │
         ├── ¿está en Store y fresco?  ──sí──> responde
         │
@@ -92,26 +92,27 @@ miss de detalle   →  click           →  se guarda 1 asignatura            ~1
 
 Gobernado por `program.catalog_fetched_at` y `section.fetched_at`.
 
+**El catálogo de un plan son dos consultas, no una.** `soc4=0` significa "todas menos
+libre elección" ([GOTCHAS.md §21](docs/GOTCHAS.md)), así que las libres del plan no
+están en esas ~98 filas: salen del buscador de electivas, que es por sede y no por plan.
+Si `catalog_fetched_at` solo cubre la primera, la cache queda plausible e incompleta.
+
 ---
 
 ## Cupos
 
-Dos rutas, a propósito:
-
-| Endpoint | Comportamiento |
-|---|---|
-| `GET /courses/{code}` | sirve de cache, con `measured_at` y edad explícita |
-| `GET /courses/{code}/seats` | fuerza consulta al SIA, refresca y persiste |
+Un solo concepto de frescura, `?max_age=<segundos>`, con default por tipo de recurso.
+`?max_age=0` fuerza la consulta al SIA. Contrato completo en [docs/API.md](docs/API.md).
 
 ```json
-{ "section": 1, "available": 32, "measured_at": "2026-08-15T16:22:03Z", "age_seconds": 47 }
+{ "key": "1", "number": 1, "available": 32, "measured_at": "2026-08-15T16:22:03Z", "age_seconds": 47 }
 ```
 
 Nunca se sirve un cupo sin decir de cuándo es.
 
-El endpoint "en vivo" cuesta exactamente lo mismo que traer el detalle completo,
-porque llegan juntos. Aprovecha: **refresca y guarda todo el grupo**, devuelve solo
-los cupos. Sale gratis y mantiene la cache caliente.
+Forzar los cupos cuesta exactamente lo mismo que traer el detalle completo, porque
+llegan juntos. Aprovecha: **refresca y guarda todo el grupo**, devuelve solo los cupos.
+Sale gratis y mantiene la cache caliente.
 
 `seat_snapshot` es append-only. El historial habilita alertas más adelante sin
 rediseñar nada.
@@ -122,27 +123,37 @@ rediseñar nada.
 
 No es un cliente HTTP sin estado. Es un **pool de sesiones ADF vivas**, y cada una:
 
-- muere a los 5 min de inactividad
+- muere a los **~4.2 min** de inactividad — renovable con tráfico; keepalive ≤3 min
 - es **estrictamente secuencial**: una petición en vuelo a la vez
 - está *parqueada* en un `(level, campus, faculty, program)`; moverla cuesta 2 POSTs
-- está en la región del buscador **o** en la del detalle; salir cuesta 1 POST
+- está en la región del buscador **o** en una región de detalle **numerada**; salir
+  cuesta 1 POST *al id correcto*
 - renumera sus `_afrRK` en cada re-render → hay que re-parsear, nunca cachear índices
 
 ```go
 type SIAConn struct {
-    viewState string
-    jar       *cookiejar.Jar
-    parkedAt  ProgramKey   // cascada ya hecha para este programa
-    inDetail  bool         // true → hay que hacer Back antes de nada
-    lastUsed  time.Time
+    viewState    string
+    jar          *cookiejar.Jar
+    parkedAt     ProgramKey // cascada ya hecha para este programa
+    detailRegion int        // 0 = en el buscador; >0 = región de detalle abierta.
+                            // Volver es pt1:r1:<detailRegion>:cb4 y el número
+                            // sube con cada detalle. Ver GOTCHAS.md §20.
+    lastUsed     time.Time
 }
 ```
 
-Esos dos campos de estado son los que ahorran POSTs: si la conexión ya está en el
-programa pedido y no está en detalle, son 2 POSTs en vez de 6.
+`detailRegion` no es un booleano por una razón cara: con `pt1:r1:1:cb4` fijo, el
+segundo detalle de la sesión deja la conexión inservible y **parece** una sesión
+caducada. Con el índice leído de la respuesta: 98 asignaturas seguidas, 99 s, sin un
+solo atasco.
+
+Esos campos de estado son los que ahorran POSTs: si la conexión ya está en el programa
+pedido y no está en detalle, son 2 POSTs en vez de 6.
 
 **Fase 1:** pool de 1-2 conexiones con mutex. Suficiente para uso personal y no
-encierra en nada.
+encierra en nada. Medido, el techo está mucho más arriba: **8 sesiones concurrentes, 0
+errores, 0 throttling y latencia plana** (la búsqueda tarda lo mismo con N=1 que con
+N=8). Crecer el pool es una decisión de cortesía, no una restricción del servidor.
 
 ### Rutas mínimas medidas
 
@@ -167,8 +178,11 @@ Usar el filtro `it11` (nombre) baja el payload de 241 KB a 15–27 KB.
 
 **Después**
 
-- `Refresher`: crawl inicial y polling. El crawl con detalle de todas las carreras son
-  horas (1 POST por asignatura); diseñarlo resumible con checkpoint por programa.
+- `Refresher`: crawl inicial y polling. Ya está dimensionado: el censo son **1380
+  entradas de programa** (852 códigos distintos) en toda la UNAL, y una carrera con
+  detalle cuesta **201 POSTs / 99 s / 31 MB**. El crawl completo con detalle son del
+  orden de **30-40 h**; diseñarlo resumible con checkpoint por programa. Se puede
+  paralelizar: el SIA aguantó 8 conexiones sin quejarse.
 - Otras sedes: `campus` ya está en el esquema, es iterar.
 - Alertas de cupo: el historial de `seat_snapshot` ya lo soporta.
 
@@ -182,13 +196,16 @@ detalles de implementación:
 | Restricción | Impacto |
 |---|---|
 | El User-Agent no puede parecer navegador | el default de Go sirve; no "mejorarlo" |
-| Sesión muere a los 5 min | keepalive o re-bootstrap; el pool lo gestiona |
-| Bootstrap cuesta 7 s y 1.1 MB | una vez por sesión, jamás por request |
+| Sesión muere a los ~4.2 min | keepalive ≤3 min o re-bootstrap; el pool lo gestiona |
+| Bootstrap cuesta entre 0.15 s/52 KB y 7 s/4.5 MB | una vez por sesión, jamás por request |
 | Conexión estrictamente secuencial | N requests concurrentes ⇒ N conexiones |
+| **La región de detalle está numerada y sube** | `detailRegion` en la conexión; con id fijo la 2.ª asignatura la mata |
 | `_afrRK` se renumera en cada re-render | re-parsear siempre; nunca cachear índices |
 | Sin cascada completa el botón es no-op silencioso | ~900 B = error, tratar como tal |
 | Los grupos visibles dependen del programa | `section_program`; una consulta ≠ el universo |
 | Los cupos son globales | una medición sirve para todos los programas |
+| **`soc4=0` excluye libre elección** | el catálogo de un plan son 2 consultas, no 1 |
+| **`program.code` no es único entre sedes** | identidad `(campus, faculty, code)` |
 
 ---
 
@@ -206,5 +223,7 @@ course ─┬─ course_program ── program
                     └─ seat_snapshot        (append-only)
 ```
 
-Clave natural de una oferta: `(code, term, number)`. Nunca `code` solo — el listado
+Clave natural de una oferta: `(code, term, key)`, con `key` = el token entre
+paréntesis de la cabecera del grupo (`1`, `AMAZ-07`, `TUMA-01`); `Grupo N` solo se
+repite dentro de la misma asignatura. Nunca `code` solo — el listado
 devuelve ofertas, no asignaturas.

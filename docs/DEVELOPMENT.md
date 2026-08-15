@@ -113,12 +113,14 @@ cuándo el SIA cambió de forma.
 
 Es un catálogo público de una universidad, sin `robots.txt`. Aun así:
 
-- **Un bootstrap por sesión**, jamás por request. Cuesta 7 s y 1.1 MB.
+- **Un bootstrap por sesión**, jamás por request. Cuesta entre 0.15 s/52 KB y 7 s/4.5 MB,
+  y no lo controlas ([GOTCHAS §25](GOTCHAS.md)).
 - Reutiliza la conexión: cambiar de carrera son 2 POSTs, no 6.
 - Usa `it11` cuando busques una asignatura concreta: 241 KB → 15 KB.
-- El crawl completo con detalle son **horas** (1 POST por asignatura). Hazlo resumible
-  y sin paralelismo agresivo hasta saber si el SIA lo tolera
-  ([OPEN-QUESTIONS.md §5](OPEN-QUESTIONS.md)).
+- El crawl completo con detalle son **30-40 h** (una carrera de 98 asignaturas = 201
+  POSTs / 99 s / 31 MB). Hazlo resumible. El SIA aguantó 8 conexiones en paralelo sin
+  errores ni throttling, así que se puede paralelizar con moderación
+  ([OPEN-QUESTIONS.md](OPEN-QUESTIONS.md)).
 
 Durante el desarrollo, trabaja contra fixtures y toca el servidor real solo para
 verificar.
@@ -132,7 +134,8 @@ verificar.
    trampas y no necesita red.
 3. Parser del detalle (grupos, horarios, cupos).
 4. `SIAConn`: bootstrap, cascada, búsqueda, detalle, Volver. Con los campos de estado
-   `parkedAt` e `inDetail` desde el principio — son los que ahorran POSTs.
+   `parkedAt` y `detailRegion` desde el principio — son los que ahorran POSTs.
+   `detailRegion` es un entero, no un bool: sube con cada detalle (GOTCHAS §20).
 5. Pool de 1-2 conexiones con mutex.
 6. `Store` y read-through.
 7. API HTTP.

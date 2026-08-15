@@ -35,11 +35,13 @@ assert {
 }
 
 docs {
-  PASO 1 de 2 para el detalle. Marca la fila {{fila}} como seleccionada.
+  OPCIONAL. Resulto innecesaria.
 
-  Devuelve ~900 bytes SIN contenido. Es normal y es obligatorio:
-  sin este paso, el paso 08 tambien devuelve vacio.
+  Verificado: el paso 08 funciona solo, en un unico POST, porque su DELTAS ya
+  lleva selectedRowKeys. La ruta real es 06 -> 08.
 
-  El indice de fila sale del atributo _afrRK del <tr>, o del id de celda
-  pt1:r1:0:t4:N:c1. Empieza en 0.
+  Se conserva para documentar el payload del evento `selection`, que existe en
+  el protocolo aunque no haga falta para leer el detalle.
+
+  Devuelve ~900 B sin contenido.
 }

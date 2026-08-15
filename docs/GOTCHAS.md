@@ -1,6 +1,6 @@
 # Trampas verificadas
 
-Cada punto aquí fue comprobado contra el servidor de producción el **2026-08-15**.
+Cada punto fue comprobado contra el servidor de producción el **2026-08-15**.
 Varios contradicen lo que asumía el proyecto anterior (`BetterCampus/sia-scraper`).
 
 Léelo antes de escribir código.
@@ -23,8 +23,8 @@ Medido, misma URL, único cambio el UA:
 Con UA de navegador recibes `AdfLoopbackUtils.runLoopback(...)`, que calcula
 `_afrLoop` y `Adf-Window-Id` en JS y recarga. Sin motor JS te quedas ahí.
 
-**Contraintuitivo:** intentar "parecer navegador" para pasar desapercibido es
-exactamente lo que rompe el scraper. Deja que Go mande su `Go-http-client/2.0`.
+**Contraintuitivo:** intentar "parecer navegador" es exactamente lo que rompe el
+scraper. Deja que Go mande su `Go-http-client/2.0`.
 
 ---
 
@@ -36,12 +36,11 @@ Al saltarte el loopback, ADF asigna ese id fijo. No hay que extraerlo ni generar
 
 ## 3. El ViewState NO rota
 
-`docs/QUIRKS.md` del proyecto anterior afirmaba que Oracle ADF rota el
-`javax.faces.ViewState` tras cada POST, y sobre esa premisa montó toda su arquitectura
-de resincronización de estado.
+El proyecto anterior afirmaba que ADF rota el `javax.faces.ViewState` tras cada POST,
+y montó toda su arquitectura de resincronización sobre esa premisa.
 
-Es falso. Verificado: el mismo token `!-5pdrpr5se` en los 8 pasos de una sesión
-completa. El estado vive en el servidor indexado por cookie; el token solo apunta.
+Es falso. Verificado: el mismo token `!-5pdrpr5se` en los 8 pasos de una sesión.
+El estado vive en el servidor indexado por cookie; el token solo apunta.
 
 Recaptúralo por si acaso, pero no diseñes alrededor de que cambie.
 
@@ -71,7 +70,7 @@ posicionalmente, nunca caches la lista de keys.
 
 El proyecto anterior usaba el índice de posición como `selectedRowKeys` y como sufijo
 en `pt1:r1:0:t4:{idx}:cl2`. Funciona en la primera búsqueda de una sesión y se rompe
-en la segunda — que es el patrón normal (`set_career` → `scrape` → `set_career`).
+en la segunda — que es el patrón normal.
 
 ---
 
@@ -97,7 +96,7 @@ Conserva el valor de la primera búsqueda de la sesión. **Cuenta los `<tr>`.**
 | Electivas sin disparar `soc10` antes de `soc6` | basura: keys duplicados |
 
 Ni error, ni mensaje de validación. Solo no hace nada. Si recibes ~900 B donde
-esperabas datos, te falta un paso de la cascada o expiró la sesión.
+esperabas datos: falta un paso, o estás en la región 1 (§10), o expiró la sesión.
 
 ---
 
@@ -106,7 +105,6 @@ esperabas datos, te falta un paso de la cascada o expiró la sesión.
 `AdfPage.PAGE.__initializeSessionTimeoutTimer(300000, 120000, ...)`
 
 Se renueva con cada petición, así que un scraper activo la mantiene viva sola.
-Si algo devuelve ~900 B inesperadamente, prueba re-bootstrap.
 
 Respuesta típica de sesión caducada:
 
@@ -131,21 +129,30 @@ Probadas las 6 combinaciones:
 
 ---
 
-## 9. La selección previa al click es obligatoria
+## 9. El POST de `selection` es innecesario
 
-El POST de `selection` devuelve ~900 B sin contenido y parece un fallo. No lo es:
-sin él, el click al link también devuelve vacío.
+Antes creía que hacían falta dos POSTs para el detalle (`selection` y luego el click).
+No: **un solo POST basta** si `DELTAS` lleva `selectedRowKeys`.
 
----
+Verificado: 1 POST → 48 524 B con `Cupos disponibles`.
 
-## 10. Hay que "Volver" entre cursos
-
-Tras ver un detalle quedas en la región 1. Un segundo click al link de otra fila
-devuelve 893 B. Sal con `pt1:r1:1:cb4` antes de pedir el siguiente.
+Cuando el `selection` parecía obligatorio era porque `DELTAS` no llevaba la clave.
 
 ---
 
-## 11. `DELTAS` es opcional
+## 10. "Volver" antes de CUALQUIER acción de la región 0
+
+La sesión está en `pt1:r1:0` (buscador+tabla) o en `pt1:r1:1` (detalle).
+
+Tras abrir un detalle quedas en la región 1. Verificado limpio: desde ahí, tanto una
+**búsqueda nueva** como el **detalle de otra asignatura** devuelven ~895 B.
+
+No es solo "entre detalles": es antes de cualquier cosa en la región 0.
+Tu pool tiene que llevar ese estado por sesión.
+
+---
+
+## 11. `DELTAS` es opcional para buscar
 
 El HAR de navegador de las electivas **no manda `oracle.adf.view.rich.DELTAS` en
 ningún paso**, ni siquiera en el `cb1` final, y devuelve las 240 filas igual.
@@ -161,30 +168,36 @@ Manda cualquier cosa consistente.
 
 ---
 
-## 13. Los códigos de asignatura se repiten
-
-Cada fila es una **oferta**, no una asignatura:
+## 13. Los códigos se repiten en el listado — y son la misma asignatura
 
 ```
 libre elección Bogotá:  215 códigos únicos en 240 filas
-consulta malformada:    266 códigos únicos en 1000 filas
-                        1000008-M ×131 · 1000009-B ×83 · 1000012-B ×72
+2019510 ×7 · 2020922 ×4 · 2020933 ×4 · 2018632 ×4
 ```
 
-Nunca uses el código como clave primaria. Perderías la mayoría de los datos.
+**Verificado:** hacer click en dos filas duplicadas del mismo código da un detalle
+**byte-idéntico** (`sha256` igual, 28 líneas iguales).
+
+Las filas repetidas **no son grupos distintos**: `2019510` aparece 7 veces y su detalle
+tiene **1 solo grupo**. Son emparejamientos (asignatura × plan) — la misma asignatura
+ofertada bajo varios planes, y las 5 columnas visibles no incluyen el plan.
+
+**Dedupear por código al parsear el listado es seguro.**
+
+El listado regular de una carrera **no** tiene duplicados (98 códigos únicos de 98
+filas). Solo aparecen en el buscador de electivas.
 
 ---
 
 ## 14. Posible tope de 1000 filas (sin confirmar)
 
 En una consulta malformada vi `_rowCount="2114"` con exactamente **1000 filas**
-devueltas — número sospechosamente igual al `fetchSize: 1000` que declara el
-componente `AdfRichTable`.
+devueltas — igual al `fetchSize: 1000` que declara el `AdfRichTable`.
 
-No pude confirmarlo: `_rowCount` no es fiable (ver #5) y `startRow`/`rows` en `DELTAS`
-no tuvieron ningún efecto. Con consultas bien formadas (98, 240 filas) nunca se alcanza.
+No pude confirmarlo: `_rowCount` no es fiable (§5) y `startRow`/`rows` en `DELTAS` no
+tuvieron efecto. Con consultas bien formadas (98, 240 filas) nunca se alcanza.
 
-**Pendiente de verificar** si alguna consulta legítima supera las 1000 filas.
+**Pendiente de verificar.**
 
 ---
 
@@ -193,19 +206,88 @@ no tuvieron ningún efecto. Con consultas bien formadas (98, 240 filas) nunca se
 `ELECTIVES_CAMPUS_INCREMENT = 40` → para sede=2 calculaba `soc6=42`.
 
 El dropdown solo tiene opciones **0..12**. Es un índice posicional en una lista de 13,
-no una fórmula aritmética. El flujo de electivas de ese proyecto estaba roto.
+no una fórmula. El flujo de electivas de ese proyecto estaba roto.
+
+---
+
+## 16. El conjunto de grupos depende de la carrera; los cupos no
+
+Misma asignatura (`1000004-B` Cálculo diferencial), dos carreras:
+
+```
+INGENIERÍA DE SISTEMAS Y COMPUTACIÓN : 25 grupos
+INGENIERÍA INDUSTRIAL                : 23 grupos
+comunes                              : 23      ← subconjunto ESTRICTO
+solo en Sistemas                     : Grupo 18, Grupo 24
+cupos de los 23 comunes              : idénticos, 0 diferencias
+```
+
+Los grupos son **globales** (mismo profesor, horario, aula y cupos), pero cada plan ve
+solo el subconjunto que tiene habilitado.
+
+Dos consecuencias:
+
+- **Una sola medición de cupos sirve para todos los planes.** No hay que muestrear por
+  carrera.
+- Consultar una asignatura desde **una** carrera te da un subconjunto de sus grupos.
+  Para el universo completo habría que consultarla desde todos los planes que la
+  ofrecen. Para el caso de uso normal (¿qué puedo inscribir yo?) el subconjunto por
+  plan es justamente lo que interesa.
+
+Modelado: `section` global + `section_program` como tabla de visibilidad.
+
+---
+
+## 17. El vocabulario de tipología cambia entre vistas
+
+```
+listado:  LIBRE ELECCIÓN (L)
+detalle:  ELEGIBLES
+```
+
+Misma cosa, dicha distinto. Normaliza a un enum en el dominio y guarda el literal
+crudo aparte.
+
+**No confirmado** que la tipología varíe entre carreras: `1000004-B` es
+`FUND. OPTATIVA` tanto en Sistemas como en Industrial, y las 6 asignaturas de cálculo
+salieron iguales en ambos listados. Aun así vive en `course_program`, porque revertirlo
+después es trivial y al revés no.
+
+---
+
+## 18. Hay asignaturas sin grupos
+
+`2027641` (Análisis de bases de datos) existe en el catálogo y su detalle trae
+**0 grupos**. No se está ofertando este periodo.
+
+El esquema debe permitirlo, y la API debe distinguir *"no la conozco"* de
+*"existe pero no tiene oferta"*.
+
+---
+
+## 19. `it11` filtra por nombre, `it10` por créditos
+
+Pese al orden de los campos, `it10` es **número de créditos** e `it11` es **nombre**.
+
+`it11` filtra en el servidor: substring, insensible a acentos (`calculo` → `Cálculo`).
+Baja el payload de 241 KB a 15–27 KB.
+
+**No reemplaza la carrera:** con `soc3` vacío, ADF ignora la consulta y re-renderiza
+el resultado anterior — que se parece mucho a un éxito. Cuidado.
 
 ---
 
 ## Resumen para el diseño en Go
 
 ```go
-// 1. Un UA que no parezca navegador (el default de Go sirve)
+// 1. UA que no parezca navegador (el default de Go sirve)
 // 2. Adf-Window-Id = "winnoloop" constante
-// 3. cookiejar obligatorio, ViewState de la misma sesión
+// 3. cookiejar obligatorio; ViewState de la misma sesión
 // 4. Re-parsear _afrRK antes de CADA uso. Nunca cachear.
-// 5. Contar los <tr>, ignorar _rowCount
-// 6. Respuesta de ~900 B = paso faltante o sesión caducada
-// 7. Un bootstrap por sesión, no por carrera
-// 8. Clave primaria = (código, grupo), nunca código solo
+// 5. Contar los <tr>; ignorar _rowCount
+// 6. Respuesta de ~900 B = paso faltante, región 1, o sesión caducada
+// 7. Llevar el estado (parkedAt, inDetail) por conexión
+// 8. Un bootstrap por sesión, no por carrera
+// 9. Dedupear el listado por código
+// 10. Clave natural de oferta: (code, term, number)
 ```

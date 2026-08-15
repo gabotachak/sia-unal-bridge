@@ -98,6 +98,42 @@ Hay que leer sus opciones de la respuesta de ese paso.
 
 Valor conocido de `soc4`: **`7` = LIBRE ELECCIÓN**.
 
+### `soc3` — Carreras de Ingeniería (nivel=0, sede=2, facultad=8)
+
+Ejemplo de lo que devuelve el paso 3 de la cascada:
+
+| Valor | Etiqueta |
+|---|---|
+| `0` | 2541 INGENIERÍA AGRÍCOLA |
+| `1` | 2542 INGENIERÍA CIVIL |
+| `2` | 2543 INGENIERÍA DE SISTEMAS |
+| `3` | 2A74 INGENIERÍA DE SISTEMAS Y COMPUTACIÓN |
+| `4` | 2879 INGENIERÍA DE SISTEMAS Y COMPUTACIÓN |
+| `5` | 2544 INGENIERÍA ELÉCTRICA |
+| `6` | 2983 INGENIERÍA ELÉCTRICA |
+| `7` | 2545 INGENIERÍA ELECTRÓNICA |
+| `8` | 2546 INGENIERÍA INDUSTRIAL |
+| `9` | 2547 INGENIERÍA MECÁNICA |
+| `10` | 2548 INGENIERÍA MECATRÓNICA |
+| `11` | 2549 INGENIERÍA QUÍMICA |
+
+Ojo: hay **nombres repetidos con código institucional distinto** (`2A74` y `2879`,
+ambos "Ingeniería de Sistemas y Computación"; `2544` y `2983`, ambos "Eléctrica").
+Son versiones curriculares distintas. Resolver por nombre es ambiguo — guarda el
+índice **y** el nombre completo con su código institucional.
+
+### `it10` / `it11` — filtros de texto
+
+| Campo | Filtra por |
+|---|---|
+| `it10` | **número de créditos** |
+| `it11` | **nombre de la asignatura** |
+
+El orden engaña: `it10` no es el nombre.
+
+`it11` filtra en el servidor, substring e insensible a acentos (`calculo` encuentra
+`Cálculo`). Baja el payload de 241 KB a 15–27 KB. No reemplaza la carrera.
+
 ---
 
 ## Código de carrera
@@ -120,18 +156,18 @@ Considera resolver por nombre y guardar el nombre junto al índice.
 
 ## Celdas de la tabla de resultados
 
-| Celda | Campo | Ejemplo |
-|---|---|---|
-| `c1` | Código | `2016696`, `1000003-B` |
-| `c2` | Nombre | `Algoritmos` |
-| `c5` | Créditos | `3` |
-| `c6` | Tipología | `FUND. OBLIGATORIA (B)` |
-| `c8` | Descripción | programa completo, texto largo |
+| Celda | Campo | Ejemplo | Columna en BD |
+|---|---|---|---|
+| `c1` | Código | `2016696`, `1000003-B` | `course.code` |
+| `c2` | Nombre | `Algoritmos` | `course.name` |
+| `c5` | Créditos | `3` | `course.credits` |
+| `c6` | Tipología | `FUND. OBLIGATORIA (B)` | `course_program.typology` |
+| `c8` | Descripción | programa completo, texto largo | `course.description` |
 
 Id de celda: `pt1:r1:0:t4:{RK}:c{N}`. El código va dentro de un
 `<a id="pt1:r1:0:t4:{RK}:cl2">`.
 
-Tipologías observadas:
+Tipologías observadas **en el listado**:
 
 ```
 FUND. OBLIGATORIA (B)          DISCIPLINAR OBLIGATORIA (C)
@@ -139,6 +175,10 @@ FUND. OPTATIVA (O)             DISCIPLINAR OPTATIVA (T)
 LIBRE ELECCIÓN (L)             NIVELACIÓN (E)
 TRABAJO DE GRADO (P)
 ```
+
+El **detalle usa otro vocabulario** para lo mismo: donde el listado dice
+`LIBRE ELECCIÓN (L)`, el detalle dice `ELEGIBLES`. Normaliza a un enum en el dominio
+y conserva el literal crudo aparte.
 
 Marcador extra: `ASIGNATURA SIN PROGRAMAR` aparece en `c2` fuera del `<span>`,
 después de un `<div></div>`.

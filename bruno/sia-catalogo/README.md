@@ -22,9 +22,13 @@ Corre en orden. Cada petición depende del estado que dejó la anterior.
 | 04 | Facultad (soc2) | puebla carrera |
 | 05 | Carrera (soc3) | puebla tipología |
 | 06 | Consultar cursos | **98 asignaturas** (Ing. Sistemas) |
-| 07 | Seleccionar fila | devuelve ~900 B vacíos — es normal y obligatorio |
+| 07 | Seleccionar fila | **opcional** — resultó innecesaria, ver abajo |
 | 08 | Detalle | grupos, profesor, horarios, aula, **cupos** |
-| 14 | Volver | obligatorio antes del siguiente detalle |
+| 14 | Volver | obligatorio antes de cualquier acción del buscador |
+
+El paso **07 se puede saltar**. Verificado: el `08` funciona solo, en un único POST,
+porque su `DELTAS` ya lleva `selectedRowKeys`. Se deja en la colección para
+documentar el evento `selection`, pero la ruta real es `06 → 08`.
 
 ## Flujo B — libre elección (todas las facultades mezcladas)
 
@@ -63,8 +67,16 @@ elección de todas las facultades de la sede.
 **El User-Agent no puede parecer navegador.** Con Chrome/Firefox el servidor devuelve
 7 KB de bootstrap JS que exige ejecutar JavaScript. El UA de Bruno funciona.
 
-**Respuesta de ~900 B = algo falta.** O te saltaste un paso de la cascada, o expiró la
-sesión (5 min). Los scripts de la colección te lo avisan en la consola.
+**Respuesta de ~900 B = algo falta.** O te saltaste un paso de la cascada, o estás en
+la vista de detalle sin haber hecho Volver, o expiró la sesión (5 min). Los scripts de
+la colección te lo avisan en la consola.
+
+**Tras un detalle, "Volver" (14) es obligatorio antes de *cualquier* cosa** — otra
+búsqueda o el detalle de otra asignatura. No es solo entre detalles.
+
+**`nombre` (`it11`) filtra en el servidor.** Substring, insensible a acentos.
+Baja el payload de 241 KB a 15-27 KB. La ruta más rápida para una asignatura concreta
+es `06` con `nombre` puesto, y luego `08`.
 
 **`fila` es el `_afrRK`, no la posición.** Los row keys se acumulan entre búsquedas y
 **se renumeran** tras cada "Volver". Lee el `_afrRK` del `<tr>` en la respuesta del

@@ -35,10 +35,10 @@ assert {
 }
 
 docs {
-  PASO 2 de 2. Click en el link del codigo. ~48 KB con lo que la
-  consulta en lote NO trae:
+  UN SOLO POST. No hace falta correr el 07 antes.
 
-    - Grupos (nombre, numero)
+  Trae lo que la consulta en lote NO tiene:
+    - Grupos (numero, nombre)
     - Profesor por grupo
     - Horarios: dia, hora inicio/fin
     - Aula y edificio
@@ -46,7 +46,16 @@ docs {
     - Fechas del periodo (ej. 27/08/2026 - 17/12/2026)
     - Jornada y duracion
 
-  OJO: la sesion ADF expira a los 5 minutos
-  (__initializeSessionTimeoutTimer(300000)). Si esto devuelve ~900 bytes
-  en vez de ~48 KB, la sesion caduco: vuelve a correr desde el 01.
+  `fila` debe ser el _afrRK REAL leido de la respuesta del paso 06, no la
+  posicion. Los row keys se acumulan entre busquedas y se renumeran tras cada
+  re-render.
+
+  El conjunto de grupos depende de la CARRERA desde la que consultas.
+  Los cupos, en cambio, son globales: iguales desde cualquier carrera.
+
+  Tras esto quedas en la vista de detalle: corre el 14 (Volver) antes de
+  cualquier otra cosa.
+
+  Si devuelve ~900 B en vez de ~48 KB: sesion caducada (5 min) o estabas ya en
+  la vista de detalle.
 }

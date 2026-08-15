@@ -29,7 +29,7 @@ sia-unal-bridge/
 │   ├── sia/                        # ── ADAPTADOR driven: Oracle ADF ──
 │   │   ├── conn.go                 # SIAConn: bootstrap, búsqueda, detalle, Volver
 │   │   ├── cascade.go              # las DOS cascadas: regular (5 pasos) y electivas (9)
-│   │   ├── pool.go                 # pool 1-2, mutex, keepalive <=3 min (muere a ~4.2)
+│   │   ├── pool.go                 # pool de 4, mutex por operacion, keepalive <=3 min
 │   │   ├── form.go                 # cuerpos x-www-form-urlencoded (PROTOCOL.md)
 │   │   ├── envelope.go             # <partial-response> → CDATA indexado por id
 │   │   ├── parse_list.go           # tabla t4: filas, _afrRK, dedupe por código
@@ -113,14 +113,14 @@ devuelven, y está bien: dependen del dominio, que apunta hacia adentro.)
 
 ## Por qué `internal/sia` está partido así
 
-Es el paquete gordo y debe serlo: ahí viven las 27 trampas de
+Es el paquete gordo y debe serlo: ahí viven las 28 trampas de
 [GOTCHAS.md](GOTCHAS.md). Está dividido por **fase del protocolo**, no por capa
 técnica, para que cada trampa tenga un archivo obvio donde vivir y donde buscarla.
 
 | Archivo | Trampas que le tocan |
 |---|---|
 | `conn.go` | §1 User-Agent · §2 `winnoloop` · §3 ViewState no rota · §7 timeout ~4.2 min · §8 cookie+ViewState · §10 región 0 vs detalle · **§20 región de detalle numerada** · §22 bootstrap con tabla ajena · §25 coste variable del bootstrap |
-| `pool.go` | §7 expiración y keepalive ≤3 min · concurrencia estrictamente secuencial por conexión (8 en paralelo van bien) |
+| `pool.go` | §7 expiración y keepalive ≤3 min · **§28 mutex por conexión envolviendo la operación lógica** · 8 conexiones en paralelo van bien |
 | `form.go` | §9 `selection` innecesario · §11 `DELTAS` opcional · §12 headers no validados |
 | `cascade.go` | §6 la cascada no se puede saltar · §21 `soc4=0` excluye libre elección → la de electivas no es opcional · §5 de `PROTOCOL.md`: `soc10` antes de `soc6` o sale basura |
 | `parse_list.go` | §4 `_afrRK` se renumera y no empieza en 0 · §5 `_rowCount` no fiable · §13 dedupe · §14 tope de 1000 · §21 `soc4=0` excluye libre elección · §23 `<tr>` ×5 en la página completa |

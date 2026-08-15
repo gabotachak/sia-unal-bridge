@@ -124,7 +124,8 @@ rediseñar nada.
 No es un cliente HTTP sin estado. Es un **pool de sesiones ADF vivas**, y cada una:
 
 - muere a los **~4.2 min** de inactividad — renovable con tráfico; keepalive ≤3 min
-- es **estrictamente secuencial**: una petición en vuelo a la vez
+- es **estrictamente secuencial**: una petición en vuelo a la vez — y el servidor no lo
+  impone, así que el mutex es tuyo ([GOTCHAS §28](docs/GOTCHAS.md))
 - está *parqueada* en un `(level, campus, faculty, program)`; moverla cuesta 2 POSTs
 - está en la región del buscador **o** en una región de detalle **numerada**; salir
   cuesta 1 POST *al id correcto*
@@ -150,10 +151,57 @@ solo atasco.
 Esos campos de estado son los que ahorran POSTs: si la conexión ya está en el programa
 pedido y no está en detalle, son 2 POSTs en vez de 6.
 
-**Fase 1:** pool de 1-2 conexiones con mutex. Suficiente para uso personal y no
-encierra en nada. Medido, el techo está mucho más arriba: **8 sesiones concurrentes, 0
-errores, 0 throttling y latencia plana** (la búsqueda tarda lo mismo con N=1 que con
-N=8). Crecer el pool es una decisión de cortesía, no una restricción del servidor.
+**Fase 1:** pool de **4** conexiones, cada una con su mutex. Medido: 8 sesiones
+concurrentes dan 0 errores, 0 throttling y latencia plana (la búsqueda tarda lo mismo
+con N=1 que con N=8). Con 1-2 el `503 busy` salta con dos pestañas abiertas; crecer más
+allá de 4-8 es decisión de cortesía, no restricción del servidor. Ver *Concurrencia*.
+
+### Concurrencia: entre conexiones, nunca dentro de una
+
+"Estrictamente secuencial" dejó de ser una suposición heredada. Medido: el SIA **no
+rechaza** dos peticiones simultáneas sobre la misma sesión — devuelve `200 OK` y le da a
+un hilo la respuesta del otro ([GOTCHAS §28](docs/GOTCHAS.md)).
+
+```
+2 búsquedas idénticas, misma conexión → las dos correctas
+2 programas distintos, misma conexión → ambas devuelven el catálogo del MISMO programa
+2 detalles, misma conexión            → uno gana, el otro recibe 895 B
+```
+
+El segundo caso es el peligroso: respuesta equivocada, bien formada, indetectable desde
+el cliente. Y no se arregla poniendo un mutex en cualquier sitio:
+
+```
+    correcto                        roto
+    lock                            lock; POST soc3; unlock
+      POST soc3                     lock; POST cb1;  unlock
+      POST cb1                      ↑ otra operación se cuela aquí
+    unlock
+```
+
+**El mutex envuelve la operación lógica** —cascada+`cb1`, detalle+`Volver`—, no el POST.
+
+Con eso, las goroutines se ganan su sitio en cuatro puntos y solo en cuatro:
+
+| Uso | Justificación medida |
+|---|---|
+| Pool como `chan *SIAConn` | canal con buffer = pool acotado; `select` con `ctx.Done()` da el `503 busy` de [API.md](docs/API.md) |
+| Keepalive | una goroutine con ticker para todo el pool: ping ≤3 min mantiene la sesión 30 min; 5 min de silencio la mata |
+| `singleflight` | con pool chico es lo que evita que 3 clientes en frío hagan 3 × 10 s en cola |
+| `Refresher` (fase 2) | 30-40 h en serie; `errgroup` acotado + checkpoint por programa |
+
+Dos trampas propias de este proyecto:
+
+- **Write-behind con el contexto de la request.** El read-through responde y *luego*
+  persiste. Si eso corre en una goroutine con el `Context` de la request, se cancela al
+  volver el handler y la escritura se pierde en silencio. Usa `context.WithoutCancel`.
+- **Bootstraps en fan-out.** Es la operación cara y variable (hasta 4.5 MB): arrancar 8
+  a la vez son ~35 MB de golpe. Escalona el llenado del pool en frío.
+
+**Tamaño del pool en fase 1: 4.** Con 1-2 devuelves `503` en cuanto hay dos pestañas
+abiertas, y el servidor da para 8 sin despeinarse. Por encima de eso el límite es la
+cortesía con la UNAL —4 conexiones crawleando son ~120 MB/min contra un servidor público
+de universidad—, no la capacidad.
 
 ### Rutas mínimas medidas
 
@@ -174,7 +222,7 @@ Usar el filtro `it11` (nombre) baja el payload de 241 KB a 15–27 KB.
 
 - read-through de catálogo y detalle
 - endpoint de cupos en vivo
-- pool de 1-2 conexiones
+- pool de 4 conexiones (ver *Concurrencia*)
 
 **Después**
 
@@ -198,7 +246,7 @@ detalles de implementación:
 | El User-Agent no puede parecer navegador | el default de Go sirve; no "mejorarlo" |
 | Sesión muere a los ~4.2 min | keepalive ≤3 min o re-bootstrap; el pool lo gestiona |
 | Bootstrap cuesta entre 0.15 s/52 KB y 7 s/4.5 MB | una vez por sesión, jamás por request |
-| Conexión estrictamente secuencial | N requests concurrentes ⇒ N conexiones |
+| **Una conexión concurrente devuelve la respuesta de otro hilo** | mutex por conexión sobre la operación lógica; N requests ⇒ N conexiones |
 | **La región de detalle está numerada y sube** | `detailRegion` en la conexión; con id fijo la 2.ª asignatura la mata |
 | `_afrRK` se renumera en cada re-render | re-parsear siempre; nunca cachear índices |
 | Sin cascada completa el botón es no-op silencioso | ~900 B = error, tratar como tal |

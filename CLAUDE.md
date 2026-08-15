@@ -21,7 +21,7 @@ está completa y verificada contra producción (2026-08-15).
 
 ## Antes de escribir código
 
-Lee **`docs/GOTCHAS.md`** completo. No es opcional. Son 27 trampas verificadas contra
+Lee **`docs/GOTCHAS.md`** completo. No es opcional. Son 28 trampas verificadas contra
 el servidor real, varias de las cuales fallan **en silencio** (devuelven datos
 plausibles pero equivocados). El proyecto anterior murió por asumir mal cuatro de ellas.
 
@@ -44,12 +44,13 @@ Las cuatro que más código han roto:
 
 | Ruta | Qué hay |
 |---|---|
-| `ARCH.md` | Arquitectura: puertos, read-through, pool de sesiones, alcance |
+| `PLAN.md` | **Plan de implementación: pasos, criterios de aceptación, fixtures** |
+| `ARCH.md` | Arquitectura: puertos, read-through, pool de sesiones, concurrencia |
 | `docs/API.md` | Contrato HTTP: endpoints, IDs públicos, frescura, errores |
 | `docs/LAYOUT.md` | Árbol de paquetes Go y librerías — propuesta, sin implementar |
 | `docs/PROTOCOL.md` | Handshake ADF completo con cuerpos de petición reales |
 | `docs/FIELDS.md` | Componentes ADF, opciones de cada dropdown, mapeo a columnas |
-| `docs/GOTCHAS.md` | Las 27 trampas |
+| `docs/GOTCHAS.md` | Las 28 trampas |
 | `docs/DATA-MODEL.md` | Esquema Postgres + structs de Go |
 | `docs/OPEN-QUESTIONS.md` | Qué está verificado y qué no. Léelo antes de asumir |
 | `docs/DEVELOPMENT.md` | Entorno: Docker, Postgres, cómo replicar el flujo |
@@ -88,7 +89,8 @@ Es un **pool de conexiones ADF con estado**. Cada conexión:
 - está en la región del buscador **o** en una región de detalle **numerada**; salir
   cuesta 1 POST al id correcto (`pt1:r1:<N>:cb4`, `N` creciente)
 
-N requests concurrentes ⇒ N conexiones. Fase 1: pool de 1-2 con mutex; medido, el SIA
+N requests concurrentes ⇒ N conexiones. Fase 1: pool de 4 con mutex por conexión
+**sobre la operación lógica** (§28); medido, el SIA
 aguanta 8 en paralelo sin errores ni throttling.
 
 Los campos de estado (`parkedAt`, `detailRegion`) son lo que ahorra POSTs: si la

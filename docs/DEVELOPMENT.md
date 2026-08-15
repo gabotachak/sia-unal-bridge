@@ -136,7 +136,9 @@ verificar.
 4. `SIAConn`: bootstrap, cascada, búsqueda, detalle, Volver. Con los campos de estado
    `parkedAt` y `detailRegion` desde el principio — son los que ahorran POSTs.
    `detailRegion` es un entero, no un bool: sube con cada detalle (GOTCHAS §20).
-5. Pool de 1-2 conexiones con mutex.
+5. Pool de 4 conexiones. El mutex envuelve la **operación lógica** (cascada+`cb1`,
+   detalle+`Volver`), no el POST: partirlo reproduce el §28 — dos peticiones a la vez
+   sobre una conexión devuelven `200 OK` con la respuesta del otro hilo.
 6. `Store` y read-through.
 7. API HTTP.
 

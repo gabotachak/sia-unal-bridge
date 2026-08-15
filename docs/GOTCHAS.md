@@ -5,7 +5,7 @@ Varios contradicen lo que asumía el proyecto anterior (`BetterCampus/sia-scrape
 
 Léelo antes de escribir código.
 
-> §20-§27 salen de la segunda ronda de experimentos (2026-08-15, tarde). Las dos caras
+> §20-§28 salen de la segunda ronda de experimentos (2026-08-15, tarde). Las dos caras
 > de descubrir por tu cuenta son la §20 —se disfraza de sesión colgada— y la §27, que
 > no se nota nunca: simplemente faltan grupos.
 
@@ -568,6 +568,52 @@ calendario** (`24/08/2026` frente al `27/08/2026` de Bogotá).
 
 ---
 
+## 28. Una conexión no RECHAZA la concurrencia: te da la respuesta de otro
+
+Lo esperable de un backend con estado sería un error, o un lock. No hay ninguno de los
+dos. Dos peticiones a la vez sobre la **misma** sesión (misma cookie, mismo ViewState)
+devuelven `200 OK` con contenido plausible, y el perdedor no tiene forma de notarlo.
+
+Medido, tres escenarios:
+
+```
+A) 2 búsquedas IDÉNTICAS     → las dos correctas, 98 filas cada una
+B) 2 programas DISTINTOS     → las dos devuelven 67 filas y los MISMOS códigos.
+                               El hilo que pidió el programa de 98 filas recibió
+                               el catálogo del otro programa. 200 OK.
+C) 2 detalles                → uno gana (157 KB, 19 grupos), el otro recibe 895 B
+```
+
+El caso B es el grave: no es un fallo, es una **respuesta equivocada bien formada**. El
+caso C al menos se detecta con la regla del no-op (§6).
+
+Después de la carrera la sesión queda desincronizada de forma no determinista — en una
+tirada un `soc3` de vuelta al programa correcto seguía devolviendo 67 filas, en otra se
+recuperó sola. **La conexión no hay que tirarla:** re-cascadear (`soc9` → `soc2` →
+`soc3`) la deja sana otra vez.
+
+### La consecuencia no es "pon un mutex", es dónde ponerlo
+
+El mutex tiene que envolver la **operación lógica completa**:
+
+```
+    correcto                             roto
+    ────────                             ────
+    lock                                 lock; POST soc3; unlock
+      POST soc3                          lock; POST cb1;  unlock
+      POST cb1                           ↑ dos operaciones se intercalan aquí
+    unlock                                 y reproduces el caso B tal cual
+```
+
+Las operaciones lógicas son: *cascada + `cb1`*, y *detalle + `Volver`*. Partirlas es
+exactamente el bug.
+
+Entre conexiones distintas no hay problema: 8 sesiones en paralelo dan 0 errores y 0
+contaminación (§ concurrencia en [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md)). El paralelismo
+va **entre** conexiones, nunca dentro de una.
+
+---
+
 ## Resumen para el diseño en Go
 
 ```go
@@ -586,4 +632,5 @@ calendario** (`24/08/2026` frente al `27/08/2026` de Bogotá).
 // 12. soc4=0 excluye libre elección; las libres van por el buscador de electivas
 // 13. Keepalive <= 3 min (el timeout real es ~4.2 min, no 5)
 // 14. Identidad de programa: (campus_code, faculty_code, code)
+// 15. Mutex por conexion envolviendo la OPERACION LOGICA, no cada POST
 ```

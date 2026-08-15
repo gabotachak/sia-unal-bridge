@@ -381,7 +381,7 @@ si vuelve a pasar, entonces sí es `502`.
 ## Lo que el contrato asume de la implementación
 
 **Singleflight por clave de fetch.** Tres clientes pidiendo `2016696` en frío = 1 POST,
-no 3 encolados. Sin esto, el pool de 1-2 conexiones secuenciales se vuelve una cola de
+no 3 encolados. Sin esto, el pool de 4 conexiones secuenciales se vuelve una cola de
 10 s × N. La clave es `(program, code)` para el detalle y `program` para el catálogo.
 
 **Miss frío síncrono.** El cliente espera. Feo pero honesto, y con los números medidos

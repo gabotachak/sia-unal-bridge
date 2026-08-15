@@ -32,7 +32,12 @@ servidor en producción** (2026-08-15). Sin código todavía.
 | [docs/PROTOCOL.md](docs/PROTOCOL.md) | Handshake completo con cuerpos de petición reales |
 | [docs/FIELDS.md](docs/FIELDS.md) | Componentes ADF y opciones de cada dropdown |
 | [docs/GOTCHAS.md](docs/GOTCHAS.md) | 19 trampas verificadas. **Léelo antes de codear.** |
+| [docs/OPEN-QUESTIONS.md](docs/OPEN-QUESTIONS.md) | Qué está probado y qué no. Experimentos pendientes |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Entorno con Docker, fixtures, orden sugerido para arrancar |
 | [bruno/](bruno/sia-catalogo/) | Colección Bruno para ejecutar el flujo a mano |
+
+Empezando de cero: [DEVELOPMENT.md](docs/DEVELOPMENT.md) para montar el entorno,
+[GOTCHAS.md](docs/GOTCHAS.md) antes de escribir la primera línea.
 
 ## Convención de idioma
 

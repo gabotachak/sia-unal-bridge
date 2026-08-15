@@ -1,0 +1,142 @@
+# Entorno de desarrollo
+
+Pensado para trabajar en Linux con Docker. Todavía no hay código: esto documenta el
+entorno que hace falta montar.
+
+---
+
+## Requisitos
+
+| Herramienta | Versión | Para qué |
+|---|---|---|
+| Go | 1.22+ | el servicio |
+| Docker + Compose | cualquiera reciente | Postgres local |
+| Bruno | 1.x | ejecutar el flujo del SIA a mano |
+| `curl` | — | pruebas rápidas contra el SIA |
+
+Conexión a internet: el SIA solo responde desde fuera. No hay fixtures grabados en el
+repo todavía (ver [Fixtures](#fixtures)).
+
+---
+
+## Postgres local
+
+```yaml
+# docker-compose.yml
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sia
+      POSTGRES_PASSWORD: sia
+      POSTGRES_DB: sia_bridge
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sia"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+```
+
+```bash
+docker compose up -d db
+psql postgres://sia:sia@localhost:5432/sia_bridge
+```
+
+El esquema está en [DATA-MODEL.md](DATA-MODEL.md). Cuando haya migraciones, van en
+`migrations/`.
+
+---
+
+## Probar el protocolo a mano
+
+Antes de depurar código propio, confirma que el SIA sigue igual.
+
+### Con Bruno
+
+Abre `bruno/sia-catalogo/` y selecciona el entorno **SIA**. Corre las peticiones en
+orden (01 → 06 para el catálogo, 01 → 13 para electivas). Cada una imprime en consola
+el número de filas y el rango de `_afrRK`.
+
+Si una devuelve ~900 B, la consola te avisa: falta un paso, estás en la región de
+detalle, o caducó la sesión.
+
+### Con curl
+
+Lo mínimo para ver que responde:
+
+```bash
+curl -sS -o /dev/null -w '%{http_code} %{size_download}\n' \
+  -A 'sia-bridge/dev' \
+  'https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf?taskflowId=task-flow-AC_CatalogoAsignaturas'
+```
+
+Esperado: `200` y ~1 MB. Si son ~7000 bytes, tu UA parece de navegador — ver
+[GOTCHAS.md §1](GOTCHAS.md).
+
+Extraer el ViewState:
+
+```bash
+curl -sS -A 'sia-bridge/dev' '<url de arriba>' \
+  | grep -o 'javax.faces.ViewState" value="[^"]*"'
+```
+
+---
+
+## Fixtures
+
+**No hay ninguno commiteado todavía.** `.gitignore` excluye `/testdata/live/` y `*.har`
+porque las respuestas del SIA pesan entre 50 KB y 1 MB.
+
+Cuando haya parser, conviene guardar un juego mínimo y sanitizado:
+
+| Fixture | Para probar |
+|---|---|
+| listado de una carrera (~98 filas) | parser de tabla, dedupe, `_afrRK` |
+| listado de electivas (~240 filas) | duplicados, comodín de sede |
+| detalle con varios grupos | parser de grupos, horarios, cupos |
+| detalle con 0 grupos (`2027641`) | asignatura sin oferta |
+| grupo sin horario (`Horarios/Aula: No informado`) | `section` sin `class_session` |
+| respuesta de ~900 B | detección de no-op |
+| respuesta de sesión caducada | detección de timeout |
+
+Fecharlos (`listado_2026-08-15.xml`) y no borrar los viejos: sirven para detectar
+cuándo el SIA cambió de forma.
+
+---
+
+## Cuidado con el servidor
+
+Es un catálogo público de una universidad, sin `robots.txt`. Aun así:
+
+- **Un bootstrap por sesión**, jamás por request. Cuesta 7 s y 1.1 MB.
+- Reutiliza la conexión: cambiar de carrera son 2 POSTs, no 6.
+- Usa `it11` cuando busques una asignatura concreta: 241 KB → 15 KB.
+- El crawl completo con detalle son **horas** (1 POST por asignatura). Hazlo resumible
+  y sin paralelismo agresivo hasta saber si el SIA lo tolera
+  ([OPEN-QUESTIONS.md §5](OPEN-QUESTIONS.md)).
+
+Durante el desarrollo, trabaja contra fixtures y toca el servidor real solo para
+verificar.
+
+---
+
+## Orden sugerido para arrancar
+
+1. Esquema y migraciones (`DATA-MODEL.md`).
+2. Parser del listado, contra un fixture guardado a mano con Bruno. Es la parte con más
+   trampas y no necesita red.
+3. Parser del detalle (grupos, horarios, cupos).
+4. `SIAConn`: bootstrap, cascada, búsqueda, detalle, Volver. Con los campos de estado
+   `parkedAt` e `inDetail` desde el principio — son los que ahorran POSTs.
+5. Pool de 1-2 conexiones con mutex.
+6. `Store` y read-through.
+7. API HTTP.
+
+El paso 4 es donde muerden las trampas de `GOTCHAS.md`. Tener los pasos 2 y 3 ya
+probados contra fixtures hace que sea mucho más fácil saber si el problema está en la
+navegación o en el parseo.

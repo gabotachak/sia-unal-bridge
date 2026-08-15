@@ -9,7 +9,7 @@ entorno que hace falta montar.
 
 | Herramienta | Versión | Para qué |
 |---|---|---|
-| Go | 1.22+ | el servicio |
+| Go | 1.26.6 | el servicio |
 | Docker + Compose | cualquiera reciente | Postgres local |
 | Bruno | 1.x | ejecutar el flujo del SIA a mano |
 | `curl` | — | pruebas rápidas contra el SIA |
@@ -25,7 +25,7 @@ repo todavía (ver [Fixtures](#fixtures)).
 # docker-compose.yml
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:18.6-alpine
     environment:
       POSTGRES_USER: sia
       POSTGRES_PASSWORD: sia

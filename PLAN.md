@@ -23,7 +23,7 @@ justificación de cada decisión vive en los otros documentos; aquí solo está 
 
 - Ingeniería inversa **completa y verificada**. Sin código todavía.
 - Alcance de fase 1: **Bogotá (`campus=2`), pregrado (`level=0`)**.
-- Go 1.22+, Postgres 17.
+- Go 1.26.6, Postgres 18.6 (últimas estables verificadas, 2026-08-15).
 
 ---
 
@@ -50,7 +50,7 @@ No se vuelven a discutir salvo que aparezca una medición nueva.
 ## Fase 0 — andamiaje (medio día)
 
 1. `go mod init`, árbol de [`docs/LAYOUT.md`](docs/LAYOUT.md) con paquetes vacíos.
-2. `docker-compose.yml` con Postgres 17. `Makefile`: `run`, `test`, `migrate`, `lint`.
+2. `docker-compose.yml` con Postgres 18. `Makefile`: `run`, `test`, `migrate`, `lint`.
 3. `internal/config`: ~6 variables de entorno (`DATABASE_URL`, `PORT`, `SIA_POOL_SIZE`,
    `LOG_LEVEL`, `TEST_DATABASE_URL`).
 4. El test de la invariante del hexágono, que debe pasar desde el día 1:

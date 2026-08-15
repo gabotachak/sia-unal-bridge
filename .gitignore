@@ -1,0 +1,22 @@
+# Go
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+vendor/
+
+# entorno
+.env
+.env.local
+
+# macOS
+.DS_Store
+
+# editores
+.vscode/
+.idea/
+
+# capturas y respuestas crudas del SIA (pueden ser MB)
+/testdata/live/
+*.har

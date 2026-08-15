@@ -1,0 +1,42 @@
+meta {
+  name: 01 Bootstrap
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}?taskflowId=task-flow-AC_CatalogoAsignaturas
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: text/html,application/xhtml+xml
+}
+
+script:post-response {
+  const b = String(res.getBody() || "");
+  const m = b.match(/<update id="javax\.faces\.ViewState"><!\[CDATA\[([^\]]+)\]\]>/)
+         || b.match(/javax\.faces\.ViewState"\s+value="([^"]+)"/);
+  if (m) {
+    bru.setVar("viewState", m[1]);
+    console.log("ViewState -> " + m[1]);
+  } else {
+    console.log("!! ViewState no encontrado");
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Arranca la sesion.
+
+  CLAVE: el User-Agent NO puede parecer un navegador. Con Chrome/Firefox el
+  servidor devuelve ~7KB de bootstrap JS (AdfLoopbackUtils.runLoopback) que
+  exige ejecutar JavaScript. Bruno manda su propio UA, asi que funciona.
+
+  Al saltarte el loopback, ADF asigna Adf-Window-Id = "winnoloop" (fijo).
+  El script captura el javax.faces.ViewState y lo guarda en la variable.
+}

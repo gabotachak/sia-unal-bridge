@@ -1,0 +1,54 @@
+meta {
+  name: 06 Consultar cursos
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}?Adf-Window-Id={{windowId}}&Adf-Page-Id={{pageId}}
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+  Adf-Ads-Page-Id: {{adsPageId}}
+  Adf-Rich-Message: true
+  Origin: https://sia.unal.edu.co
+  Referer: {{baseUrl}}?taskflowId=task-flow-AC_CatalogoAsignaturas
+}
+
+body:text {
+  pt1:r1:0:soc1={{nivel}}&pt1:r1:0:soc9={{sede}}&pt1:r1:0:soc2={{facultad}}&pt1:r1:0:soc3={{carrera}}&pt1:r1:0:soc4={{tipologia}}&pt1:r1:0:soc5=&pt1:r1:0:soc10=0&pt1:r1:0:it10=&pt1:r1:0:it11=&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={{windowId}}&Adf-Page-Id={{pageId}}&javax.faces.ViewState={{viewState}}&oracle.adf.view.rich.DELTAS=%7Bpt1%3Ar1%3A0%3At4%3D%7BviewportSize%3D{{filas}}%7D%7D&event=pt1%3Ar1%3A0%3Acb1&event.pt1:r1:0:cb1=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&oracle.adf.view.rich.PROCESS=pt1%3Ar1%2Cpt1%3Ar1%3A0%3Acb1
+}
+
+script:post-response {
+  const b = String(res.getBody() || "");
+  const m = b.match(/<update id="javax\.faces\.ViewState"><!\[CDATA\[([^\]]+)\]\]>/)
+         || b.match(/javax\.faces\.ViewState"\s+value="([^"]+)"/);
+  if (m) {
+    bru.setVar("viewState", m[1]);
+    console.log("ViewState -> " + m[1]);
+  } else {
+    console.log("!! ViewState no encontrado");
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Dispara el boton Buscar (cb1). Devuelve TODAS las filas de una:
+  fetchSize=1000, contentDelivery=immediate, sin paginacion.
+
+  Sube {{filas}} si esperas mas de 99 asignaturas.
+
+  Respuesta: <partial-response> XML con un <update id="pt1:r1:0:pb3"> que
+  contiene la tabla HTML. Columnas por fila:
+    c1 = Codigo (dentro de un <a id="...:t4:N:cl2">)
+    c2 = Asignatura
+    c5 = Creditos
+    c6 = Tipologia
+    c8 = Descripcion (texto largo del programa)
+}

@@ -1,0 +1,45 @@
+meta {
+  name: 07 Seleccionar fila
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}?Adf-Window-Id={{windowId}}&Adf-Page-Id={{pageId}}
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+  Adf-Ads-Page-Id: {{adsPageId}}
+  Adf-Rich-Message: true
+  Origin: https://sia.unal.edu.co
+  Referer: {{baseUrl}}?taskflowId=task-flow-AC_CatalogoAsignaturas
+}
+
+body:text {
+  pt1:r1:0:soc1={{nivel}}&pt1:r1:0:soc9={{sede}}&pt1:r1:0:soc2={{facultad}}&pt1:r1:0:soc3={{carrera}}&pt1:r1:0:soc4={{tipologia}}&pt1:r1:0:soc5=&pt1:r1:0:soc10=0&pt1:r1:0:it10=&pt1:r1:0:it11=&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={{windowId}}&Adf-Page-Id={{pageId}}&javax.faces.ViewState={{viewState}}&oracle.adf.view.rich.DELTAS=%7Bpt1%3Ar1%3A0%3At4%3D%7BviewportSize%3D{{filas}}%2Crows%3D{{filas}}%2CselectedRowKeys%3D{{fila}}%7D%7D&event=pt1%3Ar1%3A0%3At4&event.pt1:r1:0:t4=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eselection%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&oracle.adf.view.rich.PROCESS=pt1%3Ar1%3A0%3At4
+}
+
+script:post-response {
+  const b = String(res.getBody() || "");
+  const m = b.match(/<update id="javax\.faces\.ViewState"><!\[CDATA\[([^\]]+)\]\]>/)
+         || b.match(/javax\.faces\.ViewState"\s+value="([^"]+)"/);
+  if (m) { bru.setVar("viewState", m[1]); console.log("ViewState -> " + m[1]); }
+  else { console.log("!! ViewState no encontrado"); }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  PASO 1 de 2 para el detalle. Marca la fila {{fila}} como seleccionada.
+
+  Devuelve ~900 bytes SIN contenido. Es normal y es obligatorio:
+  sin este paso, el paso 08 tambien devuelve vacio.
+
+  El indice de fila sale del atributo _afrRK del <tr>, o del id de celda
+  pt1:r1:0:t4:N:c1. Empieza en 0.
+}

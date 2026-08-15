@@ -1,0 +1,49 @@
+meta {
+  name: 14 Volver (entre cursos)
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}?Adf-Window-Id={{windowId}}&Adf-Page-Id={{pageId}}
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+  Adf-Ads-Page-Id: {{adsPageId}}
+  Adf-Rich-Message: true
+  Origin: https://sia.unal.edu.co
+  Referer: {{baseUrl}}?taskflowId=task-flow-AC_CatalogoAsignaturas
+}
+
+body:text {
+  pt1:r1:0:soc1={{nivel}}&pt1:r1:0:soc9={{sede}}&pt1:r1:0:soc2={{facultad}}&pt1:r1:0:soc3={{carrera}}&pt1:r1:0:soc4={{tipologia}}&pt1:r1:0:soc5={{modo}}&pt1:r1:0:soc10={{sedeElect}}&pt1:r1:0:soc6={{facElect}}&pt1:r1:0:soc7=&pt1:r1:0:it10=&pt1:r1:0:it11={{nombre}}&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={{windowId}}&Adf-Page-Id={{pageId}}&javax.faces.ViewState={{viewState}}&event=pt1%3Ar1%3A1%3Acb4&event.pt1:r1:1:cb4=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&oracle.adf.view.rich.PROCESS=pt1%3Ar1%2Cpt1%3Ar1%3A1%3Acb4
+}
+
+script:post-response {
+  const b = String(res.getBody() || "");
+  const m = b.match(/<update id="javax\.faces\.ViewState"><!\[CDATA\[([^\]]+)\]\]>/)
+         || b.match(/javax\.faces\.ViewState"\s+value="([^"]+)"/);
+  if (m) { bru.setVar("viewState", m[1]); }
+  const n = (b.match(/<tr role="row" _afrRK=/g) || []).length;
+  const k = [...b.matchAll(/_afrRK="(\d+)"/g)].map(x => +x[1]);
+  console.log(`filas=${n}` + (k.length ? ` _afrRK ${Math.min(...k)}..${Math.max(...k)}` : "") +
+              (b.length < 1200 ? "  <<< ~900B: falta un paso o sesion caducada" : ""));
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  OBLIGATORIO entre un detalle y el siguiente. Sin esto quedas atrapado en la
+  vista de detalle y el siguiente click devuelve 893 B vacios.
+
+  ~250 KB: re-renderiza la tabla completa.
+
+  OJO: los _afrRK SE RENUMERAN aqui. Hay que re-parsear la tabla antes de
+  pedir el siguiente curso. Ejemplo real: 2016353 estaba en _afrRK=101 y
+  tras Volver quedo en _afrRK=8.
+}

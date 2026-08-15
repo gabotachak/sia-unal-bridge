@@ -1,0 +1,46 @@
+meta {
+  name: 02 Nivel (soc1)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}?Adf-Window-Id={{windowId}}&Adf-Page-Id={{pageId}}
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+  Adf-Ads-Page-Id: {{adsPageId}}
+  Adf-Rich-Message: true
+  Origin: https://sia.unal.edu.co
+  Referer: {{baseUrl}}?taskflowId=task-flow-AC_CatalogoAsignaturas
+}
+
+body:text {
+  pt1:r1:0:soc1={{nivel}}&pt1:r1:0:soc9={{sede}}&pt1:r1:0:soc2={{facultad}}&pt1:r1:0:soc3={{carrera}}&pt1:r1:0:soc4={{tipologia}}&pt1:r1:0:soc5=&pt1:r1:0:soc10=0&pt1:r1:0:it10=&pt1:r1:0:it11=&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={{windowId}}&Adf-Page-Id={{pageId}}&javax.faces.ViewState={{viewState}}&event=pt1%3Ar1%3A0%3Asoc1&event.pt1:r1:0:soc1=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&oracle.adf.view.rich.PROCESS=pt1%3Ar1%3A0%3Asoc1
+}
+
+script:post-response {
+  const b = String(res.getBody() || "");
+  const m = b.match(/<update id="javax\.faces\.ViewState"><!\[CDATA\[([^\]]+)\]\]>/)
+         || b.match(/javax\.faces\.ViewState"\s+value="([^"]+)"/);
+  if (m) {
+    bru.setVar("viewState", m[1]);
+    console.log("ViewState -> " + m[1]);
+  } else {
+    console.log("!! ViewState no encontrado");
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Selecciona nivel de estudio. 0=Pregrado 1=Doctorado 2=Postgrado
+
+  Los dropdowns dependientes llegan VACIOS en la pagina inicial: hay que
+  dispararlos en orden. Por eso este paso no se puede saltar.
+}

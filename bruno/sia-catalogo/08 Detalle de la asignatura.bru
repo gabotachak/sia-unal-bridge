@@ -1,0 +1,52 @@
+meta {
+  name: 08 Detalle de la asignatura
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}?Adf-Window-Id={{windowId}}&Adf-Page-Id={{pageId}}
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+  Adf-Ads-Page-Id: {{adsPageId}}
+  Adf-Rich-Message: true
+  Origin: https://sia.unal.edu.co
+  Referer: {{baseUrl}}?taskflowId=task-flow-AC_CatalogoAsignaturas
+}
+
+body:text {
+  pt1:r1:0:soc1={{nivel}}&pt1:r1:0:soc9={{sede}}&pt1:r1:0:soc2={{facultad}}&pt1:r1:0:soc3={{carrera}}&pt1:r1:0:soc4={{tipologia}}&pt1:r1:0:soc5=&pt1:r1:0:soc10=0&pt1:r1:0:it10=&pt1:r1:0:it11=&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={{windowId}}&Adf-Page-Id={{pageId}}&javax.faces.ViewState={{viewState}}&oracle.adf.view.rich.DELTAS=%7Bpt1%3Ar1%3A0%3At4%3D%7BviewportSize%3D{{filas}}%2Crows%3D{{filas}}%2CselectedRowKeys%3D{{fila}}%7D%7D&event=pt1%3Ar1%3A0%3At4%3A{{fila}}%3Acl2&event.pt1:r1:0:t4:{{fila}}:cl2=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&oracle.adf.view.rich.PROCESS=pt1%3Ar1%2Cpt1%3Ar1%3A0%3At4%3A{{fila}}%3Acl2
+}
+
+script:post-response {
+  const b = String(res.getBody() || "");
+  const m = b.match(/<update id="javax\.faces\.ViewState"><!\[CDATA\[([^\]]+)\]\]>/)
+         || b.match(/javax\.faces\.ViewState"\s+value="([^"]+)"/);
+  if (m) { bru.setVar("viewState", m[1]); console.log("ViewState -> " + m[1]); }
+  else { console.log("!! ViewState no encontrado"); }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  PASO 2 de 2. Click en el link del codigo. ~48 KB con lo que la
+  consulta en lote NO trae:
+
+    - Grupos (nombre, numero)
+    - Profesor por grupo
+    - Horarios: dia, hora inicio/fin
+    - Aula y edificio
+    - Cupos disponibles
+    - Fechas del periodo (ej. 27/08/2026 - 17/12/2026)
+    - Jornada y duracion
+
+  OJO: la sesion ADF expira a los 5 minutos
+  (__initializeSessionTimeoutTimer(300000)). Si esto devuelve ~900 bytes
+  en vez de ~48 KB, la sesion caduco: vuelve a correr desde el 01.
+}

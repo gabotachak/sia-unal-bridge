@@ -217,6 +217,13 @@
 .row__seats.is-zero b {
   color: var(--bad);
 }
+
+/* Sin oferta. Gris y sin peso: no es una advertencia —no hay nada que se haya
+   llenado— sino la ausencia de dato que medir. */
+.row__seats.is-none b {
+  color: var(--text-faint);
+  font-weight: 400;
+}
 /* El signo de pregunta de "nadie preguntó todavía". Se pinta en jade —el
    color de lo tocable— y no en gris: gris se lee como dato faltante y
    definitivo, y esto es justo lo contrario, una invitación a entrar. Al pasar

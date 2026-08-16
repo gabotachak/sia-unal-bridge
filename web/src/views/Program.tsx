@@ -350,10 +350,14 @@ function SeatsCell({
     const age = formatAge((Date.now() - Date.parse(askedAt)) / 1000);
     return (
       <span
-        className="row__seats is-zero col-seats"
+        className="row__seats is-none col-seats"
         title={`Sin grupos programados · consultado ${new Date(askedAt).toLocaleString('es-CO')}`}
       >
-        <b className="tnum">0</b>
+        {/* Una raya, no un cero. En una columna de cupos el cero significa
+            "hay grupos y están llenos", que es la mala noticia accionable;
+            acá no hay nada que llenar. La raya es la convención de "no hay
+            valor" y deja el óxido para los ceros de verdad. */}
+        <b aria-hidden="true">—</b>
         <small>
           sin grupos<span className="row__age tnum"> · {age}</span>
         </small>

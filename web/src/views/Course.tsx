@@ -9,6 +9,7 @@ import { AddButton } from '../components/AddButton';
 import { IconButton } from '../components/IconButton';
 import { Empty, Fault, Loading } from '../components/States';
 import { Seats } from '../components/Seats';
+import { sentence, titleCase } from '../lib/format';
 import './Course.css';
 
 const DAYS = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
@@ -114,7 +115,7 @@ export function Course() {
                 <span className="head__dot">·</span>
                 {data.typology}
               </p>
-              <h1 className="course__title">{data.name}</h1>
+              <h1 className="course__title">{sentence(data.name)}</h1>
             </div>
 
             <AddButton
@@ -200,7 +201,7 @@ function SectionRow({ section }: { section: Section }) {
       <div className="group__body">
         <p className="group__teacher">
           <User size={14} strokeWidth={1.75} aria-hidden="true" />
-          <span>{section.instructor || 'sin profesor asignado'}</span>
+          <span>{section.instructor ? titleCase(section.instructor) : 'sin profesor asignado'}</span>
         </p>
 
         <ul className="sched">

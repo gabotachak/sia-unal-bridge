@@ -3,6 +3,7 @@ import { CalendarDays, LayoutList, Monitor, Moon, Sun, Trash2 } from 'lucide-rea
 import { useConfirm } from './Confirm';
 import { useTheme } from '../hooks/useTheme';
 import { usePlan } from '../hooks/usePlan';
+import { sentence } from '../lib/format';
 import { clearStored, selectionPath } from '../lib/storage';
 import { IconButton } from './IconButton';
 import './Topbar.css';
@@ -95,7 +96,7 @@ export function Topbar() {
         {sel && (
           <button type="button" className="planchip" onClick={startOver}>
             <span className="planchip__code tnum">{sel.program}</span>
-            <span className="planchip__name">{sel.programName}</span>
+            <span className="planchip__name">{sentence(sel.programName)}</span>
             <span className="planchip__campus">{sel.campusName.replace(/^SEDE\s+/i, '')}</span>
             <Trash2 className="planchip__caret" size={14} strokeWidth={STROKE} aria-hidden="true" />
             <span className="sr-only">Empezar de nuevo</span>

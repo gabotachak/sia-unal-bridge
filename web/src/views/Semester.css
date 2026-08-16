@@ -174,7 +174,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text);
-  text-transform: lowercase;
 }
 
 .slot__when {

@@ -9,7 +9,7 @@ import { Layout } from '../components/Layout';
 import { useConfirm } from '../components/Confirm';
 import { AddButton } from '../components/AddButton';
 import { Empty, Fault, Loading } from '../components/States';
-import { fold, formatAge } from '../lib/format';
+import { fold, formatAge, sentence } from '../lib/format';
 import { selectionId, selectionPath } from '../lib/storage';
 import './Program.css';
 
@@ -272,7 +272,7 @@ export function Program() {
                       }`}
                     >
                       <span className="row__code tnum col-code">{c.code}</span>
-                      <span className="row__name">{c.name}</span>
+                      <span className="row__name">{sentence(c.name)}</span>
                       <span
                         className={`tag tag--${slugTypology(c.typology)} col-typ`}
                         title={c.typology}

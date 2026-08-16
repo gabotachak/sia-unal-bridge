@@ -4,7 +4,7 @@ import { Eraser, Filter, RefreshCw, Trash2 } from 'lucide-react';
 import { ApiError, get, routes } from '../api/client';
 import type { CourseDetail } from '../api/types';
 import { usePlan } from '../hooks/usePlan';
-import { formatAge } from '../lib/format';
+import { formatAge, titleCase } from '../lib/format';
 import { pooled } from '../lib/pooled';
 import { MAX_RETRIES, backoffMs, isTransient, sleep } from '../lib/retry';
 import { itemId, selectionPath, type PlanItem } from '../lib/storage';
@@ -319,7 +319,7 @@ function CourseCard({
             return (
               <li key={s.key} className={`slot ${seats === 0 ? 'is-zero' : ''}`}>
                 <span className="slot__key tnum">{s.key}</span>
-                <span className="slot__who">{s.instructor || '—'}</span>
+                <span className="slot__who">{s.instructor ? titleCase(s.instructor) : '—'}</span>
                 <span className="slot__when tnum">
                   {s.schedule.length === 0
                     ? 'sin horario'

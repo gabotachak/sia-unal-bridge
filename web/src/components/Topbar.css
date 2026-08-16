@@ -101,12 +101,6 @@
     background-color var(--fast) var(--ease-out),
     transform var(--fast) var(--ease-out);
 }
-@media (hover: hover) and (pointer: fine) {
-  .planchip:hover {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-  }
-}
 .planchip:active {
   transform: scale(0.98);
 }
@@ -126,7 +120,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text);
-  text-transform: lowercase;
 }
 
 .planchip__campus {
@@ -139,9 +132,33 @@
   border-left: 1px solid var(--rule);
 }
 
+/* La caneca vive DENTRO del chip pero se separa como si fuera otro control:
+   su propia división y su propio color. Sin eso se leía como un adorno del
+   rótulo —gris, pegada al nombre— y es la única acción destructiva de la
+   barra: tiene que verse antes de tocarla, no después. */
 .planchip__caret {
   flex: none;
-  color: var(--text-faint);
+  color: var(--bad);
+  opacity: 0.75;
+  padding-left: var(--gap-sm);
+  margin-left: var(--gap-xs);
+  border-left: 1px solid var(--rule);
+  /* El borde es tan alto como el chip, no como el icono: si midiera lo que
+     mide el glifo se vería como una rayita suelta en el aire. */
+  box-sizing: content-box;
+  height: 1.15rem;
+  transition: opacity var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .planchip:hover .planchip__caret {
+    opacity: 1;
+  }
+  /* El chip entero pasa a rojo al pasar por encima: lo que se toca acá borra,
+     y prometer jade —el color de "seguí adelante"— sería mentir. */
+  .planchip:hover {
+    border-color: var(--bad);
+    background: var(--bad-soft);
+  }
 }
 
 /* ── Cómo se encoge ─────────────────────────────────────────────────

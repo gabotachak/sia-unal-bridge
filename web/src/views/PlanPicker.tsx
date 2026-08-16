@@ -21,7 +21,7 @@ import { usePlan } from '../hooks/usePlan';
 import { Layout } from '../components/Layout';
 import { useConfirm } from '../components/Confirm';
 import { Empty, Fault, Loading } from '../components/States';
-import { fold } from '../lib/format';
+import { fold, sentence } from '../lib/format';
 import { selectionId, selectionPath } from '../lib/storage';
 import './PlanPicker.css';
 
@@ -291,7 +291,7 @@ export function PlanPicker() {
                 groups.map(([code, g]) => (
                   <section key={code} className="faculty">
                     <h3 className="faculty__name">
-                      {g.name}
+                      {sentence(g.name)}
                       <span className="faculty__code tnum">{code}</span>
                     </h3>
                     <ul className="plans">
@@ -306,7 +306,7 @@ export function PlanPicker() {
                               onClick={() => choose(p)}
                             >
                               <span className="plan__code tnum">{p.code}</span>
-                              <span className="plan__name">{p.name}</span>
+                              <span className="plan__name">{sentence(p.name)}</span>
                               {p.catalog_fetched_at && (
                                 <span className="plan__cached" title="catálogo ya cacheado" />
                               )}

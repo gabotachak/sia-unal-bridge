@@ -28,15 +28,24 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("SIA_POOL_SIZE: %w", err)
 	}
-	
-	cooldownStr := getenv("FETCH_COOLDOWN", "60")
-	cooldown, err := strconv.Atoi(cooldownStr)
+
+	cooldown, err := strconv.Atoi(getenv("FETCH_COOLDOWN", "60"))
 	if err != nil {
 		return Config{}, fmt.Errorf("FETCH_COOLDOWN: %w", err)
 	}
+	// 0 disables the throttle on purpose; a negative would disable it too, but
+	// silently and by accident, so it is rejected instead.
+	if cooldown < 0 {
+		return Config{}, fmt.Errorf("FETCH_COOLDOWN: must be >= 0, got %d", cooldown)
+	}
 
 	return Config{
-		DatabaseURL:   getenv("DATABASE_URL", "postgres://sia:sia@localhost:5432/sia_bridge?sslmode=require"),
+		// sslmode=disable is deliberate: this default only ever applies to a
+		// bare `go run ./cmd/bridge` against the compose Postgres, which
+		// serves no TLS. Any real deployment sets DATABASE_URL explicitly and
+		// should require TLS there. sslmode=require here would only make
+		// `make run` and `make migrate` fail to connect.
+		DatabaseURL:   getenv("DATABASE_URL", "postgres://sia:sia@localhost:15432/sia_bridge?sslmode=disable"),
 		Port:          getenv("PORT", "8080"),
 		SIABaseURL:    getenv("SIA_BASE_URL", "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf"),
 		SIAPoolSize:   poolSize,

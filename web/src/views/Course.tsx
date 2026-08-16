@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
-import { routes } from '../api/client';
+import { FETCH_COOLDOWN, routes } from '../api/client';
 import type { ClassSession, CourseDetail, Section } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { Layout } from '../components/Layout';
@@ -28,9 +29,59 @@ export function Course() {
    * clics costarían dos consultas idénticas al SIA para el mismo dato.
    */
   const measuring = loading && !!data;
+
+  /**
+   * El cooldown del botón, en epoch ms. La API rechaza con 429 dos `max_age=0`
+   * seguidos sobre la misma asignatura, así que el botón se apaga solo en vez
+   * de ofrecer algo que va a rebotar.
+   *
+   * Se arranca de tres sitios, y ninguno sobra:
+   *  - al medir, optimista, para que el botón se apague en el clic;
+   *  - de la edad del dato que llegó, porque otro cliente pudo medir hace 5 s
+   *    y este todavía no lo sabe;
+   *  - del `retry_after_seconds` de un 429, que es la única fuente exacta y
+   *    corrige a las otras dos si el FETCH_COOLDOWN horneado quedó desfasado.
+   */
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  // La medición más reciente de la asignatura: el POST del SIA las sella todas
+  // a la vez, así que la más nueva marca cuándo se habló con el SIA.
+  const freshestSeats = data?.sections?.reduce<number | null>(
+    (min, s) => (s.seats ? (min === null ? s.seats.age_seconds : Math.min(min, s.seats.age_seconds)) : min),
+    null,
+  );
+  useEffect(() => {
+    if (freshestSeats === null || freshestSeats === undefined) return;
+    const left = FETCH_COOLDOWN - freshestSeats;
+    if (left > 0) setCooldownUntil((prev) => Math.max(prev, Date.now() + left * 1000));
+  }, [freshestSeats]);
+
+  useEffect(() => {
+    if (error?.status === 429 && error.retryAfter) {
+      setCooldownUntil(Date.now() + error.retryAfter * 1000);
+    }
+  }, [error]);
+
+  const cooldownLeft = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
+
   function measureAll() {
+    setCooldownUntil(Date.now() + FETCH_COOLDOWN * 1000);
     reload(routes.course(scope, program, code, 0));
   }
+
+  /**
+   * Un 429 del cooldown no es un fallo: la asignatura sigue en pantalla y el
+   * dato que se ve es correcto, sólo que es reciente. Sacarlo del banner de
+   * error evita gritar "algo salió mal" cuando lo que pasó es que el botón se
+   * pulsó dos veces seguidas.
+   */
+  const rateLimited = error?.status === 429 ? error : null;
+  const fault = error && !rateLimited ? error : null;
 
   return (
     <Layout
@@ -46,7 +97,8 @@ export function Course() {
       freshness={freshness}
     >
       {loading && !data && <Loading elapsed={elapsed} what="Trayendo la asignatura y sus grupos" />}
-      {error && <Fault error={error} onRetry={() => reload()} />}
+      {fault && <Fault error={fault} onRetry={() => reload()} />}
+      {rateLimited && <p className="course__cooldown">{rateLimited.humane}</p>}
 
       {data && (
         <>
@@ -90,8 +142,12 @@ export function Course() {
                 <h2 className="groups__head">
                   {data.sections.length} {data.sections.length === 1 ? 'grupo' : 'grupos'}
                 </h2>
-                <button className="btn" onClick={measureAll} disabled={measuring}>
-                  {measuring ? 'midiendo…' : 'medir cupos'}
+                <button
+                  className="btn"
+                  onClick={measureAll}
+                  disabled={measuring || cooldownLeft > 0}
+                >
+                  {measuring ? 'midiendo…' : cooldownLeft > 0 ? `esperar ${cooldownLeft} s` : 'medir cupos'}
                 </button>
               </div>
               <p className="groups__note">

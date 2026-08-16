@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	windowID  = "winnoloop" // Adf-Window-Id, constant once the JS loopback is skipped. GOTCHAS §2.
-	pageID    = "0"
-	adsPageID = "1"
+	windowID    = "winnoloop" // Adf-Window-Id, constant once the JS loopback is skipped. GOTCHAS §2.
+	pageID      = "0"
+	adsPageID   = "1"
 	maxBodySize = 10 * 1024 * 1024 // 10 MB limit for SIA responses
 )
 

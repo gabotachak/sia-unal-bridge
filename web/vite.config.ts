@@ -14,17 +14,27 @@ import { fileURLToPath } from 'node:url';
 // En compose el mismo papel lo hace nginx (ver web/nginx.conf). La API nunca
 // se entera de ninguno de los dos.
 export default defineConfig(({ mode }) => {
-  // Lee variables VITE_* del .env de la raíz del monorepo (un nivel arriba).
-  // También lee explícitamente FETCH_COOLDOWN para exportarla al cliente
+  // Prefijo '' lee TODAS las variables del .env de la raíz, no sólo las VITE_*,
+  // porque FETCH_COOLDOWN es una sola variable compartida con el backend y
+  // duplicarla como VITE_FETCH_COOLDOWN sería tener dos fuentes de verdad para
+  // el mismo número.
+  //
+  // Esto NO expone el .env al cliente: lo que llega al bundle lo decide
+  // `envPrefix` (sigue en VITE_ por defecto) más el `define` explícito de aquí
+  // abajo. POSTGRES_PASSWORD y compañía se quedan en el proceso de build.
   const env = loadEnv(mode, resolve(dirname(fileURLToPath(import.meta.url)), '..'), '');
 
-  const apiTarget = env.VITE_API_TARGET || 'http://localhost:8080';
+  // process.env es el caso Docker: el build corre con contexto ./web, donde el
+  // .env de la raíz no existe, así que compose lo inyecta como build arg.
+  const cooldown = env.FETCH_COOLDOWN || process.env.FETCH_COOLDOWN || '60';
+
+  const apiTarget = env.VITE_API_TARGET || 'http://localhost:18080';
   const devPort = Number(env.VITE_DEV_PORT) || 5173;
 
   return {
     plugins: [react()],
     define: {
-      'import.meta.env.VITE_FETCH_COOLDOWN': JSON.stringify(env.FETCH_COOLDOWN || '60'),
+      'import.meta.env.VITE_FETCH_COOLDOWN': JSON.stringify(cooldown),
     },
     server: {
       port: devPort,

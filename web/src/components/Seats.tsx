@@ -12,7 +12,6 @@ type Props = {
 
 /** Los cupos tienen TTL de 5 min en la API. Pasado eso, el dato está vencido. */
 const SEATS_TTL = 300;
-const FETCH_COOLDOWN = parseInt(import.meta.env.VITE_FETCH_COOLDOWN || '60', 10);
 
 /**
  * El contador de cupos: cifra de tablero de aeropuerto.
@@ -35,9 +34,6 @@ export function Seats({ available, measuredAt, ageSeconds, onRefresh, busy }: Pr
   const stale = age > SEATS_TTL;
   const empty = available === 0;
   const digits = String(available).padStart(2, '0').split('');
-  
-  const inCooldown = age < FETCH_COOLDOWN;
-  const cooldownRemaining = FETCH_COOLDOWN - age;
 
   return (
     <div className={`seats ${empty ? 'seats--empty' : ''} ${stale ? 'seats--stale' : ''}`}>
@@ -60,8 +56,8 @@ export function Seats({ available, measuredAt, ageSeconds, onRefresh, busy }: Pr
           hace {formatAge(age)}
         </span>
         {onRefresh && (
-          <button className="btn seats__btn" onClick={onRefresh} disabled={busy || inCooldown}>
-            {busy ? 'midiendo…' : inCooldown ? `esperar ${cooldownRemaining}s` : 'medir ahora'}
+          <button className="btn seats__btn" onClick={onRefresh} disabled={busy}>
+            {busy ? 'midiendo…' : 'medir ahora'}
           </button>
         )}
       </div>

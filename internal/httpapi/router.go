@@ -16,6 +16,8 @@ import (
 // rule for this adapter.
 type api struct {
 	svc *catalog.Service
+	// cooldown is the floor on how often a client may force a SIA fetch for
+	// one course. Zero disables the throttle entirely. See cooldown.go.
 	cooldown time.Duration
 }
 

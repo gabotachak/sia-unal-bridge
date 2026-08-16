@@ -22,6 +22,16 @@ export type Result<T> = {
   freshness: Freshness;
 };
 
+/**
+ * Cada cuánto acepta la API un `?max_age=0` para la misma asignatura.
+ *
+ * Se hornea en tiempo de build desde FETCH_COOLDOWN (ver web/vite.config.ts),
+ * así que es una PISTA para no ofrecer un botón que va a rebotar — no la
+ * autoridad. La autoridad es el 429 del servidor con su `retry_after_seconds`,
+ * que es quien manda cuando los dos no coinciden.
+ */
+export const FETCH_COOLDOWN = Number(import.meta.env.VITE_FETCH_COOLDOWN) || 60;
+
 /** Un error de la API con su significado, no un `Error` genérico. */
 export class ApiError extends Error {
   status: number;
@@ -30,6 +40,8 @@ export class ApiError extends Error {
   hint?: string;
   /** Solo en un 300: las opciones entre las que hay que elegir. */
   candidates?: Candidate[];
+  /** Solo en un 429: segundos que faltan para poder volver a medir. */
+  retryAfter?: number;
 
   constructor(status: number, code: string, message: string, extra?: Partial<ApiError>) {
     super(message);
@@ -55,12 +67,25 @@ export class ApiError extends Error {
         return 'Esa asignatura no está en el catálogo de este plan.';
       case 'unknown_section':
         return 'Ese grupo no existe, o todavía no reporta cupos.';
+      case 'rate_limit':
+        return this.retryAfter
+          ? `Esta asignatura se midió hace un momento. Se puede volver a medir en ${this.retryAfter} s.`
+          : 'Esta asignatura se midió hace un momento. Hay que esperar un poco para volver a medir.';
       case 'offline':
-        return 'No se pudo contactar a la API. ¿Está corriendo en el puerto 8080?';
+        return 'No se pudo contactar a la API. ¿Está corriendo en el puerto 18080?';
       default:
         return this.message || 'Algo salió mal.';
     }
   }
+}
+
+// Number(null) es 0, no NaN, así que el header ausente hay que descartarlo a
+// mano o un 429 sin Retry-After diría "volvé en 0 s".
+function retryAfterHeader(res: Response): number | undefined {
+  const raw = res.headers.get('Retry-After');
+  if (!raw) return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
 function parseMaxAge(header: string | null): number {
@@ -90,6 +115,9 @@ export async function get<T>(path: string): Promise<Result<T>> {
     throw new ApiError(res.status, body?.error ?? 'internal', body?.message ?? res.statusText, {
       hint: body?.hint,
       candidates: body?.candidates,
+      // El servidor es la autoridad sobre el cooldown: el front lo tiene
+      // horneado en tiempo de build y puede quedar desfasado.
+      retryAfter: body?.retry_after_seconds ?? retryAfterHeader(res),
     });
   }
 

@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
 
@@ -310,7 +312,7 @@ func TestCourseDetail_MissThenHit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	router := NewRouter(svc)
+	router := NewRouter(svc, 0) // cooldown 0: these tests are about caching, not throttling
 	url := "/v1/campuses/1101/programs/2A74/courses/2016696"
 
 	// ── miss ──
@@ -385,7 +387,7 @@ func TestCourseDetail_UnknownCourseIs404(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := NewRouter(svc)
+	router := NewRouter(svc, 0) // cooldown 0: these tests are about caching, not throttling
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/campuses/1101/programs/ZZZZ/courses/2016696", nil)
@@ -403,7 +405,7 @@ func TestCourseDetail_UnknownCourseIs404(t *testing.T) {
 func TestHealthz(t *testing.T) {
 	store := newFakeStore()
 	svc := catalog.NewService(store, &fakeSIA{}, "2026-2")
-	router := NewRouter(svc)
+	router := NewRouter(svc, 0) // cooldown 0: these tests are about caching, not throttling
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/healthz", nil)
@@ -422,12 +424,164 @@ func TestMaxAge_InvalidIsBadRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := NewRouter(svc)
+	router := NewRouter(svc, 0) // cooldown 0: these tests are about caching, not throttling
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/campuses/1101/programs/2A74/courses/2016696?max_age=-5", nil)
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("got status %d, want 400 for negative max_age", w.Code)
+	}
+}
+
+// cooldownFixture wires a router with a live throttle and a program already
+// in the store, and hands back the SIA fake so tests can count real fetches.
+func cooldownFixture(t *testing.T, cooldown int) (*gin.Engine, *fakeSIA, string) {
+	t.Helper()
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := catalog.NewService(store, sia, "2026-2")
+	if _, err := store.UpsertProgram(context.Background(), catalog.Program{
+		CampusCode: "1101", FacultyCode: "2055", Code: "2A74", LevelSlug: "pregrado",
+		CampusIdx: 2, FacultyIdx: 8, ProgramIdx: 3,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return NewRouter(svc, cooldown), sia, "/v1/campuses/1101/programs/2A74/courses/2016696"
+}
+
+func do(router *gin.Engine, url string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, url, nil))
+	return w
+}
+
+// A course nobody has ever fetched must not be throttled: that request is a
+// first fetch, not a refresh. The bug this pins down answered 429 *after*
+// fetching from the SIA, so the client paid the round trip and saw none of it.
+func TestCooldown_ColdCacheIsNotThrottled(t *testing.T) {
+	router, sia, url := cooldownFixture(t, 60)
+
+	w := do(router, url+"?max_age=0")
+	if w.Code != http.StatusOK {
+		t.Fatalf("got status %d on a cold cache, want 200. body %s", w.Code, w.Body.String())
+	}
+	if sia.detailCalls != 1 {
+		t.Errorf("got %d SIA detail calls, want exactly 1", sia.detailCalls)
+	}
+}
+
+// The gate must cost nothing at the SIA: a throttled request may not fetch.
+func TestCooldown_BlocksSecondForcedRefresh(t *testing.T) {
+	router, sia, url := cooldownFixture(t, 60)
+
+	if w := do(router, url+"?max_age=0"); w.Code != http.StatusOK {
+		t.Fatalf("warm-up got status %d, want 200", w.Code)
+	}
+	w := do(router, url+"?max_age=0")
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("got status %d on immediate re-refresh, want 429", w.Code)
+	}
+	if sia.detailCalls != 1 {
+		t.Errorf("got %d SIA detail calls, want 1 — the throttled request must not fetch", sia.detailCalls)
+	}
+	if w.Header().Get("Retry-After") == "" {
+		t.Error("expected a Retry-After header on 429")
+	}
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["error"] != "rate_limit" {
+		t.Errorf("got error=%v, want rate_limit", body["error"])
+	}
+	if body["retry_after_seconds"] == nil {
+		t.Error("expected retry_after_seconds in the body")
+	}
+}
+
+// The bypass: gating only max_age==0 left ?max_age=1 as a free hole, since a
+// cache is essentially never under a second old.
+func TestCooldown_SubCooldownMaxAgeIsNotABypass(t *testing.T) {
+	router, sia, url := cooldownFixture(t, 60)
+
+	if w := do(router, url+"?max_age=0"); w.Code != http.StatusOK {
+		t.Fatalf("warm-up got status %d, want 200", w.Code)
+	}
+	for _, maxAge := range []string{"1", "5", "59"} {
+		w := do(router, url+"?max_age="+maxAge)
+		if w.Code != http.StatusTooManyRequests {
+			t.Errorf("max_age=%s got status %d, want 429 — under the cooldown is still a forced refresh", maxAge, w.Code)
+		}
+	}
+	if sia.detailCalls != 1 {
+		t.Errorf("got %d SIA detail calls, want 1", sia.detailCalls)
+	}
+}
+
+// At or above the cooldown there is nothing to throttle: the read-through
+// already serves those from cache, so they must pass through untouched.
+func TestCooldown_MaxAgeAboveCooldownPasses(t *testing.T) {
+	router, sia, url := cooldownFixture(t, 60)
+
+	if w := do(router, url+"?max_age=0"); w.Code != http.StatusOK {
+		t.Fatalf("warm-up got status %d, want 200", w.Code)
+	}
+	for _, maxAge := range []string{"60", "600"} {
+		w := do(router, url+"?max_age="+maxAge)
+		if w.Code != http.StatusOK {
+			t.Errorf("max_age=%s got status %d, want 200", maxAge, w.Code)
+		}
+		if got := w.Header().Get("X-Cache"); got != "hit" {
+			t.Errorf("max_age=%s got X-Cache=%q, want hit", maxAge, got)
+		}
+	}
+	if sia.detailCalls != 1 {
+		t.Errorf("got %d SIA detail calls, want 1", sia.detailCalls)
+	}
+}
+
+// No ?max_age= at all is catalog.DefaultFreshness, not a forced refresh.
+func TestCooldown_DefaultFreshnessIsNeverThrottled(t *testing.T) {
+	router, _, url := cooldownFixture(t, 60)
+
+	if w := do(router, url); w.Code != http.StatusOK {
+		t.Fatalf("first plain GET got status %d, want 200", w.Code)
+	}
+	if w := do(router, url); w.Code != http.StatusOK {
+		t.Fatalf("second plain GET got status %d, want 200", w.Code)
+	}
+}
+
+// All four detail endpoints reduce to the same SIA POST, so one throttle has
+// to cover them or it covers nothing.
+func TestCooldown_AppliesToEverySharedFetchEndpoint(t *testing.T) {
+	router, sia, url := cooldownFixture(t, 60)
+
+	if w := do(router, url+"?max_age=0"); w.Code != http.StatusOK {
+		t.Fatalf("warm-up got status %d, want 200", w.Code)
+	}
+	for _, suffix := range []string{"", "/sections", "/sections/1", "/sections/1/seats"} {
+		w := do(router, url+suffix+"?max_age=0")
+		if w.Code != http.StatusTooManyRequests {
+			t.Errorf("%s%s got status %d, want 429", url, suffix, w.Code)
+		}
+	}
+	if sia.detailCalls != 1 {
+		t.Errorf("got %d SIA detail calls, want 1", sia.detailCalls)
+	}
+}
+
+// Cooldown 0 is the documented off switch.
+func TestCooldown_ZeroDisablesTheThrottle(t *testing.T) {
+	router, sia, url := cooldownFixture(t, 0)
+
+	for i := 0; i < 3; i++ {
+		if w := do(router, url+"?max_age=0"); w.Code != http.StatusOK {
+			t.Fatalf("request %d got status %d, want 200", i, w.Code)
+		}
+	}
+	if sia.detailCalls != 3 {
+		t.Errorf("got %d SIA detail calls, want 3 with the throttle off", sia.detailCalls)
 	}
 }

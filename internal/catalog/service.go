@@ -449,6 +449,23 @@ func (s *Service) CourseDetail(ctx context.Context, program Program, code string
 	return s.refreshDetail(ctx, program, code)
 }
 
+// LastDetailFetch reports when the detail POST for this course last ran,
+// reading the cache only — it never touches the SIA, which is the whole point:
+// a refresh cooldown that fetches in order to decide whether to allow a fetch
+// is not a cooldown.
+//
+// One timestamp serves every detail endpoint because they all reduce to the
+// same POST (see refreshDetail): course, sections, section and seats are four
+// views of one round trip, so throttling them separately would throttle
+// nothing. Second return is false when the course was never fetched.
+func (s *Service) LastDetailFetch(ctx context.Context, program Program, code string) (time.Time, bool, error) {
+	fetchedAt, ok, err := s.store.CourseProgramFetchedAt(ctx, program.ID, code)
+	if err != nil || !ok || fetchedAt == nil {
+		return time.Time{}, false, err
+	}
+	return *fetchedAt, true, nil
+}
+
 // SectionSeats is the seats-granularity read-through. Seats are the one
 // volatile datum (docs/ARCH.md "Lo único volátil son los cupos"), so they get
 // their own TTL — FreshnessSeats, governed by seat_snapshot.measured_at

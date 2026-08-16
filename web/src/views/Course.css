@@ -222,3 +222,12 @@
 .course__actions {
   margin: var(--gap) 0;
 }
+
+/* El aviso de cooldown NO es un error: la asignatura sigue en pantalla y el
+   dato que se ve es bueno. Tono de nota, no de fallo. */
+.course__cooldown {
+  font-size: var(--t-micro);
+  color: var(--paper-faint);
+  margin: var(--gap-xs) 0 0;
+  font-style: italic;
+}

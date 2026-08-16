@@ -62,6 +62,7 @@ func (s *Store) UpsertCatalog(ctx context.Context, program catalog.Program, offe
 func (s *Store) ProgramCourses(ctx context.Context, programID int64) ([]catalog.CourseOffering, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT c.campus_code, c.code, c.name, c.credits, c.description, c.fetched_at, cp.typology,
+		       cp.detail_fetched_at,
 		       seats.total, seats.oldest, seats.n
 		FROM course_program cp
 		JOIN course c ON c.campus_code = cp.campus_code AND c.code = cp.code
@@ -89,7 +90,8 @@ func (s *Store) ProgramCourses(ctx context.Context, programID int64) ([]catalog.
 		var total, n *int
 		var oldest *time.Time
 		if err := rows.Scan(&o.Course.CampusCode, &o.Course.Code, &o.Course.Name, &o.Course.Credits,
-			&o.Course.Description, &o.Course.FetchedAt, &o.Typology, &total, &oldest, &n); err != nil {
+			&o.Course.Description, &o.Course.FetchedAt, &o.Typology, &o.DetailFetchedAt,
+			&total, &oldest, &n); err != nil {
 			return nil, fmt.Errorf("store: ProgramCourses: scan: %w", err)
 		}
 		if total != nil && oldest != nil && n != nil && *n > 0 {

@@ -15,6 +15,13 @@ type CourseOffering struct {
 	// Seats is the stored seat total across the groups this program sees.
 	// nil = nunca se pidió el detalle de esta asignatura desde este plan.
 	Seats *CourseSeats
+
+	// DetailFetchedAt is when this program last pulled the course's detail,
+	// nil if never. It is what separates the two ways Seats can be nil:
+	// nobody ever asked, or somebody asked and the SIA answered with no
+	// groups at all. Sin este campo el listado no puede decir "cero" sin
+	// mentir, porque un cero y un "no sé" se ven igual.
+	DetailFetchedAt *time.Time
 }
 
 // DropdownOption is one <option> of a cascade dropdown: Index is SIA's

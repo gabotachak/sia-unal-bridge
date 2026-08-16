@@ -214,9 +214,24 @@
 .row__seats.is-zero b {
   color: var(--bad);
 }
+/* El signo de pregunta de "nadie preguntó todavía". Se pinta en jade —el
+   color de lo tocable— y no en gris: gris se lee como dato faltante y
+   definitivo, y esto es justo lo contrario, una invitación a entrar. Al pasar
+   por la fila termina de encenderse. */
 .row__seats.is-unknown {
+  display: block;
+  color: var(--accent);
+  opacity: 0.5;
+  transition: opacity var(--fast) var(--ease-out);
+}
+.row:hover .row__seats.is-unknown {
+  opacity: 1;
+}
+
+/* 'sin grupos' no es una medición, así que va en palabras y no en la mono de
+   las edades: distingue de un vistazo el cero medido del cero por vacío. */
+.row__seats.is-zero small {
   color: var(--text-faint);
-  font-size: var(--t-small);
 }
 
 /* ── Etiqueta de tipología ──────────────────────────────────────────

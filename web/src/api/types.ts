@@ -47,6 +47,10 @@ export type CourseSummary = {
   typology: string; // literal del SIA: 'LIBRE ELECCIÓN (L)'
   description?: string;
   fetched_at: string;
+  /** Cuándo se pidió el detalle desde este plan, ausente si nunca.
+   *  Con esto puesto y sin `seats`, la asignatura no tiene grupos: el cero
+   *  es un dato. Sin esto, nadie preguntó todavía. */
+  detail_fetched_at?: string | null;
   seats?: CourseSeats;
 };
 

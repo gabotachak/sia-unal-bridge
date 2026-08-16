@@ -99,7 +99,7 @@ export function Course() {
       </Link>
 
       {loading && !data && (
-        <Loading elapsed={elapsed} attempt={attempt} what="Trayendo la asignatura y sus grupos" />
+        <Loading elapsed={elapsed} attempt={attempt} what="Trayendo la asignatura" />
       )}
       {fault && <Fault error={fault} onRetry={() => reload()} />}
       {rateLimited && <p className="course__cooldown">{rateLimited.humane}</p>}
@@ -170,8 +170,7 @@ export function Course() {
               </div>
 
               <p className="groups__note">
-                Una sola consulta trae los cupos de todos los grupos: el SIA los devuelve
-                juntos en la misma respuesta.
+                El botón mide los cupos de todos los grupos a la vez.
               </p>
 
               <ul className={`groups ${measuring ? 'is-measuring' : ''}`}>

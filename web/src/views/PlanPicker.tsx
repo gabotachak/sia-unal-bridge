@@ -279,7 +279,7 @@ export function PlanPicker() {
               <Loading
                 elapsed={programs.elapsed}
                 attempt={programs.attempt}
-                what={`Trayendo los planes de ${campusName}`}
+                what="Trayendo los planes"
               />
             )}
             {programs.error && <Fault error={programs.error} onRetry={() => programs.reload()} />}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
-import { ArrowLeftRight, CornerUpLeft, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowLeftRight, CornerUpLeft, HelpCircle, Search, SlidersHorizontal, X } from 'lucide-react';
 import { routes } from '../api/client';
 import type { CoursesResponse, CourseSummary, ProgramsResponse } from '../api/types';
 import { useApi } from '../hooks/useApi';
@@ -176,7 +176,7 @@ export function Program() {
       </header>
 
       {loading && !data && (
-        <Loading elapsed={elapsed} attempt={attempt} what="Trayendo el catálogo del plan" />
+        <Loading elapsed={elapsed} attempt={attempt} what="Trayendo el catálogo" />
       )}
       {error && <Fault error={error} onRetry={() => reload()} />}
 
@@ -280,7 +280,7 @@ export function Program() {
                         {shortTypology(c.typology)}
                       </span>
                       <span className="row__credits tnum col-cr">{c.credits}</span>
-                      <SeatsCell seats={c.seats} />
+                      <SeatsCell seats={c.seats} askedAt={c.detail_fetched_at} />
                       <AddButton
                         item={{
                           level,
@@ -308,19 +308,49 @@ export function Program() {
 /**
  * Los cupos de la asignatura, sumados sobre los grupos que este plan ve.
  *
+ * Tres estados, y la diferencia entre dos de ellos es la que importa:
+ *
+ *   sin preguntar   → un signo de pregunta. Nadie pidió el detalle todavía.
+ *   sin grupos      → 0. Se preguntó y el SIA contestó que no hay oferta.
+ *   con grupos      → el número, verde si queda algo y óxido si es cero.
+ *
+ * Los dos primeros se veían igual —un guion— y eso era mentir por omisión:
+ * "no sé" y "no hay" son respuestas distintas. Lo que los separa es
+ * `detail_fetched_at`, el sello de la última vez que este plan pidió el
+ * detalle.
+ *
  * Sin botón de recargar a propósito: acá se muestra lo que la base YA tiene.
  * Un botón por fila invitaría a disparar una consulta al SIA por cada una de
- * las 313 asignaturas. Para medir se entra a la materia, donde una sola
- * consulta trae todos sus grupos.
+ * las 313 asignaturas. El signo de pregunta no es un botón aparte —la fila
+ * entera ya es un enlace— sino la señal de que ahí adentro hay algo que
+ * averiguar: entrar a la asignatura mide todos sus grupos de un POST.
  */
-function SeatsCell({ seats }: { seats?: CourseSummary['seats'] }) {
+function SeatsCell({
+  seats,
+  askedAt,
+}: {
+  seats?: CourseSummary['seats'];
+  askedAt?: string | null;
+}) {
   if (!seats) {
+    if (!askedAt) {
+      return (
+        <span
+          className="row__seats is-unknown col-seats"
+          title="Nunca se le preguntó al SIA por esta asignatura. Ábrela para medir sus cupos."
+        >
+          <HelpCircle size={15} strokeWidth={2} aria-hidden="true" />
+          <span className="sr-only">Cupos sin consultar</span>
+        </span>
+      );
+    }
     return (
       <span
-        className="row__seats is-unknown col-seats"
-        title="Nunca se pidió el detalle de esta asignatura"
+        className="row__seats is-zero col-seats"
+        title={`Sin grupos programados · consultado ${new Date(askedAt).toLocaleString('es-CO')}`}
       >
-        —
+        <b className="tnum">0</b>
+        <small>sin grupos</small>
       </span>
     );
   }

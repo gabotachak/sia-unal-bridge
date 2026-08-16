@@ -641,6 +641,17 @@ components:
           examples: ["FUND. OBLIGATORIA (B)"]
         description: { type: string }
         fetched_at: { type: string, format: date-time }
+        detail_fetched_at:
+          description: |
+            Cuándo se pidió por última vez el detalle de esta asignatura DESDE
+            ESTE plan. Ausente si nunca se pidió.
+
+            Es lo que separa los dos motivos por los que `seats` puede faltar:
+            sin este sello, nadie preguntó; con el sello puesto y sin `seats`,
+            se preguntó y la asignatura no tiene grupos programados — ahí el
+            cero es un dato.
+          type: string
+          format: date-time
         seats:
           description: |
             Cupos YA GUARDADOS de la asignatura: la suma sobre los grupos que

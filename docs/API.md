@@ -138,6 +138,22 @@ sino por el buscador de electivas, que es **por sede** y devuelve entre 233 y 64
 según la sede y el plan de origen. `catalog_fetched_at` se sella cuando están las dos
 mitades; si no, la respuesta es plausible y le falta el trozo que más se consulta.
 
+Cada asignatura del listado trae los cupos que **ya** están guardados (`seats`) y el
+sello `detail_fetched_at`, que es cuándo ese plan pidió su detalle por última vez.
+Ninguno de los dos dispara nada: salen del Store tal cual.
+
+Los dos juntos son los que dejan responder sin mentir, porque `seats` puede faltar por
+dos motivos distintos:
+
+| `detail_fetched_at` | `seats` | Significa |
+|---|---|---|
+| ausente | ausente | nadie preguntó todavía — **no sé** |
+| presente | ausente | se preguntó y la asignatura no tiene grupos — **cero** |
+| presente | presente | los cupos, con la edad de la medición más vieja |
+
+Sin el sello, un catálogo recién traído y una asignatura sin oferta se ven idénticos, y
+el cliente termina pintando un guion en los dos casos.
+
 ### Detalle — granularidad asignatura
 
 | Método | Ruta |

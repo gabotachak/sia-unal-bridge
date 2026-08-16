@@ -87,6 +87,13 @@ func courseSummaryJSON(o catalog.CourseOffering) gin.H {
 		"description": o.Course.Description,
 		"fetched_at":  o.Course.FetchedAt,
 	}
+	// Cuándo se pidió el detalle de esta asignatura desde este plan, si es que
+	// se pidió alguna vez. Es lo que le permite al cliente distinguir "sin
+	// medir" de "medido y sin grupos": con este sello puesto y sin `seats`, el
+	// cero es un dato, no un hueco.
+	if o.DetailFetchedAt != nil {
+		h["detail_fetched_at"] = o.DetailFetchedAt
+	}
 	// Los cupos que YA están guardados. Ausentes si nunca se pidió el detalle
 	// de esta asignatura desde este plan — que es la respuesta honesta, no un
 	// cero.

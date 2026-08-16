@@ -1,7 +1,6 @@
 import { Link, useParams } from 'react-router';
 import { Inbox, RotateCw, TriangleAlert } from 'lucide-react';
 import type { ApiError } from '../api/client';
-import { MAX_RETRIES } from '../lib/retry';
 import './States.css';
 
 /**
@@ -9,7 +8,14 @@ import './States.css';
  *
  * Un miss frío contra el SIA tarda entre 3 y 8 segundos: son hasta 15 POSTs
  * encadenados contra una app con estado de sesión. Un spinner mudo durante 8 s
- * se lee como "está roto". Acá se muestra el cronómetro y se explica por qué.
+ * se lee como "está roto", así que hay cronómetro: la cuenta que sube es la
+ * prueba de que algo pasa.
+ *
+ * Lo que NO se cuenta es cómo está hecho esto. La versión anterior explicaba
+ * el cache, la cascada de peticiones y hasta que del otro lado hay Postgres —
+ * información nuestra, no de quien espera. A quien busca una materia no le
+ * sirve saber nuestra arquitectura; le sirve saber que va a tardar un poco y
+ * que la próxima vez no.
  */
 export function Loading({
   elapsed,
@@ -35,18 +41,12 @@ export function Loading({
       {/* Se dice que se está reintentando, pero no se pide nada: el error que
           lo causó se arregla solo casi siempre, y no hay decisión que tomar
           hasta que se acaben los intentos. */}
-      {attempt > 0 && (
-        <p className="state__retry">
-          El SIA cortó la sesión. Reintentando ({attempt}/{MAX_RETRIES})…
-        </p>
-      )}
+      {attempt > 0 && <p className="state__retry">Se cortó la conexión con el SIA. Reintentando…</p>}
 
       {slow && (
         <p className="state__note">
-          No está cacheado, así que se está consultando al SIA en vivo. Son varias
-          peticiones encadenadas contra una app con estado de sesión — por eso tarda.
-          <br />
-          La próxima vez esta misma pantalla abre desde Postgres, en milisegundos.
+          Esta es la primera vez que se pide, así que hay que ir hasta el SIA. La próxima
+          vez abre al instante.
         </p>
       )}
       <p className="state__clock tnum">

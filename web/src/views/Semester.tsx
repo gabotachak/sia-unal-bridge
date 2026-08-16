@@ -139,7 +139,7 @@ export function Semester() {
         <>
           <p>Se quita {n === 1 ? 'la materia' : `las ${n} materias`} de la lista.</p>
           <p>
-            Tu plan sigue siendo el mismo, así que podés volver a agregarlas desde el catálogo.
+            Tu plan sigue siendo el mismo, así que puedes volver a agregarlas desde el catálogo.
           </p>
         </>
       ),
@@ -207,7 +207,7 @@ export function Semester() {
         <>
           <Empty
             title="Todavía no agregaste materias"
-            note="Tocá el + en las asignaturas que estés considerando. Acá vas a poder ver los cupos de todos sus grupos con un solo botón."
+            note="Toca el + en las asignaturas que estés considerando. Aquí podrás ver los cupos de todos sus grupos con un solo botón."
           />
           {plan.selection && (
             <p className="sem__back">
@@ -238,9 +238,9 @@ export function Semester() {
           </ul>
 
           <p className="sem__note">
-            Los cupos se guardan con su hora de medición, así que lo que ves acá es lo que
+            Los cupos se guardan con su hora de medición, así que lo que ves aquí es lo que
             había en ese momento — no una promesa de que sigan ahí. El botón vuelve a
-            preguntarle al SIA por las {plan.items.length} materias, de a {CONCURRENCY} a la
+            preguntarle al SIA por las {plan.items.length} materias, en tandas de {CONCURRENCY} a la
             vez, que es lo que el pool de conexiones puede atender en paralelo.
           </p>
         </>

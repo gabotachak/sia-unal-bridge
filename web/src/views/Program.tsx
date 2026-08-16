@@ -147,7 +147,7 @@ export function Program() {
         <div className="stray" role="status">
           <p className="stray__text">
             Estás mirando el plan <b>{program}</b>, y el tuyo es <b>{selection.programName}</b>.
-            Podés mirar todo lo que quieras, pero para agregar materias al semestre tenés que
+            Puedes mirar todo lo que quieras, pero para agregar materias al semestre tienes que
             estar en tu plan.
           </p>
           <div className="stray__actions">
@@ -246,7 +246,7 @@ export function Program() {
           {shown.length === 0 ? (
             <Empty
               title="Ninguna asignatura coincide"
-              note="Quitá algún filtro. Ojo: la tipología depende del plan, no de la asignatura."
+              note="Quita algún filtro. Ojo: la tipología depende del plan, no de la asignatura."
             />
           ) : (
             <div className="table">

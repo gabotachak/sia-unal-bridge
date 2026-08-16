@@ -72,7 +72,7 @@ export function Fault({ error, onRetry }: { error: ApiError; onRetry?: () => voi
         <h2 className="state__head">¿Cuál de estos?</h2>
         <p className="state__note">
           El mismo código existe en varias sedes o facultades — PEAMA reexpone el mismo
-          plan. Elegí uno:
+          plan. Elige uno:
         </p>
         <ul className="state__options">
           {error.candidates.map((c) => (

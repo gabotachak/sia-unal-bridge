@@ -128,7 +128,7 @@ export function PlanPicker() {
             <p>
               Se va a borrar {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi
               semestre, porque {n === 1 ? 'es' : 'son'} del plan <b>{current.programName}</b> y sus
-              grupos no son los mismos acá.
+              grupos no son los mismos aquí.
             </p>
           </>
         ),
@@ -157,7 +157,7 @@ export function PlanPicker() {
             <>
               ¿Dónde
               <br />
-              <em>estudiás?</em>
+              <em>estudias?</em>
             </>
           ) : (
             'Cambiar de plan'
@@ -167,7 +167,7 @@ export function PlanPicker() {
         <p className="setup__lead rise" style={{ animationDelay: '120ms' }}>
           {first ? (
             <>
-              Todo lo demás cuelga de acá. El mismo código de plan existe en varias sedes,
+              Todo lo demás cuelga de aquí. El mismo código de plan existe en varias sedes,
               así que preguntar sin decir dónde no significa nada.
             </>
           ) : (
@@ -180,9 +180,9 @@ export function PlanPicker() {
         {!first && plan.items.length > 0 && (
           <p className="setup__warn">
             <TriangleAlert size={15} strokeWidth={2} aria-hidden="true" />
-            Elegir otro plan borra las {plan.items.length}{' '}
-            {plan.items.length === 1 ? 'materia' : 'materias'} de Mi semestre: sus grupos y su
-            tipología son de este plan.
+            Elegir otro plan borra{' '}
+            {plan.items.length === 1 ? 'la materia' : `las ${plan.items.length} materias`} de Mi
+            semestre: sus grupos y su tipología son de este plan.
           </p>
         )}
 
@@ -261,7 +261,7 @@ export function PlanPicker() {
         </h2>
 
         {!campus ? (
-          <p className="step__hint">Elegí una sede para ver sus planes.</p>
+          <p className="step__hint">Elige una sede para ver sus planes.</p>
         ) : (
           <>
             <label className="search">
@@ -286,7 +286,7 @@ export function PlanPicker() {
 
             {programs.data &&
               (groups.length === 0 ? (
-                <Empty title="Ningún plan coincide" note="Probá con menos letras." />
+                <Empty title="Ningún plan coincide" note="Prueba con menos letras." />
               ) : (
                 groups.map(([code, g]) => (
                   <section key={code} className="faculty">

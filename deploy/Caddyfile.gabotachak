@@ -1,0 +1,11 @@
+# sia-unal-bridge — bloque para el Caddyfile compartido del server.
+# Puertos según docker-compose.yml / .env de este proyecto. Si alguno choca
+# con otro proyecto en el server, avisar para reasignar antes de aplicar.
+
+sia-api.gabotachak.dev {
+	reverse_proxy localhost:18080
+}
+
+sia.gabotachak.dev {
+	reverse_proxy localhost:13000
+}

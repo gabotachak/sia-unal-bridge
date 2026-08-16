@@ -8,6 +8,7 @@ services:
     # Atado a 127.0.0.1: sin el prefijo, Docker abre el puerto en TODAS las
     # interfaces y se salta el firewall del host por sus reglas en iptables.
     ports: ["127.0.0.1:${DB_PORT:-15432}:5432"]
+    restart: unless-stopped
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
@@ -29,6 +30,7 @@ services:
       FETCH_COOLDOWN: ${FETCH_COOLDOWN:-60}
     # PORT es fijo dentro del contenedor; API_PORT sólo mueve el puerto del host.
     ports: ["${API_PORT:-18080}:8080"]
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
@@ -41,6 +43,7 @@ services:
       args:
         FETCH_COOLDOWN: ${FETCH_COOLDOWN:-60}
     ports: ["${WEB_PORT:-13000}:8080"]
+    restart: unless-stopped
     depends_on:
       - api
 

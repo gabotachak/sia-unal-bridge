@@ -1,5 +1,7 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // El proxy es lo que hace que CORS no exista.
 //
@@ -11,15 +13,24 @@ import react from '@vitejs/plugin-react';
 //
 // En compose el mismo papel lo hace nginx (ver web/nginx.conf). La API nunca
 // se entera de ninguno de los dos.
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 5173,
-    proxy: {
-      '/v1': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
+export default defineConfig(({ mode }) => {
+  // Lee variables VITE_* del .env de la raíz del monorepo (un nivel arriba).
+  const env = loadEnv(mode, resolve(dirname(fileURLToPath(import.meta.url)), '..'), 'VITE_');
+
+  const apiTarget = env.VITE_API_TARGET || 'http://localhost:8080';
+  const devPort = Number(env.VITE_DEV_PORT) || 5173;
+
+  return {
+    plugins: [react()],
+    server: {
+      port: devPort,
+      proxy: {
+        '/v1': {
+          target: apiTarget,
+          changeOrigin: true,
+        },
       },
     },
-  },
+  };
 });
+

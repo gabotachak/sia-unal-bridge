@@ -16,23 +16,22 @@ services:
   api:
     build: .
     environment:
-      # db, not localhost: this is the in-network hostname, never the
-      # host-facing DATABASE_URL from .env (that one's for `make migrate`
-      # and tests running outside the compose network).
+      # Hostname `db` es el nombre del servicio en la red interna de Docker,
+      # NO localhost. El DATABASE_URL del .env (sección 4) es para el host.
       DATABASE_URL: postgres://${POSTGRES_USER:-sia}:${POSTGRES_PASSWORD:-sia}@db:5432/${POSTGRES_DB:-sia_bridge}?sslmode=disable
-      PORT: ${PORT:-8080}
+      PORT: ${API_PORT:-8080}
       SIA_BASE_URL: ${SIA_BASE_URL:-https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf}
       SIA_POOL_SIZE: ${SIA_POOL_SIZE:-4}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SIA_TERM: ${SIA_TERM:-2026-2}
-    ports: ["${PORT:-8080}:8080"]
+    ports: ["${API_PORT:-8080}:8080"]
     depends_on:
       db:
         condition: service_healthy
 
   web:
     build: ./web
-    ports: ["3000:80"]
+    ports: ["${WEB_PORT:-3000}:80"]
     depends_on:
       - api
 

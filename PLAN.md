@@ -189,11 +189,40 @@ de `API.md`, con `X-Cache: miss` la primera vez y `hit` la segunda.
 
 ## Definición de "fase 1 hecha"
 
-1. Catálogo y detalle de cualquier plan de pregrado de Bogotá, servidos como JSON.
-2. Cupos con su edad, siempre.
-3. Cache que sobrevive al reinicio y no sirve datos de un plan como si fueran de otro.
-4. 8 clientes concurrentes sin respuestas cruzadas.
-5. Los parsers pasan contra los 11 fixtures, sin red.
+**Completa — verificado contra el SIA real y Postgres real, 2026-08-15.**
+
+1. ✅ Catálogo y detalle de cualquier plan de pregrado de Bogotá, servidos como JSON.
+   `ResolveProgram` camina facultad→programa en vivo si no está en cache
+   (`FetchProgramDirectory`, 2-14 POSTs acotados).
+2. ✅ Cupos con su edad, siempre. `age_seconds` va en el body de cada sección y de
+   `.../seats`, nunca solo en cabeceras.
+3. ✅ Cache que sobrevive al reinicio (Postgres) y no mezcla planes: `section_program`
+   por programa, `course_program.detail_fetched_at` gobierna visibilidad.
+4. ✅ 8 clientes concurrentes sin respuestas cruzadas — `TestLive_PoolConcurrency8DistinctPrograms`,
+   8/8 catálogos distintos, `-race` limpio.
+5. ✅ Los parsers pasan contra los fixtures, sin red — `internal/sia/testdata/`.
+
+**Desviaciones conocidas del plan original**, documentadas en línea donde aplican:
+
+- `?q=`/`?credits=`/`?typology=` en `/courses` de un programa se filtran **en memoria**
+  sobre el catálogo ya cacheado, no con `it11`/`it10` server-side. Correcto, pero no
+  optimiza el payload de un miss filtrado en frío como describía `API.md`.
+- Room/building del horario es *best-effort*: el SIA repite el código de sala sin
+  delimitador estable. Ver el comentario de `buildingRe` en `sia/parse_schedule.go`.
+- `noop_session_expired_mute_*` sigue siendo un fixture sintético — la firma muda
+  (~1.2 KB) no se reprodujo; la explícita (419 B) sí, real. Ver
+  [`docs/OPEN-QUESTIONS.md §3`](docs/OPEN-QUESTIONS.md).
+- Prerrequisitos se extraen (`ParseDetail`) pero no se persisten, como ya preveía este
+  documento. "Contenido de la asignatura" (componentes) no se parsea.
+
+**Trampas nuevas encontradas construyendo esto**, añadidas a `GOTCHAS.md`:
+
+- §29: `golang.org/x/net/html` baja `_afrRK` a minúsculas — `Attr("_afrRK")` falla en
+  silencio, hay que leer `Attr("_afrrk")`.
+- §30: reenviar un `valueChange` con el mismo valor no re-renderiza el dropdown
+  dependiente — rompía el recorrido de facultades reutilizando una conexión.
+- Bug propio (no del SIA): `cuposRe` estaba declarado y nunca usado — los cupos, el
+  dato central de todo el proyecto, no se guardaban. Corregido antes de tocar `store`.
 
 ---
 

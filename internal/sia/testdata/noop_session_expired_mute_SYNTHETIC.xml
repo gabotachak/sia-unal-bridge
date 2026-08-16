@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  SYNTHETIC — not captured from the server. See docs/OPEN-QUESTIONS.md §3:
+  two live probes on 2026-08-15 left a session idle 322s+ without it dying,
+  contradicting the ~270s figure from the first round of experiments. This
+  fixture reconstructs the documented ~1.2KB mute shape (empty re-render,
+  no message) for unit tests of isNoop(); replace with a real capture once
+  natural expiry is reproduced.
+-->
+<partial-response><changes>
+<update id="pt1:r1:0:pb3"><![CDATA[<div id="pt1:r1:0:pb3" class="resultado af_panelBox"><table class="af_panelBox_table p_AFCore p_AFDefault" cellpadding="0" cellspacing="0" border="0" width="0" summary="" role="presentation"><tbody><tr><td class="af_panelBox_header-start p_AFCore p_AFDefault">&nbsp;</td></tr></tbody></table></div>]]></update>
+<update id="javax.faces.ViewState"><![CDATA[!-j1vdpejr1]]></update>
+</changes></partial-response>

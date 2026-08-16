@@ -2,16 +2,33 @@ services:
   db:
     image: postgres:18.6-alpine
     environment:
-      POSTGRES_USER: sia
-      POSTGRES_PASSWORD: sia
-      POSTGRES_DB: sia_bridge
+      POSTGRES_USER: ${POSTGRES_USER:-sia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sia}
+      POSTGRES_DB: ${POSTGRES_DB:-sia_bridge}
     ports: ["5432:5432"]
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sia"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sia}"]
       interval: 5s
       retries: 10
+
+  api:
+    build: .
+    environment:
+      # db, not localhost: this is the in-network hostname, never the
+      # host-facing DATABASE_URL from .env (that one's for `make migrate`
+      # and tests running outside the compose network).
+      DATABASE_URL: postgres://${POSTGRES_USER:-sia}:${POSTGRES_PASSWORD:-sia}@db:5432/${POSTGRES_DB:-sia_bridge}?sslmode=disable
+      PORT: ${PORT:-8080}
+      SIA_BASE_URL: ${SIA_BASE_URL:-https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf}
+      SIA_POOL_SIZE: ${SIA_POOL_SIZE:-4}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SIA_TERM: ${SIA_TERM:-2026-2}
+    ports: ["${PORT:-8080}:8080"]
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   pgdata:

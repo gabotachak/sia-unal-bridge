@@ -1,5 +1,5 @@
 // Package config reads environment variables into a Config struct. No
-// framework, no validation library: ~6 variables don't need one.
+// framework, no validation library: a handful of variables don't need one.
 package config
 
 import (
@@ -15,6 +15,7 @@ type Config struct {
 	SIABaseURL      string
 	SIAPoolSize     int
 	LogLevel        string
+	Term            string // SIA exposes only the current term — docs/API.md
 }
 
 func Load() (Config, error) {
@@ -30,6 +31,7 @@ func Load() (Config, error) {
 		SIABaseURL:      getenv("SIA_BASE_URL", "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf"),
 		SIAPoolSize:     poolSize,
 		LogLevel:        getenv("LOG_LEVEL", "info"),
+		Term:            getenv("SIA_TERM", "2026-2"), // NOT "TERM" — collides with the shell's terminal-type var
 	}, nil
 }
 

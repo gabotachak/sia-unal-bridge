@@ -634,3 +634,61 @@ va **entre** conexiones, nunca dentro de una.
 // 14. Identidad de programa: (campus_code, faculty_code, code)
 // 15. Mutex por conexion envolviendo la OPERACION LOGICA, no cada POST
 ```
+
+---
+
+## 29. `golang.org/x/net/html` baja `_afrRK` a minúsculas — trampa de implementación, no del SIA
+
+Verificado escribiendo `sia/parse_list.go` (2026-08-15). No es un hallazgo contra el
+servidor como los anteriores: es un hallazgo contra la librería HTML de Go.
+
+El tokenizer de `golang.org/x/net/html` (y por tanto `goquery`, que lo usa por debajo)
+ASCII-lowercasea todos los nombres de atributo al parsear, por espec. HTML5. El atributo
+que llega en el wire como `_afrRK="47"` aparece en el árbol DOM parseado como `_afrrk`.
+
+```go
+tr.Attr("_afrRK")  // false, "" — silencioso, no panic
+tr.Attr("_afrrk")  // true, "47" — correcto
+```
+
+Con `Attr` devolviendo `(valor, ok)`, el fallo es fácil de no notar si no se comprueba
+`ok`: `ParseList` devolvía **0 filas** de un documento con 98 `<tr>` reales, sin error.
+Se mezcla mal con el §4 (nunca cachear `_afrRK`, releer siempre) — aquí el bug estaba en
+leerlo *mal*, no en cachearlo.
+
+**Regla:** cualquier atributo con mayúsculas que se lea vía `goquery`/`x/net/html` hay
+que buscarlo en minúsculas. No aplica a atributos `id` (van todos en minúsculas en el
+HTML que manda el SIA) ni a texto de nodos — solo a nombres de atributo.
+
+---
+
+## 30. Reenviar un `valueChange` con el mismo valor no re-renderiza el dropdown dependiente
+
+Verificado escribiendo `sia/cascade.go` (paso 6, 2026-08-15). Necesario para resolver
+`{program}` en la URL: recorrer las ~13 facultades de Bogotá y, por cada una, pedir sus
+carreras (`soc2` → puebla `soc3`).
+
+La implementación ingenua reutiliza `soc1`+`soc9` (nivel+sede) para cada facultad,
+llamando a la misma secuencia de 2 pasos en cada iteración. **Falla en la segunda
+llamada sobre la misma conexión:**
+
+```
+1.ª vez:  soc1=0, soc9=2  →  respuesta trae <update id="pt1:r1:0:soc2"> con las 13 facultades  ✓
+2.ª vez:  soc1=0, soc9=2  →  respuesta NO trae <update id="pt1:r1:0:soc2">                      ✗
+```
+
+Mismos valores, misma conexión, mismo ViewState. La respuesta es 200 OK y no es un no-op
+de los de siempre (no mide ~900 B, sigue siendo una respuesta normal) — simplemente el
+`<update>` que se necesita no está, porque desde el punto de vista de ADF el valor **no
+cambió**, así que no hay nada que re-renderizar. Se parece al no-op de cascada
+incompleta (§6) pero la causa es la contraria: no falta un paso, sobra una repetición.
+
+**Regla:** nunca reenviar un `valueChange` con el mismo valor que el componente ya
+tiene. Si hace falta releer las opciones de un dropdown ya seleccionado, no se puede —
+hay que quedarse con la respuesta de la primera vez.
+
+**Consecuencia de diseño:** `sia.SIAConn.FetchProgramDirectory` hace nivel+sede **una
+sola vez** y despues itera facultad por facultad cambiando solo `soc2` (valor distinto
+en cada vuelta, así que sí re-renderiza `soc3`). Nunca separar esto en llamadas
+independientes que puedan reutilizar la misma conexión para el mismo nivel+sede dos
+veces.

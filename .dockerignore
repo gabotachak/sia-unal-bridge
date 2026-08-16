@@ -1,0 +1,7 @@
+.git/
+.claude/
+bruno/
+docs/
+*.md
+internal/sia/testdata/
+testdata/live/

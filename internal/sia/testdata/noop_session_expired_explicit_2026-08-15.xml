@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<partial-response><changes><eval><![CDATA[if (window['AdfPage'] && AdfPage.PAGE && AdfPage.PAGE.__getSessionTimeoutHelper())
+	AdfPage.PAGE.__getSessionTimeoutHelper().__alertTimeout();
+else {
+	alert('Because of inactivity, your session has timed out and is no longer active.  Click OK to reload the page.');
+	window.location.replace(window.location.href);}
+]]></eval></changes></partial-response>

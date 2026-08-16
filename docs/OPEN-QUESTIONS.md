@@ -104,6 +104,19 @@ Dos correcciones a lo que decía `GOTCHAS.md §7`:
   JS. Un keepalive de 4 min es demasiado justo; usa **≤3 min**.
 - Hay **dos firmas de muerte** distintas. Justo al expirar, un no-op de ~1.2 KB
   indistinguible del no-op por cascada incompleta. Más tarde, los 419 B con el mensaje
+
+> **Revisado en fase 1 (2026-08-15, noche).** Tres sondas con curl (misma cascada,
+> misma cookie jar): ociosa 322 s → **viva** (`cb1` devolvió 232 KB, no un no-op).
+> Ociosa 420 s → **muerta**, con la firma explícita real de 419 B (`Because of
+> inactivity, your session has timed out...`), capturada y guardada en
+> `internal/sia/testdata/noop_session_expired_explicit_2026-08-15.xml`. Estrecha la
+> ventana real a **algún punto entre 322 s y 420 s** — más ancha que los 270 s
+> documentados en la primera ronda, pero confirma que el mecanismo existe tal como se
+> describe. No cambia el diseño (`keepalive ≤3 min` sigue siendo cota segura de sobra).
+> La firma **muda** (~1.2 KB, justo al expirar) no se observó en esta sonda — saltamos
+> directo del baseline vivo a la explícita porque el primer POST tras 420 s ya cayó
+> del otro lado de ambas ventanas. `noop_session_expired_mute_SYNTHETIC.xml` sigue
+> siendo sintético; reemplazar si se acota mejor el punto exacto de expiración.
   explícito. Ambas significan lo mismo: re-bootstrapear.
 
 No hay tope absoluto observable: tres sesiones con ping regular llegaron a los 30 min

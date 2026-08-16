@@ -32,7 +32,7 @@ services:
       POSTGRES_DB: sia_bridge
     ports: ["5432:5432"]
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql   # 18+: layout por versión mayor, no .../data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sia"]
       interval: 5s
@@ -46,6 +46,26 @@ volumes:
 docker compose up -d db
 psql postgres://sia:sia@localhost:5432/sia_bridge
 ```
+
+---
+
+## API en contenedor
+
+`Dockerfile` (multi-stage: `golang:1.26.6-alpine` build → `alpine:3.20` runtime) y el
+servicio `api` en `docker-compose.yml` levantan el puente completo:
+
+```bash
+DATABASE_URL="postgres://sia:sia@localhost:5432/sia_bridge?sslmode=disable" make migrate
+docker compose up -d --build
+curl http://localhost:8080/v1/healthz
+```
+
+Las migraciones **no corren solas** — `api` no las aplica al arrancar. Correr `make
+migrate` contra el puerto 5432 mapeado en el host antes de `docker compose up` (o
+después; el schema no cambia entre versiones todavía).
+
+`api` espera a que `db` esté `healthy` (`depends_on.condition: service_healthy`), no
+solo arrancado.
 
 El esquema está en [DATA-MODEL.md](DATA-MODEL.md). Cuando haya migraciones, van en
 `migrations/`.

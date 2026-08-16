@@ -115,8 +115,10 @@
    del texto es imposible de barrer con la vista, y ese salto es lo que
    hacía que redimensionar la ventana se sintiera roto. */
 
+/* La de cupos es la única columna que creció: tiene que caber 'sin grupos ·
+   2 h' en una línea. Sale del ancho del nombre, que es el que cede. */
 .table {
-  --cols: 6.2rem minmax(0, 1fr) 2.4rem 2.2rem 4.6rem 2.25rem;
+  --cols: 6.2rem minmax(0, 1fr) 2.4rem 2.2rem 6.4rem 2.25rem;
 }
 
 .table__head,
@@ -207,6 +209,7 @@
 .row__seats small {
   font-size: 0.6rem;
   color: var(--text-faint);
+  white-space: nowrap;
 }
 .row__seats.is-open b {
   color: var(--ok);
@@ -272,7 +275,7 @@
 
 @media (max-width: 700px) {
   .table {
-    --cols: 6.2rem minmax(0, 1fr) 2.4rem 4.6rem 2.25rem;
+    --cols: 6.2rem minmax(0, 1fr) 2.4rem 6.4rem 2.25rem;
   }
   .col-cr {
     display: none;
@@ -288,6 +291,12 @@
   }
   .col-typ,
   .col-code {
+    display: none;
+  }
+  /* Acá la columna vuelve a ser angosta y 'sin grupos · 2 h' ya no cabe. Se
+     va la edad y no la palabra: en el teléfono importa más que no hay grupos
+     que cuándo se supo, y el dato completo sigue a un toque, en la ficha. */
+  .row__age {
     display: none;
   }
 }

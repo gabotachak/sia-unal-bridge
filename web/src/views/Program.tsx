@@ -344,13 +344,19 @@ function SeatsCell({
         </span>
       );
     }
+    // "Sin grupos" tampoco es para siempre: la UNAL puede programar oferta
+    // mañana. Así que lleva su edad igual que todo lo demás — la del sello del
+    // detalle, calculada acá porque el reloj del servidor solo sella los cupos.
+    const age = formatAge((Date.now() - Date.parse(askedAt)) / 1000);
     return (
       <span
         className="row__seats is-zero col-seats"
         title={`Sin grupos programados · consultado ${new Date(askedAt).toLocaleString('es-CO')}`}
       >
         <b className="tnum">0</b>
-        <small>sin grupos</small>
+        <small>
+          sin grupos<span className="row__age tnum"> · {age}</span>
+        </small>
       </span>
     );
   }

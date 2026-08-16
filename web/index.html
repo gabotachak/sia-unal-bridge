@@ -38,10 +38,12 @@
       rel="stylesheet"
     />
 
-    <link
-      rel="icon"
-      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23241f19'/><rect x='8' y='7' width='4.5' height='18' rx='1.2' fill='%23f0e7d8'/><rect x='15.5' y='7' width='4.5' height='11' rx='1.2' fill='%237fc06a'/><rect x='23' y='7' width='4.5' height='15' rx='1.2' fill='%23e78ac9'/></svg>"
-    />
+    <!--
+      El icono es un archivo y no un data URI incrustado acá: adentro lleva una
+      media query que lo pinta claro u oscuro según el navegador, y eso no cabe
+      en una sola línea escapada. Ver web/public/favicon.svg.
+    -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body>
     <!-- React se engancha acá. Todo lo demás lo pinta src/main.tsx. -->

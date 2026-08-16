@@ -53,18 +53,20 @@
   color: var(--text);
 }
 
+/* Un tono y ninguno más: el trazo hereda el color del texto, así que la marca
+   es tinta en claro y hueso en oscuro sin una sola regla de tema. Antes eran
+   tres barras de tres colores —jade, musgo, rosa— y esos colores acá no
+   significaban nada: en el resto de la app cada uno tiene un trabajo (tocable,
+   hay cupos, aviso) y gastarlos en el logo los desafinaba. */
 .brand__mark {
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.35rem;
+  height: 1.35rem;
   flex: none;
-  fill: var(--accent);
-}
-.brand__mark--ok {
-  fill: var(--ok);
-}
-.brand__mark--faint {
-  fill: var(--accent);
-  opacity: 0.42;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .brand__word {

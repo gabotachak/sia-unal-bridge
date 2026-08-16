@@ -78,10 +78,13 @@ export function Topbar() {
     <header className="bar">
       <div className="bar__inner">
         <Link className="brand" to="/" aria-label="SIA Bridge — inicio">
+          {/* El Puente de Boyacá, el mismo trazo del favicon: un arco
+              semicircular y dos tableros que se juntan en ángulo. La forma
+              rara es lo que lo hace ESE puente y no un puente cualquiera. */}
           <svg className="brand__mark" viewBox="0 0 32 32" aria-hidden="true">
-            <rect x="3" y="6" width="6" height="20" rx="2" />
-            <rect className="brand__mark--ok" x="13" y="6" width="6" height="12" rx="2" />
-            <rect className="brand__mark--faint" x="23" y="6" width="6" height="16" rx="2" />
+            <path d="M2 18 16 11l14 7" />
+            <path d="M8 24a8 8 0 0 1 16 0" />
+            <path d="M2 18v6M30 18v6" />
           </svg>
           <span className="brand__word">SIA Bridge</span>
         </Link>

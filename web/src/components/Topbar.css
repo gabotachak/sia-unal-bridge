@@ -90,7 +90,7 @@
   max-width: 30rem;
   height: 2.25rem;
   padding: 0 0.4rem 0 0.55rem;
-  margin-left: var(--gap-xs);
+  margin-right: var(--gap-xs);
   border: 1px solid var(--rule);
   border-radius: var(--radius-sm);
   background: var(--surface);

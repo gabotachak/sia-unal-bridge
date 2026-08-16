@@ -35,18 +35,21 @@ export function Topbar({ freshness }: { freshness?: F | null }) {
   return (
     <header className="bar">
       <div className="bar__inner">
-        <Link className="brand" to="/" aria-label="Tablero — inicio">
+        <Link className="brand" to="/" aria-label="SIA Bridge — inicio">
           <svg className="brand__mark" viewBox="0 0 32 32" aria-hidden="true">
             <rect x="3" y="6" width="6" height="20" rx="2" />
             <rect className="brand__mark--ok" x="13" y="6" width="6" height="12" rx="2" />
             <rect className="brand__mark--faint" x="23" y="6" width="6" height="16" rx="2" />
           </svg>
-          <span className="brand__word">Tablero</span>
+          <span className="brand__word">SIA Bridge</span>
         </Link>
+
+        <div className="bar__spacer" />
 
         {/* El plan elegido. Es contexto y es puerta: dice de qué plan es todo
             lo que hay debajo, y al tocarlo se cambia. El chevron doble es la
-            convención de "acá se elige entre varios". */}
+            convención de "acá se elige entre varios". Vive con el resto de
+            controles, a la derecha. */}
         {sel && (
           <Link className="planchip" to="/plan">
             <span className="planchip__code tnum">{sel.program}</span>
@@ -56,8 +59,6 @@ export function Topbar({ freshness }: { freshness?: F | null }) {
             <span className="sr-only">Cambiar de plan</span>
           </Link>
         )}
-
-        <div className="bar__spacer" />
 
         <Freshness value={freshness ?? null} />
 

@@ -126,9 +126,9 @@ export function PlanPicker() {
               Pasar a <b>{p.name}</b> reinicia el tablero.
             </p>
             <p>
-              Se van a borrar las {n} {n === 1 ? 'materia guardada' : 'materias guardadas'} en Mi
-              semestre, porque son del plan <b>{current.programName}</b> y sus grupos no son los
-              mismos acá.
+              Se va a borrar {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi
+              semestre, porque {n === 1 ? 'es' : 'son'} del plan <b>{current.programName}</b> y sus
+              grupos no son los mismos acá.
             </p>
           </>
         ),

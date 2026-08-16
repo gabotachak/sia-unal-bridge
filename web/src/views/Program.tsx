@@ -128,8 +128,8 @@ export function Program() {
         body: (
           <>
             <p>
-              Se van a borrar las {n} {n === 1 ? 'materia guardada' : 'materias guardadas'} en Mi
-              semestre, porque son del plan <b>{selection.programName}</b>.
+              Se va a borrar {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi
+              semestre, porque {n === 1 ? 'es' : 'son'} del plan <b>{selection.programName}</b>.
             </p>
             <p>Sus grupos y su tipología son de ese plan, no de este.</p>
           </>

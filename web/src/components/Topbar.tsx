@@ -1,9 +1,9 @@
-import { Link, useNavigate } from 'react-router';
+import { Link } from 'react-router';
 import { CalendarDays, LayoutList, Monitor, Moon, Sun, Trash2 } from 'lucide-react';
 import { useConfirm } from './Confirm';
 import { useTheme } from '../hooks/useTheme';
 import { usePlan } from '../hooks/usePlan';
-import { selectionPath } from '../lib/storage';
+import { clearStored, selectionPath } from '../lib/storage';
 import { IconButton } from './IconButton';
 import './Topbar.css';
 
@@ -26,7 +26,6 @@ const STROKE = 1.75;
 export function Topbar() {
   const plan = usePlan();
   const { theme, resolved, cycle } = useTheme();
-  const navigate = useNavigate();
   const [ask, confirmDialog] = useConfirm();
   const sel = plan.selection;
 
@@ -45,8 +44,8 @@ export function Topbar() {
         n > 0 ? (
           <>
             <p>
-              Se borran el plan <b>{sel?.programName}</b> y las {n}{' '}
-              {n === 1 ? 'materia guardada' : 'materias guardadas'} en Mi semestre.
+              Se borran el plan <b>{sel?.programName}</b> y{' '}
+              {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi semestre.
             </p>
             <p>No se puede deshacer.</p>
           </>
@@ -55,8 +54,20 @@ export function Topbar() {
         ),
     });
     if (!ok) return;
-    plan.reset();
-    navigate('/plan', { replace: true });
+
+    // Borrar y RECARGAR, no borrar y navegar.
+    //
+    // Navegando quedaba el plan a medio morir: `navigate` de React Router va
+    // en transición —diferido— mientras que limpiar el estado es urgente, así
+    // que React pintaba un cuadro con `selection` en null y la ruta todavía en
+    // /nivel/…/plan/2A74. En ese cuadro se despierta el efecto de Program que
+    // adopta el plan de la URL (existe para las URLs pegadas), y el plan volvía
+    // justo antes de que la navegación llegara.
+    //
+    // Una recarga no tiene ese hueco: el estado en memoria no sobrevive, y lo
+    // que se lee al arrancar es el localStorage que se acaba de vaciar.
+    clearStored();
+    window.location.assign('/plan');
   }
 
   const themeLabel =

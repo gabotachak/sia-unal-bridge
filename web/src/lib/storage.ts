@@ -134,6 +134,26 @@ export function saveSelection(s: Selection | null): void {
   }
 }
 
+/**
+ * Empezar de nuevo: borra TODO lo guardado del plan y del semestre.
+ *
+ * El tema no entra: es una preferencia del navegador, no del plan, y perderlo
+ * al reiniciar sería un efecto secundario que nadie pidió.
+ *
+ * Escribe directo en vez de pasar por el estado de React a propósito. Quien
+ * llama a esto recarga la página enseguida, y los efectos que persisten el
+ * estado corren DESPUÉS del pintado: para cuando les tocara el turno, la
+ * pestaña ya se está yendo.
+ */
+export function clearStored(): void {
+  try {
+    localStorage.removeItem(KEY);
+    localStorage.removeItem(PICK_KEY);
+  } catch {
+    // Modo privado. Si no se puede escribir, tampoco había nada guardado.
+  }
+}
+
 /** La ruta del catálogo de un plan. Un solo sitio la arma, porque la escriben
  *  el raíl, la redirección de la raíz y los avisos de cambio de plan. */
 export function selectionPath(

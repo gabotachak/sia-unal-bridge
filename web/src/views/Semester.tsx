@@ -137,9 +137,7 @@ export function Semester() {
       confirmLabel: 'Vaciar la lista',
       body: (
         <>
-          <p>
-            Se quitan las {n} {n === 1 ? 'materia' : 'materias'} de la lista.
-          </p>
+          <p>Se quita {n === 1 ? 'la materia' : `las ${n} materias`} de la lista.</p>
           <p>
             Tu plan sigue siendo el mismo, así que podés volver a agregarlas desde el catálogo.
           </p>

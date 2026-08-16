@@ -22,50 +22,53 @@ func NewSource(pool *Pool) *Source {
 }
 
 func (s *Source) FetchLevels(ctx context.Context) ([]catalog.LabelOption, error) {
-	conn, release, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer release()
-	opts, err := conn.FetchLevels(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]catalog.LabelOption, len(opts))
-	for i, o := range opts {
-		out[i] = catalog.LabelOption{Index: o.Index, Label: o.Label}
-	}
-	return out, nil
+	return Do(ctx, s.pool, func(conn *SIAConn) ([]catalog.LabelOption, error) {
+		opts, err := conn.FetchLevels(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]catalog.LabelOption, len(opts))
+		for i, o := range opts {
+			out[i] = catalog.LabelOption{Index: o.Index, Label: o.Label}
+		}
+		return out, nil
+	})
 }
 
 func (s *Source) FetchCampuses(ctx context.Context, level int) ([]catalog.DropdownOption, error) {
-	conn, release, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer release()
-	campuses, err := conn.FetchCampuses(ctx, level)
-	if err != nil {
-		return nil, err
-	}
-	return toDomainOptions(campuses), nil
+	return Do(ctx, s.pool, func(conn *SIAConn) ([]catalog.DropdownOption, error) {
+		campuses, err := conn.FetchCampuses(ctx, level)
+		if err != nil {
+			return nil, err
+		}
+		return toDomainOptions(campuses), nil
+	})
+}
+
+// directory is FetchProgramDirectory's two return values in one value, so
+// the operation can go through the generic Do (which retries a dead session
+// once) instead of hand-rolling the acquire/release dance.
+type directory struct {
+	faculties []catalog.DropdownOption
+	programs  map[int][]catalog.DropdownOption
 }
 
 func (s *Source) FetchProgramDirectory(ctx context.Context, level, campusIdx int) ([]catalog.DropdownOption, map[int][]catalog.DropdownOption, error) {
-	conn, release, err := s.pool.Acquire(ctx)
+	dir, err := Do(ctx, s.pool, func(conn *SIAConn) (directory, error) {
+		faculties, programs, err := conn.FetchProgramDirectory(ctx, level, campusIdx)
+		if err != nil {
+			return directory{}, err
+		}
+		programsOut := make(map[int][]catalog.DropdownOption, len(programs))
+		for idx, opts := range programs {
+			programsOut[idx] = toDomainOptions(opts)
+		}
+		return directory{faculties: toDomainOptions(faculties), programs: programsOut}, nil
+	})
 	if err != nil {
 		return nil, nil, err
 	}
-	defer release()
-	faculties, programs, err := conn.FetchProgramDirectory(ctx, level, campusIdx)
-	if err != nil {
-		return nil, nil, err
-	}
-	programsOut := make(map[int][]catalog.DropdownOption, len(programs))
-	for idx, opts := range programs {
-		programsOut[idx] = toDomainOptions(opts)
-	}
-	return toDomainOptions(faculties), programsOut, nil
+	return dir.faculties, dir.programs, nil
 }
 
 func toDomainOptions(opts []Option) []catalog.DropdownOption {
@@ -77,48 +80,40 @@ func toDomainOptions(opts []Option) []catalog.DropdownOption {
 }
 
 func (s *Source) FetchCatalog(ctx context.Context, key catalog.ProgramKey) ([]catalog.CourseOffering, error) {
-	conn, release, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer release()
-
-	body, err := conn.FetchCatalog(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := ParseList(body)
-	if err != nil {
-		return nil, err
-	}
-	return offeringsFromRows(DedupeByCode(rows), key), nil
+	return Do(ctx, s.pool, func(conn *SIAConn) ([]catalog.CourseOffering, error) {
+		body, err := conn.FetchCatalog(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := ParseList(body)
+		if err != nil {
+			return nil, err
+		}
+		return offeringsFromRows(DedupeByCode(rows), key), nil
+	})
 }
 
 func (s *Source) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([]catalog.CourseOffering, error) {
-	conn, release, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer release()
-
-	body, err := conn.FetchElectives(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := ParseList(body)
-	if err != nil {
-		return nil, err
-	}
-	return offeringsFromRows(DedupeByCode(rows), key), nil
+	return Do(ctx, s.pool, func(conn *SIAConn) ([]catalog.CourseOffering, error) {
+		body, err := conn.FetchElectives(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := ParseList(body)
+		if err != nil {
+			return nil, err
+		}
+		return offeringsFromRows(DedupeByCode(rows), key), nil
+	})
 }
 
 func (s *Source) FetchDetail(ctx context.Context, key catalog.ProgramKey, code, term string) (catalog.CourseOffering, error) {
-	conn, release, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return catalog.CourseOffering{}, err
-	}
-	defer release()
+	return Do(ctx, s.pool, func(conn *SIAConn) (catalog.CourseOffering, error) {
+		return fetchDetail(ctx, conn, key, code, term)
+	})
+}
 
+func fetchDetail(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code, term string) (catalog.CourseOffering, error) {
 	row, err := findRow(ctx, conn, key, code)
 	if err != nil {
 		return catalog.CourseOffering{}, err
@@ -130,7 +125,13 @@ func (s *Source) FetchDetail(ctx context.Context, key catalog.ProgramKey, code, 
 	}
 	// Leave the detail region regardless of what happens next — an
 	// unreturned conn is stuck for every future caller (GOTCHAS §10/§20).
-	defer func() { _, _ = conn.Volver(ctx) }()
+	// Detached from ctx on purpose: a client that hangs up mid-detail must
+	// not leave the connection parked in the region forever.
+	defer func() {
+		vctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rebootstrapTimeout)
+		defer cancel()
+		_, _ = conn.Volver(vctx)
+	}()
 
 	campusCode := key.CampusCode
 	d, err := ParseDetail(body, campusCode, code, term)

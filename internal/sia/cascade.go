@@ -37,7 +37,7 @@ const campusWildcardPrefix = "SEDE "
 // be called while DetailRegion != 0 — call Volver first (GOTCHAS §10).
 func (c *SIAConn) gotoProgram(ctx context.Context, key catalog.ProgramKey) error {
 	if c.DetailRegion != 0 {
-		return fmt.Errorf("sia: gotoProgram: connection is in detail region %d, call Volver first", c.DetailRegion)
+		return fmt.Errorf("sia: gotoProgram: connection is in detail region %d, call Volver first: %w", c.DetailRegion, errStaleDetailRegion)
 	}
 	if c.parked && c.ParkedAt == key {
 		return nil
@@ -95,7 +95,7 @@ func (c *SIAConn) gotoProgram(ctx context.Context, key catalog.ProgramKey) error
 // is the caller's job, not the parser's.
 func (c *SIAConn) FetchLevels(ctx context.Context) ([]LabelOption, error) {
 	if c.DetailRegion != 0 {
-		return nil, fmt.Errorf("sia: FetchLevels: connection is in detail region %d, call Volver first", c.DetailRegion)
+		return nil, fmt.Errorf("sia: FetchLevels: connection is in detail region %d, call Volver first: %w", c.DetailRegion, errStaleDetailRegion)
 	}
 
 	target := 0
@@ -132,7 +132,7 @@ func (c *SIAConn) FetchLevels(ctx context.Context) ([]LabelOption, error) {
 // navigation state. One valueChange is cheaper.
 func (c *SIAConn) FetchCampuses(ctx context.Context, level int) ([]Option, error) {
 	if c.DetailRegion != 0 {
-		return nil, fmt.Errorf("sia: FetchCampuses: connection is in detail region %d, call Volver first", c.DetailRegion)
+		return nil, fmt.Errorf("sia: FetchCampuses: connection is in detail region %d, call Volver first: %w", c.DetailRegion, errStaleDetailRegion)
 	}
 
 	if c.navLevel == level {
@@ -182,7 +182,7 @@ func (c *SIAConn) FetchCampuses(ctx context.Context, level int) ([]Option, error
 // docs/API.md, not the full 1380-entry census (that's Refresher).
 func (c *SIAConn) FetchProgramDirectory(ctx context.Context, level, campus int) ([]Option, map[int][]Option, error) {
 	if c.DetailRegion != 0 {
-		return nil, nil, fmt.Errorf("sia: FetchProgramDirectory: connection is in detail region %d, call Volver first", c.DetailRegion)
+		return nil, nil, fmt.Errorf("sia: FetchProgramDirectory: connection is in detail region %d, call Volver first: %w", c.DetailRegion, errStaleDetailRegion)
 	}
 
 	if c.navLevel != level {
@@ -454,7 +454,7 @@ var detailRegionRe = regexp.MustCompile(`id="pt1:r1:(\d+):cb4"`)
 // caller MUST call Volver(ctx, region) before any other region-0 action.
 func (c *SIAConn) FetchDetail(ctx context.Context, rowKey string) ([]byte, int, error) {
 	if c.DetailRegion != 0 {
-		return nil, 0, fmt.Errorf("sia: FetchDetail: already in detail region %d, call Volver first", c.DetailRegion)
+		return nil, 0, fmt.Errorf("sia: FetchDetail: already in detail region %d, call Volver first: %w", c.DetailRegion, errStaleDetailRegion)
 	}
 	deltas := fmt.Sprintf("{pt1:r1:0:t4={viewportSize=999,rows=999,selectedRowKeys=%s}}", rowKey)
 	eventID := fmt.Sprintf("pt1:r1:0:t4:%s:cl2", rowKey)

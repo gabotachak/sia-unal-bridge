@@ -1,0 +1,224 @@
+.course {
+  max-width: 52rem;
+  margin-bottom: var(--gap-xl);
+}
+
+.course__sep {
+  margin: 0 0.55rem;
+  color: var(--rule-strong);
+}
+
+.course__title {
+  font-size: var(--t-title);
+  margin: var(--gap-xs) 0 var(--gap);
+  text-wrap: balance;
+}
+
+.course__desc {
+  color: var(--paper-dim);
+  font-size: var(--t-small);
+  line-height: 1.75;
+  white-space: pre-line; /* el SIA manda saltos de línea reales */
+  max-width: 44rem;
+  /* Descripciones larguísimas: se recorta con degradado y se expande al pasar */
+  max-height: 9.5rem;
+  overflow: hidden;
+  position: relative;
+  mask-image: linear-gradient(to bottom, #000 70%, transparent);
+  transition: max-height var(--slow) var(--ease);
+}
+.course__desc:hover {
+  max-height: 60rem;
+  mask-image: none;
+}
+
+.groups__head {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--amber);
+  padding-bottom: var(--gap-xs);
+  border-bottom: 1px solid var(--rule-strong);
+  margin-bottom: 0;
+}
+
+.groups {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Cada grupo es una fila del tablero: identidad · datos · cifra. */
+.group {
+  display: grid;
+  grid-template-columns: 8rem 1fr auto;
+  gap: var(--gap-lg);
+  align-items: start;
+  padding: var(--gap) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.group__id {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.group__key {
+  font-family: var(--serif);
+  font-size: 1.9rem;
+  line-height: 1;
+  color: var(--paper);
+}
+
+.group__label,
+.group__site {
+  font-size: var(--t-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+}
+
+.group__site {
+  color: var(--amber-deep);
+}
+
+.group__teacher {
+  margin: 0 0 var(--gap-sm);
+  font-size: var(--t-small);
+  color: var(--paper);
+}
+
+/* ── Horario ─────────────────────────────────────────────────────── */
+
+.sched {
+  list-style: none;
+  margin: 0 0 var(--gap-sm);
+  padding: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.sched__row {
+  display: grid;
+  grid-template-columns: 6rem 7.5rem 1fr;
+  gap: var(--gap-sm);
+  font-size: var(--t-micro);
+  color: var(--paper-dim);
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--rule-strong);
+  padding-left: var(--gap-sm);
+}
+
+.sched__day {
+  color: var(--paper);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.sched__time {
+  font-variant-numeric: tabular-nums;
+  color: var(--amber);
+}
+
+.sched__where {
+  color: var(--paper-faint);
+}
+
+.sched__none {
+  font-size: var(--t-micro);
+  color: var(--paper-faint);
+  font-style: italic;
+  padding-left: var(--gap-sm);
+  border-left: 2px solid var(--rust);
+}
+
+.group__tags {
+  display: flex;
+  gap: var(--gap-sm);
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: var(--t-micro);
+  letter-spacing: 0.1em;
+  color: var(--paper-faint);
+}
+.group__tags span::before {
+  content: '· ';
+  color: var(--rule-strong);
+}
+
+.group__seats {
+  min-width: 11rem;
+}
+
+@media (max-width: 860px) {
+  .group {
+    grid-template-columns: 1fr;
+    gap: var(--gap);
+  }
+  .group__id {
+    display: flex;
+    align-items: baseline;
+    gap: var(--gap-sm);
+  }
+  .group__seats {
+    justify-self: start;
+  }
+  .seats {
+    justify-items: start;
+    text-align: left;
+  }
+  .sched__row {
+    grid-template-columns: 5rem 6.5rem;
+    grid-template-areas: 'day time' 'where where';
+  }
+  .sched__day {
+    grid-area: day;
+  }
+  .sched__time {
+    grid-area: time;
+  }
+  .sched__where {
+    grid-area: where;
+  }
+}
+
+/* Barra de la sección de grupos: título + el único botón de medir. */
+.groups__bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap);
+  border-bottom: 1px solid var(--rule-strong);
+  padding-bottom: var(--gap-xs);
+}
+
+.groups__bar .groups__head {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.groups__note {
+  font-size: var(--t-micro);
+  color: var(--paper-faint);
+  margin: var(--gap-xs) 0 0;
+}
+
+/* Mientras se mide, los cupos viejos se atenúan: siguen ahí (con su edad
+   real) pero se ve que están por cambiar. */
+.groups.is-measuring .seats {
+  opacity: 0.4;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.group__noseats {
+  font-size: var(--t-micro);
+  color: var(--paper-faint);
+  margin: 0;
+  font-style: italic;
+}
+
+.course__actions {
+  margin: var(--gap) 0;
+}

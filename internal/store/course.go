@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -49,12 +50,30 @@ func (s *Store) UpsertCatalog(ctx context.Context, program catalog.Program, offe
 }
 
 // ProgramCourses lists a program's cached catalog (both halves, whatever
-// UpsertCatalog last wrote).
+// UpsertCatalog last wrote), con los cupos YA GUARDADOS de cada asignatura.
+//
+// El agregado de cupos sale de la misma consulta con un LEFT JOIN sobre
+// current_seats, filtrado por section_program: son los grupos que ESTE plan
+// ve, no todos los de la asignatura (DATA-MODEL.md decisión 6). Sumar los 25
+// grupos cuando el plan solo habilita 23 sería el fallo silencioso de siempre.
+//
+// Nunca dispara una consulta al SIA: una asignatura cuyo detalle nunca se
+// pidió sale con Seats nil, y esa ausencia es la respuesta honesta.
 func (s *Store) ProgramCourses(ctx context.Context, programID int64) ([]catalog.CourseOffering, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT c.campus_code, c.code, c.name, c.credits, c.description, c.fetched_at, cp.typology
+		SELECT c.campus_code, c.code, c.name, c.credits, c.description, c.fetched_at, cp.typology,
+		       seats.total, seats.oldest, seats.n
 		FROM course_program cp
 		JOIN course c ON c.campus_code = cp.campus_code AND c.code = cp.code
+		LEFT JOIN LATERAL (
+			SELECT sum(cs.available_seats) AS total,
+			       min(cs.measured_at)     AS oldest,
+			       count(*)                AS n
+			FROM section sec
+			JOIN section_program sp ON sp.section_id = sec.id AND sp.program_id = cp.program_id
+			JOIN current_seats cs ON cs.section_id = sec.id
+			WHERE sec.campus_code = cp.campus_code AND sec.code = cp.code
+		) seats ON true
 		WHERE cp.program_id = $1
 		ORDER BY c.name`,
 		programID,
@@ -67,9 +86,14 @@ func (s *Store) ProgramCourses(ctx context.Context, programID int64) ([]catalog.
 	var out []catalog.CourseOffering
 	for rows.Next() {
 		var o catalog.CourseOffering
+		var total, n *int
+		var oldest *time.Time
 		if err := rows.Scan(&o.Course.CampusCode, &o.Course.Code, &o.Course.Name, &o.Course.Credits,
-			&o.Course.Description, &o.Course.FetchedAt, &o.Typology); err != nil {
+			&o.Course.Description, &o.Course.FetchedAt, &o.Typology, &total, &oldest, &n); err != nil {
 			return nil, fmt.Errorf("store: ProgramCourses: scan: %w", err)
+		}
+		if total != nil && oldest != nil && n != nil && *n > 0 {
+			o.Seats = &catalog.CourseSeats{Available: *total, MeasuredAt: *oldest, Sections: *n}
 		}
 		out = append(out, o)
 	}

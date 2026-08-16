@@ -8,7 +8,7 @@ justificación de cada decisión vive en los otros documentos; aquí solo está 
 
 | Documento | Para qué lo abres |
 |---|---|
-| [`GOTCHAS.md`](GOTCHAS.md) | **antes de escribir la primera línea.** 32 trampas |
+| [`GOTCHAS.md`](GOTCHAS.md) | **antes de escribir la primera línea.** 33 trampas |
 | [`PROTOCOL.md`](PROTOCOL.md) | cuerpos de petición reales |
 | [`FIELDS.md`](FIELDS.md) | ids de componente, opciones, formatos del detalle |
 | [`DATA-MODEL.md`](DATA-MODEL.md) | esquema y las nueve decisiones no obvias |

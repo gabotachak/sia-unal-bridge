@@ -140,12 +140,14 @@ func (f *fakeStore) Program(_ context.Context, campusCode, facultyCode, code str
 	return catalog.Program{}, false, nil
 }
 
-func (f *fakeStore) Programs(_ context.Context, campusCode, facultyCode string) ([]catalog.Program, error) {
+func (f *fakeStore) Programs(_ context.Context, campusCode, facultyCode, levelSlug string) ([]catalog.Program, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []catalog.Program
 	for _, p := range f.programs {
-		if (campusCode == "" || p.CampusCode == campusCode) && (facultyCode == "" || p.FacultyCode == facultyCode) {
+		if (campusCode == "" || p.CampusCode == campusCode) &&
+			(facultyCode == "" || p.FacultyCode == facultyCode) &&
+			(levelSlug == "" || p.LevelSlug == levelSlug) {
 			out = append(out, p)
 		}
 	}
@@ -301,7 +303,7 @@ func TestCourseDetail_MissThenHit(t *testing.T) {
 	sia := &fakeSIA{}
 	svc := catalog.NewService(store, sia, "2026-2")
 	program, err := store.UpsertProgram(context.Background(), catalog.Program{
-		CampusCode: "1101", FacultyCode: "2055", Code: "2A74", Level: 0,
+		CampusCode: "1101", FacultyCode: "2055", Code: "2A74", LevelSlug: "pregrado",
 		CampusIdx: 2, FacultyIdx: 8, ProgramIdx: 3,
 	})
 	if err != nil {

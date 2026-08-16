@@ -782,3 +782,43 @@ facultad real, así que filtrarlo perdería datos.
 `TestLive_ElectivesWildcardIsPerCampus`, que corre Bogotá y Medellín en la misma prueba:
 240 y 640 filas de libre elección respectivamente. Antes del arreglo, Medellín daba
 no-op.
+
+---
+
+## 33. Una conexión que hizo electivas queda en `soc4=7`, y el siguiente catálogo regular sale no-op
+
+`FetchElectives` conmuta la búsqueda con `soc4=7` y arma el buscador de electivas
+(`soc5`, `soc10`, `soc6`). Al terminar **el servidor sigue ahí**. Como el pool reparte
+conexiones entre peticiones sin relación (§31), la siguiente que pida el listado regular
+puede caer en esa misma conexión.
+
+Y si además es el **mismo plan**, `gotoProgram` no hace nada —el valor de cada dropdown
+ya es el correcto, así que se salta los tres POSTs (§30, estrategia 3)—, de modo que el
+`cb1` se dispara con el buscador de electivas todavía activo. El SIA responde con un
+no-op silencioso.
+
+**La trampa dentro de la trampa:** el código *creía* arreglarlo. `FetchElectives`
+terminaba con
+
+```go
+c.form.Tipologia = TypologyAll   // NO alcanza
+```
+
+Eso solo cambia **qué lleva el próximo POST**, no el estado del servidor. `soc4` en ADF
+se cambia con un `valueChange`, no adjuntando otro valor en el siguiente formulario. Y
+peor: dejaba `navTipologia` diciendo `7` mientras `form` decía `0`, así que la conexión
+mentía sobre sí misma.
+
+**Cómo se resuelve:** `FetchCatalog` postea el cambio real a `soc4` cuando
+`navTipologia != "0"`, y se lo salta cuando ya está —no consume la respuesta, solo el
+efecto, igual que `gotoProgram`—. `FetchElectives` ya no toca `form.Tipologia` al final:
+deja `navTipologia` diciendo la verdad.
+
+Síntoma en la API: `502 sia_noop` en **el detalle** de una asignatura, en ~250 ms —
+demasiado rápido para una cascada—, y solo después de haber pedido el catálogo de ese
+plan. El detalle pasa por `findRow`, que llama a `FetchCatalog` para leer el `_afrRK`
+fresco (§4), así que el fallo aparece al pedir cupos y parece un problema de cupos.
+
+`sia/cascade.go`: `FetchCatalog`. Verificado con
+`TestLive_CatalogAfterElectivesOnSameConn`, que hace electivas y luego catálogo sobre la
+misma conexión y el mismo plan: 98 filas donde antes había un no-op.

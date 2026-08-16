@@ -62,7 +62,11 @@ CREATE TABLE program (                     -- a degree program (UNAL "carrera")
     campus_code  text NOT NULL,            -- '1101'
     faculty_code text NOT NULL,            -- '2055'
     code         text NOT NULL,            -- '2A74'
-    level        smallint NOT NULL,        -- soc1 position, mirrors level.level_idx
+
+    -- Identidad, no posición: el directorio se cachea por (sede, nivel) y hay
+    -- que poder LEERLO por nivel. Con el índice de soc1 en su lugar, un
+    -- reordenamiento del dropdown mezclaría pregrado con doctorado.
+    level_slug   text NOT NULL REFERENCES level(slug) ON DELETE CASCADE,
     name         text,                     -- 'INGENIERÍA DE SISTEMAS Y COMPUTACIÓN'
     campus_name  text,                     -- 'SEDE BOGOTÁ'
     faculty_name text,                     -- 'FACULTAD DE INGENIERÍA'
@@ -70,6 +74,7 @@ CREATE TABLE program (                     -- a degree program (UNAL "carrera")
     -- navigation coordinate: positional dropdown indices. VOLATILE.
     -- Never an identity, never in a URL. Revalidated against the label
     -- before use.
+    level_idx    smallint NOT NULL,        -- soc1
     campus_idx   smallint NOT NULL,        -- soc9
     faculty_idx  smallint NOT NULL,        -- soc2
     program_idx  smallint NOT NULL,        -- soc3
@@ -79,7 +84,7 @@ CREATE TABLE program (                     -- a degree program (UNAL "carrera")
     -- NOT UNIQUE (code): 136 of 852 codes repeat across campuses (PEAMA).
     -- See GOTCHAS.md §26. Ese es el motivo de que /v1/programs/{code} sin
     -- ?campus= pueda devolver 300.
-    UNIQUE (campus_code, faculty_code, code)
+    UNIQUE (campus_code, faculty_code, code, level_slug)
 );
 
 CREATE TABLE course_program (              -- M:N; typology lives HERE

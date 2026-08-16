@@ -1,0 +1,97 @@
+.seats {
+  display: grid;
+  gap: var(--gap-xs);
+  justify-items: end;
+  text-align: right;
+}
+
+.seats__figure {
+  display: flex;
+  gap: 3px;
+  font-family: var(--serif);
+  font-size: clamp(2.6rem, 5vw, 3.8rem);
+  line-height: 0.9;
+  color: var(--amber);
+}
+
+/* Cada dígito es una tapa del tablero. Se monta girando sobre su eje
+   superior, como las de una estación. */
+.seats__flap {
+  display: block;
+  min-width: 0.72em;
+  padding: 0.08em 0.1em 0.06em;
+  background: var(--ink-sunken);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  text-align: center;
+  transform-origin: 50% 0%;
+  animation: flap 340ms var(--ease) both;
+  /* Filete central: la ranura entre las dos mitades de la tapa. */
+  background-image: linear-gradient(to bottom, transparent 49.5%, #00000090 50%, transparent 50.5%);
+}
+
+@keyframes flap {
+  0% {
+    transform: rotateX(-88deg);
+    opacity: 0.25;
+  }
+  55% {
+    transform: rotateX(12deg);
+    opacity: 1;
+  }
+  100% {
+    transform: rotateX(0);
+  }
+}
+
+.seats--empty .seats__figure {
+  color: var(--rust);
+}
+
+.seats--stale .seats__figure {
+  color: var(--paper-faint);
+}
+
+.seats__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  font-size: var(--t-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+}
+
+.seats__label {
+  color: var(--paper-dim);
+}
+
+.seats--empty .seats__label,
+.seats--stale .seats__age {
+  color: var(--rust);
+}
+
+.seats__btn {
+  padding: 0.25rem 0.6rem;
+  font-size: var(--t-micro);
+}
+
+.seats__ttl {
+  width: 100%;
+  max-width: 11rem;
+  height: 2px;
+  background: var(--rule);
+  overflow: hidden;
+}
+
+.seats__ttl i {
+  display: block;
+  height: 100%;
+  background: var(--amber);
+  transform-origin: right center;
+  transition: transform 1s linear;
+}
+
+.seats--stale .seats__ttl i {
+  background: var(--rust);
+}

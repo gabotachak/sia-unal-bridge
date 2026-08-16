@@ -77,8 +77,8 @@ func (s *Service) ensureDirectory(ctx context.Context, campusCode, levelSlug str
 			for _, po := range programsByFaculty[fac.Index] {
 				programs = append(programs, Program{
 					CampusCode: campus.Code, FacultyCode: fac.Code, Code: po.Code,
-					Level: level.Index, Name: po.Name, CampusName: campus.Name, FacultyName: fac.Name,
-					CampusIdx: campus.Index, FacultyIdx: fac.Index, ProgramIdx: po.Index,
+					LevelSlug: level.Slug, Name: po.Name, CampusName: campus.Name, FacultyName: fac.Name,
+					LevelIdx: level.Index, CampusIdx: campus.Index, FacultyIdx: fac.Index, ProgramIdx: po.Index,
 				})
 			}
 		}
@@ -258,7 +258,13 @@ func (s *Service) ResolveProgram(ctx context.Context, ref ProgramRef) (Program, 
 			return Program{}, err
 		}
 	}
-	programs, err := s.store.Programs(ctx, ref.Campus, ref.Faculty)
+	// El nivel se resuelve para filtrar: sin él, pedir un plan de doctorado
+	// podría devolver el de pregrado que comparte código.
+	level, err := s.resolveLevel(ctx, ref.Level)
+	if err != nil {
+		return Program{}, err
+	}
+	programs, err := s.store.Programs(ctx, ref.Campus, ref.Faculty, level.Slug)
 	if err != nil {
 		return Program{}, err
 	}
@@ -301,7 +307,7 @@ func ambiguityHint(matches []Program, ref ProgramRef) string {
 
 func (p Program) key() ProgramKey {
 	return ProgramKey{
-		Level: p.Level, Campus: p.CampusIdx, Faculty: p.FacultyIdx, Program: p.ProgramIdx,
+		Level: p.LevelIdx, Campus: p.CampusIdx, Faculty: p.FacultyIdx, Program: p.ProgramIdx,
 		CampusCode: p.CampusCode,
 	}
 }
@@ -314,7 +320,11 @@ func (s *Service) Faculties(ctx context.Context, campusCode, levelSlug string) (
 	if err := s.ensureDirectory(ctx, campusCode, levelSlug, FreshnessReference); err != nil {
 		return nil, err
 	}
-	programs, err := s.store.Programs(ctx, campusCode, "")
+	level, err := s.resolveLevel(ctx, levelSlug)
+	if err != nil {
+		return nil, err
+	}
+	programs, err := s.store.Programs(ctx, campusCode, "", level.Slug)
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +351,11 @@ func (s *Service) ProgramsInFaculty(ctx context.Context, campusCode, facultyCode
 	if err := s.ensureDirectory(ctx, campusCode, levelSlug, FreshnessReference); err != nil {
 		return nil, err
 	}
-	return s.store.Programs(ctx, campusCode, facultyCode)
+	level, err := s.resolveLevel(ctx, levelSlug)
+	if err != nil {
+		return nil, err
+	}
+	return s.store.Programs(ctx, campusCode, facultyCode, level.Slug)
 }
 
 func (s *Service) ProgramsOfferingCourse(ctx context.Context, campusCode, code string) ([]Program, error) {

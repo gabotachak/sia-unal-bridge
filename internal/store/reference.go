@@ -39,18 +39,18 @@ func (s *Store) UpsertPrograms(ctx context.Context, scope string, programs []cat
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		for _, p := range programs {
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO program (campus_code, faculty_code, code, level, name, campus_name, faculty_name, campus_idx, faculty_idx, program_idx)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-				ON CONFLICT (campus_code, faculty_code, code) DO UPDATE SET
-					level = EXCLUDED.level,
+				INSERT INTO program (campus_code, faculty_code, code, level_slug, name, campus_name, faculty_name, level_idx, campus_idx, faculty_idx, program_idx)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+				ON CONFLICT (campus_code, faculty_code, code, level_slug) DO UPDATE SET
+					level_idx = EXCLUDED.level_idx,
 					name = EXCLUDED.name,
 					campus_name = EXCLUDED.campus_name,
 					faculty_name = EXCLUDED.faculty_name,
 					campus_idx = EXCLUDED.campus_idx,
 					faculty_idx = EXCLUDED.faculty_idx,
 					program_idx = EXCLUDED.program_idx`,
-				p.CampusCode, p.FacultyCode, p.Code, p.Level, p.Name, p.CampusName, p.FacultyName,
-				p.CampusIdx, p.FacultyIdx, p.ProgramIdx,
+				p.CampusCode, p.FacultyCode, p.Code, p.LevelSlug, p.Name, p.CampusName, p.FacultyName,
+				p.LevelIdx, p.CampusIdx, p.FacultyIdx, p.ProgramIdx,
 			); err != nil {
 				return fmt.Errorf("store: UpsertPrograms: program %s: %w", p.Code, err)
 			}

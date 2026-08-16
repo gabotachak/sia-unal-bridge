@@ -15,7 +15,7 @@ No hay API pública. Esto la construye.
 [![Docker](https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.1-6BA539?style=flat-square&logo=openapiinitiative&logoColor=white)](internal/httpapi/openapi.yaml)
 [![Arquitectura](https://img.shields.io/badge/arquitectura-hexagonal-8A2BE2?style=flat-square)](docs/ARCH.md)
-[![Trampas](https://img.shields.io/badge/gotchas-32%20verificadas-orange?style=flat-square)](docs/GOTCHAS.md)
+[![Trampas](https://img.shields.io/badge/gotchas-33%20verificadas-orange?style=flat-square)](docs/GOTCHAS.md)
 
 </div>
 
@@ -127,6 +127,20 @@ Cada respuesta lleva `Age`, `Cache-Control`, `X-Cache` y, en un miss, `X-SIA-Fet
 Los cupos además llevan `age_seconds` **en el body**: nunca se sirve un cupo sin decir de
 cuándo es.
 
+## La interfaz
+
+Una app de lectura sobre esta API, en [`web/`](web/). React + TypeScript, cuatro
+dependencias directas, sin librería de estado ni de componentes.
+
+```bash
+docker compose up -d      # db + api
+cd web && npm install && npm run dev   # → localhost:5173
+```
+
+Su tesis visual es la misma que la de la API: **todo dato declara su edad**. Los cupos
+se muestran en un contador de tablero de estación, con su antigüedad envejeciendo a la
+vista, y un miss frío no se esconde tras un spinner — se explica, con cronómetro.
+
 ## Lo que no es obvio
 
 Estas cinco salen de medir contra el servidor, no de suponer:
@@ -139,7 +153,7 @@ Estas cinco salen de medir contra el servidor, no de suponer:
 | **El catálogo de un plan son dos consultas** | `soc4=0` significa literalmente *todas menos libre elección*. Las libres salen del buscador de electivas, que es por sede |
 | **Una respuesta de ~900 B no es un error HTTP** | Es un no-op: falta un paso de la cascada, o caducó la sesión. Se trata como error explícito en vez de devolver datos incompletos |
 
-Las 32 completas, cada una verificada contra producción, en
+Las 33 completas, cada una verificada contra producción, en
 [`docs/GOTCHAS.md`](docs/GOTCHAS.md). Varias fallan **en silencio**: devuelven datos
 plausibles y equivocados.
 
@@ -147,7 +161,7 @@ plausibles y equivocados.
 
 | | |
 |---|---|
-| [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **Las 32 trampas. Léelo antes de tocar el código.** |
+| [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **Las 33 trampas. Léelo antes de tocar el código.** |
 | [`docs/ARCH.md`](docs/ARCH.md) | Puertos, read-through, pool de sesiones, concurrencia |
 | [`docs/API.md`](docs/API.md) | Contrato HTTP: IDs públicos, frescura, errores |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Esquema Postgres y las nueve decisiones no obvias |
@@ -155,10 +169,12 @@ plausibles y equivocados.
 | [`docs/FIELDS.md`](docs/FIELDS.md) | Componentes ADF y opciones de cada dropdown |
 | [`docs/LAYOUT.md`](docs/LAYOUT.md) | Árbol de paquetes Go y librerías |
 | [`docs/PLAN.md`](docs/PLAN.md) | Plan de implementación y criterios de aceptación |
+| [`docs/PLAN-FRONTEND.md`](docs/PLAN-FRONTEND.md) | Plan de la interfaz **+ curso mínimo de front** |
 | [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | Qué está probado y qué no |
 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Entorno, fixtures, cómo replicar el flujo |
 | [`bruno/sia-catalogo/`](bruno/sia-catalogo/) | El flujo ADF crudo, a mano contra el SIA |
 | [`bruno/bridge-api/`](bruno/bridge-api/) | Los 14 endpoints de esta API |
+| [`web/`](web/) | La interfaz: React + TypeScript sobre esta API |
 
 ## Verificar contra el servidor
 

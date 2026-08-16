@@ -11,6 +11,10 @@ import (
 type CourseOffering struct {
 	Course   Course
 	Typology string
+
+	// Seats is the stored seat total across the groups this program sees.
+	// nil = nunca se pidió el detalle de esta asignatura desde este plan.
+	Seats *CourseSeats
 }
 
 // DropdownOption is one <option> of a cascade dropdown: Index is SIA's
@@ -71,7 +75,7 @@ type Store interface {
 	// live cascade instead of the cache.
 	UpsertProgram(ctx context.Context, p Program) (Program, error)
 	Program(ctx context.Context, campusCode, facultyCode, code string) (Program, bool, error)
-	Programs(ctx context.Context, campusCode, facultyCode string) ([]Program, error)
+	Programs(ctx context.Context, campusCode, facultyCode, levelSlug string) ([]Program, error)
 	Campuses(ctx context.Context, levelSlug string) ([]Campus, error)
 	Levels(ctx context.Context) ([]Level, error)
 	ReferenceFetchedAt(ctx context.Context, scope string) (*time.Time, error)

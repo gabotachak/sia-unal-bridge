@@ -84,6 +84,7 @@ func programJSON(p catalog.Program) gin.H {
 		"campus_code":  p.CampusCode,
 		"faculty_code": p.FacultyCode,
 		"code":         p.Code,
+		"level":        p.LevelSlug,
 		"name":         p.Name,
 		"campus_name":  p.CampusName,
 		"faculty_name": p.FacultyName,

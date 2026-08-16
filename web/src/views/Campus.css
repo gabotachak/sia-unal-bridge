@@ -1,0 +1,132 @@
+.head {
+  margin-bottom: var(--gap-lg);
+  max-width: 48rem;
+}
+
+.head__title {
+  font-size: var(--t-title);
+  margin: var(--gap-xs) 0 var(--gap-sm);
+}
+
+.head__meta {
+  font-size: var(--t-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+  margin: 0;
+}
+.head__dot {
+  margin: 0 0.6rem;
+  color: var(--rule-strong);
+}
+
+/* ── Filtros ─────────────────────────────────────────────────────── */
+
+.filters {
+  display: flex;
+  gap: var(--gap-sm);
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: var(--gap-lg);
+  padding-bottom: var(--gap);
+  border-bottom: 1px solid var(--rule);
+}
+
+.field input,
+.field select {
+  background: var(--ink-sunken);
+  border: 1px solid var(--rule);
+  padding: 0.55rem 0.8rem;
+  min-width: 15rem;
+  font-size: var(--t-small);
+  transition: border-color var(--fast) var(--ease);
+}
+.field input::placeholder {
+  color: var(--paper-faint);
+}
+.field input:focus,
+.field select:focus {
+  border-color: var(--amber);
+  outline: none;
+}
+
+/* ── Facultades y planes ─────────────────────────────────────────── */
+
+.faculty {
+  margin-bottom: var(--gap-xl);
+}
+
+.faculty__name {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--amber);
+  padding-bottom: var(--gap-xs);
+  border-bottom: 1px solid var(--rule-strong);
+  margin-bottom: var(--gap-sm);
+}
+
+.faculty__code {
+  color: var(--paper-faint);
+  letter-spacing: 0.1em;
+}
+
+.plans {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  columns: 2;
+  column-gap: var(--gap-lg);
+}
+
+.plans li {
+  break-inside: avoid;
+}
+
+.plans a {
+  display: grid;
+  grid-template-columns: 3.6rem 1fr auto;
+  gap: var(--gap-sm);
+  align-items: baseline;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--rule);
+  transition: color var(--fast) var(--ease), padding var(--fast) var(--ease);
+}
+.plans a:hover,
+.plans a:focus-visible {
+  color: var(--amber);
+  padding-left: 0.4rem;
+}
+
+.plans__code {
+  font-size: var(--t-micro);
+  color: var(--paper-faint);
+  letter-spacing: 0.06em;
+}
+.plans a:hover .plans__code {
+  color: var(--amber-deep);
+}
+
+.plans__name {
+  font-size: var(--t-small);
+  line-height: 1.4;
+}
+
+/* Punto discreto: este plan ya tiene su catálogo en Postgres. */
+.plans__cached {
+  color: var(--amber);
+  font-size: 1.1rem;
+  line-height: 0;
+}
+
+@media (max-width: 860px) {
+  .plans {
+    columns: 1;
+  }
+}

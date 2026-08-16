@@ -1,0 +1,60 @@
+.add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--rule-strong);
+  color: var(--paper-faint);
+  transition: color var(--fast) var(--ease), border-color var(--fast) var(--ease),
+    background var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+
+.add__glyph {
+  line-height: 1;
+  font-weight: 500;
+}
+
+/* Variante de fila: un cuadrado discreto que solo se enciende al pasar. */
+.add--plus {
+  width: 1.7rem;
+  height: 1.7rem;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.add--plus:hover:not(:disabled),
+.add--plus:focus-visible {
+  color: var(--ink);
+  background: var(--amber);
+  border-color: var(--amber);
+  transform: scale(1.08);
+}
+
+/* Variante de ficha: con texto, para la pantalla de la materia. */
+.add--full {
+  padding: 0.55rem 1rem;
+  font-size: var(--t-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.add--full:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--amber);
+  border-color: var(--amber);
+}
+
+/* Ya está en la lista: ámbar permanente, sin gritar. */
+.add.is-added {
+  color: var(--amber);
+  border-color: var(--amber-deep);
+}
+.add.is-added:hover {
+  color: var(--ink);
+  background: var(--rust);
+  border-color: var(--rust);
+}
+
+.add:disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+}

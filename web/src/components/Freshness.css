@@ -1,0 +1,42 @@
+.fresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--t-micro);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+  white-space: nowrap;
+}
+
+.fresh__dot {
+  width: 6px;
+  height: 6px;
+  background: var(--paper-faint);
+  border-radius: 1px;
+}
+
+/* Recién traído del SIA: el ámbar late una vez y se queda. */
+.fresh--live {
+  color: var(--amber);
+}
+.fresh--live .fresh__dot {
+  background: var(--amber);
+  animation: pulse 1.6s var(--ease) 2;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  40% {
+    box-shadow: 0 0 0 4px rgba(255, 176, 46, 0.18);
+  }
+}
+
+.fresh__ms {
+  color: var(--paper-faint);
+  border-left: 1px solid var(--rule);
+  padding-left: 0.5rem;
+}

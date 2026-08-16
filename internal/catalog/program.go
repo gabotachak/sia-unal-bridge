@@ -14,7 +14,9 @@ type Program struct {
 	FacultyCode string `db:"faculty_code" json:"faculty_code"`
 	Code        string `db:"code"         json:"code"`
 
-	Level       int    `db:"level"        json:"-"`
+	// LevelSlug is identity — the directory is cached per (campus, level) and
+	// must be readable per level. LevelIdx below is only how the SIA navigates.
+	LevelSlug   string `db:"level_slug"   json:"level"`
 	Name        string `db:"name"         json:"name"`
 	CampusName  string `db:"campus_name"  json:"campus_name"`
 	FacultyName string `db:"faculty_name" json:"faculty_name"`
@@ -23,6 +25,7 @@ type Program struct {
 
 	// Navigation coordinate: positional dropdown indices. VOLATILE. Never
 	// serialized, never an identity. Revalidated against the label before use.
+	LevelIdx   int `db:"level_idx"   json:"-"`
 	CampusIdx  int `db:"campus_idx"  json:"-"`
 	FacultyIdx int `db:"faculty_idx" json:"-"`
 	ProgramIdx int `db:"program_idx" json:"-"`

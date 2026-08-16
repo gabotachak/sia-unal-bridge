@@ -54,6 +54,19 @@ type SeatSnapshot struct {
 
 func (s SeatSnapshot) AgeSeconds() int { return int(time.Since(s.MeasuredAt).Seconds()) }
 
+// CourseSeats is the seat total of a course as ALREADY STORED — the sum over
+// the groups this program can see, plus the age of the oldest of those
+// measurements.
+//
+// It never triggers a fetch: a course whose detail was never pulled simply
+// has no CourseSeats, and that absence is the honest answer. Sirve para que
+// el listado del plan diga algo útil sin pagar un POST por asignatura.
+type CourseSeats struct {
+	Available  int       `json:"available"`
+	MeasuredAt time.Time `json:"measured_at"`
+	Sections   int       `json:"sections"`
+}
+
 // Prerequisite and Component arrive free in the same detail POST but are not
 // persisted yet (fase 1 scope). See docs/PLAN.md "Lo que no se hace en fase 1".
 type Prerequisite struct {

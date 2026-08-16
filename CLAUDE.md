@@ -27,7 +27,7 @@ cachean como cualquier otra referencia.
 
 ## Antes de escribir código
 
-Lee **`docs/GOTCHAS.md`** completo. No es opcional. Son 32 trampas verificadas contra
+Lee **`docs/GOTCHAS.md`** completo. No es opcional. Son 33 trampas verificadas contra
 el servidor real, varias de las cuales fallan **en silencio** (devuelven datos
 plausibles pero equivocados). El proyecto anterior murió por asumir mal cuatro de ellas.
 
@@ -56,7 +56,7 @@ Las cuatro que más código han roto:
 | `docs/LAYOUT.md` | Árbol de paquetes Go y librerías — propuesta, sin implementar |
 | `docs/PROTOCOL.md` | Handshake ADF completo con cuerpos de petición reales |
 | `docs/FIELDS.md` | Componentes ADF, opciones de cada dropdown, mapeo a columnas |
-| `docs/GOTCHAS.md` | Las 32 trampas |
+| `docs/GOTCHAS.md` | Las 33 trampas |
 | `docs/DATA-MODEL.md` | Esquema Postgres + structs de Go |
 | `docs/OPEN-QUESTIONS.md` | Qué está verificado y qué no. Léelo antes de asumir |
 | `docs/DEVELOPMENT.md` | Entorno: Docker, Postgres, cómo replicar el flujo |

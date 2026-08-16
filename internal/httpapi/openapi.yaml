@@ -614,6 +614,10 @@ components:
       type: object
       properties:
         campus_code: { type: string, examples: ["1101"] }
+        level:
+          type: string
+          description: Slug del nivel. Es identidad: el directorio se cachea y se lee por (sede, nivel).
+          examples: ["pregrado"]
         faculty_code: { type: string, examples: ["2055"] }
         code: { type: string, examples: ["2A74"] }
         name: { type: string, examples: ["INGENIERÍA DE SISTEMAS Y COMPUTACIÓN"] }
@@ -637,6 +641,25 @@ components:
           examples: ["FUND. OBLIGATORIA (B)"]
         description: { type: string }
         fetched_at: { type: string, format: date-time }
+        seats:
+          description: |
+            Cupos YA GUARDADOS de la asignatura: la suma sobre los grupos que
+            ESTE plan ve (no todos los de la asignatura — la visibilidad depende
+            del plan). Ausente si nunca se pidió el detalle desde este plan, que
+            es distinto de cero.
+
+            Nunca dispara una consulta al SIA: sale de `current_seats`. Para
+            medir de nuevo se pide el detalle de la asignatura con `?max_age=0`,
+            que en un solo POST refresca todos sus grupos.
+          type: object
+          properties:
+            available: { type: integer, examples: [884] }
+            sections: { type: integer, examples: [19] }
+            measured_at:
+              type: string
+              format: date-time
+              description: La medición MÁS VIEJA de las sumadas.
+            age_seconds: { type: integer }
 
     CourseDetail:
       type: object

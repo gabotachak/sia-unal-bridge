@@ -139,12 +139,14 @@ func (f *fakeStore) Program(_ context.Context, campusCode, facultyCode, code str
 	return Program{}, false, nil
 }
 
-func (f *fakeStore) Programs(_ context.Context, campusCode, facultyCode string) ([]Program, error) {
+func (f *fakeStore) Programs(_ context.Context, campusCode, facultyCode, levelSlug string) ([]Program, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []Program
 	for _, p := range f.programs {
-		if (campusCode == "" || p.CampusCode == campusCode) && (facultyCode == "" || p.FacultyCode == facultyCode) {
+		if (campusCode == "" || p.CampusCode == campusCode) &&
+			(facultyCode == "" || p.FacultyCode == facultyCode) &&
+			(levelSlug == "" || p.LevelSlug == levelSlug) {
 			out = append(out, p)
 		}
 	}
@@ -326,7 +328,7 @@ func (f *fakeSIA) FetchDetail(_ context.Context, _ ProgramKey, code, term string
 }
 
 func testProgram(id int64) Program {
-	return Program{ID: id, CampusCode: "1101", FacultyCode: "2055", Code: "2A74", Level: 0, CampusIdx: 2, FacultyIdx: 8, ProgramIdx: 3}
+	return Program{ID: id, CampusCode: "1101", FacultyCode: "2055", Code: "2A74", LevelSlug: "pregrado", CampusIdx: 2, FacultyIdx: 8, ProgramIdx: 3}
 }
 
 // TestCourseDetail_SingleflightCollapsesConcurrentColdFetches is paso 6's

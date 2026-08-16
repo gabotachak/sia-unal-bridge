@@ -497,6 +497,13 @@ Un marcador único, `reference_fetch`, en vez de una tabla por lista: es una sol
 La escritura y el sello van en la misma transacción — un sello sobre un conjunto parcial
 deja la cache *fresca e incompleta*, que es el fallo silencioso de siempre.
 
+**El nivel es identidad, no solo navegación.** `program` lleva `level_slug` además de
+`level_idx`, y `Programs()` filtra por el slug. Sin ese filtro el directorio se *cachea*
+por `(sede, nivel)` pero se *lee* sin nivel: medido, pedir doctorado en Bogotá devolvía
+**107 planes** —los 42 de doctorado más los 65 de pregrado— en vez de 42. El mismo error
+contaminaba la lista de facultades y podía hacer que `ResolveProgram` devolviera el plan
+de pregrado cuando se pedía el de doctorado.
+
 **`soc1` es el caso raro y obliga a una decisión.** Sus etiquetas no traen código
 (`Pregrado`, no `1101 SEDE BOGOTÁ`), así que la regla de la decisión 7 —primer token es
 el código— produciría `code='Postgrados'`, `name='y másteres'`: una identidad pública

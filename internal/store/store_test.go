@@ -47,7 +47,7 @@ func TestUpsertProgramAndCatalog(t *testing.T) {
 	resetProgram(t, s, "9999", "2055", "2A74")
 
 	p := catalog.Program{
-		CampusCode: "9999", FacultyCode: "2055", Code: "2A74", Level: 0,
+		CampusCode: "9999", FacultyCode: "2055", Code: "2A74", LevelSlug: "pregrado",
 		Name: "INGENIERÍA DE SISTEMAS Y COMPUTACIÓN", CampusName: "SEDE BOGOTÁ", FacultyName: "FACULTAD DE INGENIERÍA",
 		CampusIdx: 2, FacultyIdx: 8, ProgramIdx: 3,
 	}
@@ -104,7 +104,7 @@ func TestUpsertDetailAndSectionsRoundTrip(t *testing.T) {
 	resetProgram(t, s, "9999", "2055", "2A75")
 
 	p, err := s.UpsertProgram(ctx, catalog.Program{
-		CampusCode: "9999", FacultyCode: "2055", Code: "2A75", Level: 0, Name: "SISTEMAS",
+		CampusCode: "9999", FacultyCode: "2055", Code: "2A75", LevelSlug: "pregrado", Name: "SISTEMAS",
 		CampusIdx: 2, FacultyIdx: 8, ProgramIdx: 3,
 	})
 	if err != nil {
@@ -187,7 +187,7 @@ func TestUpsertDetail_SeatSnapshotIsAppendOnly(t *testing.T) {
 	resetProgram(t, s, "9999", "2055", "2879")
 
 	p, err := s.UpsertProgram(ctx, catalog.Program{
-		CampusCode: "9999", FacultyCode: "2055", Code: "2879", Level: 0, Name: "SISTEMAS 2",
+		CampusCode: "9999", FacultyCode: "2055", Code: "2879", LevelSlug: "pregrado", Name: "SISTEMAS 2",
 		CampusIdx: 2, FacultyIdx: 8, ProgramIdx: 4,
 	})
 	if err != nil {

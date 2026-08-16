@@ -1,0 +1,243 @@
+.sem__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--gap-lg);
+  flex-wrap: wrap;
+  max-width: none;
+}
+
+.sem__actions {
+  display: grid;
+  gap: var(--gap-sm);
+  justify-items: end;
+}
+
+/* El botón principal de la app: el que mide todo de una. */
+.btn--hero {
+  font-size: var(--t-small);
+  padding: 0.8rem 1.6rem;
+  border-color: var(--amber);
+  color: var(--amber);
+}
+.btn--hero:hover:not(:disabled) {
+  background: var(--amber);
+  color: var(--ink);
+}
+
+.sem__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: var(--t-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+  cursor: pointer;
+}
+.sem__toggle input {
+  accent-color: var(--amber);
+}
+
+/* Barra de avance: cuántas materias van medidas. */
+.sem__progress {
+  height: 2px;
+  background: var(--rule);
+  margin-bottom: var(--gap-lg);
+  overflow: hidden;
+}
+.sem__progress i {
+  display: block;
+  height: 100%;
+  background: var(--amber);
+  transform-origin: left center;
+  transition: transform var(--slow) var(--ease);
+}
+
+.sem {
+  list-style: none;
+  margin: 0 0 var(--gap-lg);
+  padding: 0;
+  display: grid;
+  gap: var(--gap-lg);
+}
+
+/* ── Una materia ─────────────────────────────────────────────────── */
+
+.card {
+  border-top: 1px solid var(--rule-strong);
+  padding-top: var(--gap-sm);
+  transition: opacity var(--fast) var(--ease);
+}
+.card.is-loading {
+  opacity: 0.55;
+}
+
+.card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--gap);
+  flex-wrap: wrap;
+}
+
+.card__name {
+  font-family: var(--serif);
+  font-size: clamp(1.4rem, 2.6vw, 2rem);
+  line-height: 1.1;
+  transition: color var(--fast) var(--ease);
+}
+.card__name:hover {
+  color: var(--amber);
+}
+
+.card__meta {
+  font-size: var(--t-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+  margin: 0.2rem 0 0;
+}
+
+.card__tally {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-sm);
+}
+
+/* La cifra que importa: cupos sumados de toda la materia. */
+.card__big {
+  font-family: var(--serif);
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  line-height: 1;
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+.card__big.is-zero {
+  color: var(--rust);
+}
+
+.card__tallyLabel {
+  font-size: var(--t-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+}
+
+.card__remove {
+  color: var(--rule-strong);
+  font-size: 0.9rem;
+  padding: 0.2rem 0.4rem;
+  transition: color var(--fast) var(--ease);
+}
+.card__remove:hover {
+  color: var(--rust);
+}
+
+.card__error {
+  font-size: var(--t-small);
+  color: var(--rust);
+  margin: var(--gap-sm) 0 0;
+}
+.card__error--soft {
+  color: var(--paper-faint);
+  font-style: italic;
+}
+
+/* ── Grupos de la materia ────────────────────────────────────────── */
+
+.slots {
+  list-style: none;
+  margin: var(--gap-sm) 0 0;
+  padding: 0;
+}
+
+.slot {
+  display: grid;
+  grid-template-columns: 4rem 1fr 1fr auto;
+  gap: var(--gap);
+  align-items: baseline;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--t-micro);
+}
+
+.slot__key {
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  color: var(--paper);
+}
+
+.slot__who {
+  color: var(--paper-dim);
+  text-transform: none;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot__when {
+  color: var(--paper-faint);
+}
+
+/* La cifra de cupos del grupo, con su edad debajo. */
+.slot__seats {
+  display: grid;
+  justify-items: end;
+  font-family: var(--serif);
+  font-size: 1.45rem;
+  line-height: 1.05;
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+  min-width: 4.5rem;
+}
+.slot__seats small {
+  font-family: var(--mono);
+  font-size: 0.42rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+}
+
+.slot.is-zero .slot__seats {
+  color: var(--rust);
+}
+.slot.is-zero .slot__key,
+.slot.is-zero .slot__who {
+  color: var(--paper-faint);
+}
+
+.sem__note {
+  font-size: var(--t-micro);
+  line-height: 1.8;
+  color: var(--paper-faint);
+  max-width: 44rem;
+  border-top: 1px solid var(--rule);
+  padding-top: var(--gap);
+}
+
+@media (max-width: 760px) {
+  .slot {
+    grid-template-columns: 3rem 1fr auto;
+    grid-template-areas:
+      'key who seats'
+      'key when seats';
+    gap: 0.15rem var(--gap-sm);
+  }
+  .slot__key {
+    grid-area: key;
+  }
+  .slot__who {
+    grid-area: who;
+  }
+  .slot__when {
+    grid-area: when;
+  }
+  .slot__seats {
+    grid-area: seats;
+  }
+  .sem__actions {
+    justify-items: start;
+  }
+}

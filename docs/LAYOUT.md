@@ -113,7 +113,7 @@ devuelven, y está bien: dependen del dominio, que apunta hacia adentro.)
 
 ## Por qué `internal/sia` está partido así
 
-Es el paquete gordo y debe serlo: ahí viven las 32 trampas de
+Es el paquete gordo y debe serlo: ahí viven las 33 trampas de
 [GOTCHAS.md](GOTCHAS.md). Está dividido por **fase del protocolo**, no por capa
 técnica, para que cada trampa tenga un archivo obvio donde vivir y donde buscarla.
 

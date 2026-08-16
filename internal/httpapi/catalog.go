@@ -78,7 +78,7 @@ func filterOfferings(offerings []catalog.CourseOffering, q, creditsStr, typology
 }
 
 func courseSummaryJSON(o catalog.CourseOffering) gin.H {
-	return gin.H{
+	h := gin.H{
 		"campus_code": o.Course.CampusCode,
 		"code":        o.Course.Code,
 		"name":        o.Course.Name,
@@ -87,4 +87,16 @@ func courseSummaryJSON(o catalog.CourseOffering) gin.H {
 		"description": o.Course.Description,
 		"fetched_at":  o.Course.FetchedAt,
 	}
+	// Los cupos que YA están guardados. Ausentes si nunca se pidió el detalle
+	// de esta asignatura desde este plan — que es la respuesta honesta, no un
+	// cero.
+	if o.Seats != nil {
+		h["seats"] = gin.H{
+			"available":   o.Seats.Available,
+			"measured_at": o.Seats.MeasuredAt,
+			"sections":    o.Seats.Sections,
+			"age_seconds": int(time.Since(o.Seats.MeasuredAt).Seconds()),
+		}
+	}
+	return h
 }

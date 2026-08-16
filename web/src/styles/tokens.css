@@ -1,0 +1,66 @@
+/* Tokens. Un solo sitio donde vive la identidad visual.
+   Cambiar --amber acá lo cambia en toda la app. */
+
+:root {
+  /* ── Color ──────────────────────────────────────────────────────
+     Negro CÁLIDO, no gris azulado: la diferencia entre un tablero de
+     estación y un dashboard genérico está casi entera en esto. */
+  --ink: #0b0908;
+  --ink-raised: #12100d;
+  --ink-sunken: #070605;
+
+  --rule: #2a231c;
+  --rule-strong: #3d332a;
+
+  --paper: #f0e7d8;
+  --paper-dim: #9c8f7c;
+  --paper-faint: #6a6055;
+
+  /* Un solo acento. Fósforo ámbar = recién medido, vivo. */
+  --amber: #ffb02e;
+  --amber-deep: #b87516;
+
+  /* Solo alarma: sin cupos, dato vencido, error. */
+  --rust: #d1502a;
+
+  /* ── Tipografía ────────────────────────────────────────────────
+     Serif editorial de alto contraste contra monoespaciada técnica.
+     El contraste entre las dos ES el diseño. */
+  --serif: 'Instrument Serif', ui-serif, Georgia, serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Escala fluida: se adapta al ancho sin media queries. */
+  --t-display: clamp(2.6rem, 7vw, 5.5rem);
+  --t-title: clamp(1.9rem, 4vw, 3.1rem);
+  --t-lead: clamp(1.05rem, 1.6vw, 1.25rem);
+  --t-body: 0.95rem;
+  --t-small: 0.8rem;
+  --t-micro: 0.69rem;
+
+  /* ── Espacio ───────────────────────────────────────────────────*/
+  --gap-xs: 0.35rem;
+  --gap-sm: 0.7rem;
+  --gap: 1.2rem;
+  --gap-lg: 2.4rem;
+  --gap-xl: 4.5rem;
+
+  --rail-w: 3.5rem;
+  --measure: 74rem;
+
+  /* ── Movimiento ────────────────────────────────────────────────*/
+  --ease: cubic-bezier(0.2, 0.7, 0.25, 1);
+  --fast: 140ms;
+  --slow: 420ms;
+}
+
+/* Quien pidió menos movimiento, recibe menos movimiento. No es opcional:
+   la animación de cupos es un giro, y para algunas personas eso marea. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

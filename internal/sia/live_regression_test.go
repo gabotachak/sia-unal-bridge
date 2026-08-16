@@ -189,3 +189,48 @@ func TestLive_ElectivesWildcardIsPerCampus(t *testing.T) {
 		})
 	}
 }
+
+// TestLive_CatalogAfterElectivesOnSameConn reproduces a bug the frontend
+// surfaced: FetchElectives leaves the connection in the electives search
+// (soc4=7). If the next FetchCatalog lands on that same pooled connection and
+// the program is unchanged, gotoProgram skips every valueChange — so cb1
+// fires with the electives search still active and the SIA answers with a
+// silent no-op.
+//
+// Writing c.form.Tipologia was not enough: that changes what the next POST
+// carries, never the server's own state. Skipped unless SIA_LIVE=1.
+func TestLive_CatalogAfterElectivesOnSameConn(t *testing.T) {
+	if os.Getenv("SIA_LIVE") != "1" {
+		t.Skip("set SIA_LIVE=1 to run against the real SIA server")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	c, err := NewConn("https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Bootstrap(ctx); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+
+	key := catalog.ProgramKey{Level: 0, Campus: 2, Faculty: 8, Program: 3, CampusCode: "1101"}
+
+	if _, err := c.FetchElectives(ctx, key); err != nil {
+		t.Fatalf("FetchElectives: %v", err)
+	}
+
+	// Same connection, same program: gotoProgram has nothing to do.
+	body, err := c.FetchCatalog(ctx, key)
+	if err != nil {
+		t.Fatalf("FetchCatalog after FetchElectives: %v", err)
+	}
+	rows, err := ParseList(body)
+	if err != nil {
+		t.Fatalf("ParseList: %v", err)
+	}
+	if len(rows) == 0 {
+		t.Fatal("got 0 rows: the connection was still in the electives search")
+	}
+	t.Logf("%d rows in the regular listing after an electives fetch", len(rows))
+}

@@ -287,6 +287,26 @@ func (c *SIAConn) FetchCatalog(ctx context.Context, key catalog.ProgramKey) ([]b
 	if err := c.gotoProgram(ctx, key); err != nil {
 		return nil, err
 	}
+
+	// The connection may still be sitting in the ELECTIVES search from an
+	// earlier FetchElectives: soc4=7, plus soc5/soc10/soc6 set. Clicking cb1
+	// in that state answers with a no-op.
+	//
+	// Setting c.form.Tipologia alone does not fix it — that only changes what
+	// the next POST carries, not the server's own state, and a parked
+	// connection skips every valueChange in gotoProgram. It needs a real
+	// change posted to soc4. Skipped when already there, like gotoProgram:
+	// the response is not consumed, only its side effect.
+	if c.navTipologia != TypologyAll {
+		c.form.Tipologia = TypologyAll
+		if body, _, err := c.postValueChange(ctx, "pt1:r1:0:soc4"); err != nil {
+			return nil, err
+		} else if isNoop(body) {
+			return nil, newNoopError(body)
+		}
+		c.navTipologia = TypologyAll
+	}
+
 	c.form.Tipologia = TypologyAll
 	body, _, err := c.postAction(ctx, "pt1:r1:0:cb1", "{pt1:r1:0:t4={viewportSize=999}}")
 	if err != nil {
@@ -383,9 +403,11 @@ func (c *SIAConn) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([
 		return nil, newNoopError(body)
 	}
 
-	// Leave soc4 back at "all but electives" so the connection stays usable
-	// for a plain FetchCatalog next, without another full cascade.
-	c.form.Tipologia = TypologyAll
+	// NOTE: soc4 is deliberately NOT reset here. Writing c.form.Tipologia
+	// would only change what the next POST carries while the SERVER stays in
+	// the electives search — the exact mismatch that made a later
+	// FetchCatalog no-op. FetchCatalog now posts the real change itself, and
+	// navTipologia keeps saying the truth: this connection is on soc4=7.
 
 	return body, nil
 }

@@ -1,0 +1,25 @@
+meta {
+  name: 06 Programs (list)
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/programs?campus={{campus}}&faculty={{faculty}}
+  body: none
+  auth: none
+}
+
+params:query {
+  campus: {{campus}}
+  faculty: {{faculty}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  campus debe ser 1101 y faculty es obligatorio en fase 1 (no hay directorio
+  completo de sede, solo por facultad).
+}

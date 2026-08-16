@@ -1,0 +1,21 @@
+meta {
+  name: 13 Course shortcut
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/courses/{{code}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Ambiguo por diseño: 0 programas -> 404, 1 -> 200 con el detalle, N -> 300
+  con candidates. Resuelve solo contra lo ya cacheado (nunca dispara SIA
+  para DESCUBRIR qué programas lo ofrecen).
+}

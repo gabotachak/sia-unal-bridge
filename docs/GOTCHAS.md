@@ -692,3 +692,56 @@ sola vez** y despues itera facultad por facultad cambiando solo `soc2` (valor di
 en cada vuelta, así que sí re-renderiza `soc3`). Nunca separar esto en llamadas
 independientes que puedan reutilizar la misma conexión para el mismo nivel+sede dos
 veces.
+
+> **Corrección, 2026-08-16:** lo de arriba no basta. El §30 se manifestó en producción
+> vía Bruno contra `/v1/faculties` — no por una segunda llamada *dentro* de
+> `FetchProgramDirectory`, sino porque el **pool** reutiliza conexiones entre
+> operaciones sin relación: una petición a `/v1/programs/2A74/courses` deja la conexión
+> con `soc1=0, soc9=2`; la siguiente petición a `/v1/faculties`, si le toca esa misma
+> conexión, reenvía `soc1=0, soc9=2` sin saberlo → mismo no-op del §30. Ver detalle
+> completo en §31.
+
+---
+
+## 31. El §30 es un problema del *pool*, no solo de un bucle mal escrito
+
+Reproducido primero a mano vía Bruno (`GET /v1/faculties?campus=1101` → `502 sia_noop`)
+contra el `api` en Docker, con el pool ya calentado por peticiones anteriores.
+
+El §30 documentaba el síntoma dentro de un único método (`FetchProgramDirectory`
+llamándose dos veces sobre la misma conexión). La causa real es más ancha: **cualquier
+conexión del pool puede llegar a cualquier método ya parqueada en cualquier estado**,
+porque el pool no le pertenece a ninguna operación — se la queda quien la pida. Dos
+peticiones HTTP sin relación (`/programs/2A74/courses` y luego `/faculties`) pueden
+compartir físicamente la misma conexión si el scheduler del pool así lo decide, y la
+segunda hereda el `soc1`/`soc9` que dejó la primera.
+
+Peor todavía en fase 1: **el alcance es una sola sede.** `FetchElectives` postea
+`soc4=7, soc5=0, soc10=<sede>, soc6=12` — los mismos cuatro valores en *cada* llamada,
+sin excepción, porque solo hay una sede. La segunda vez que cualquier conexión del pool
+se reutiliza para electivas — sin importar de qué programa — los cuatro campos ya están
+en el valor que se les va a mandar. Sin arreglo, esto rompe silenciosamente el catálogo
+completo de cualquier segundo programa consultado.
+
+**Regla general:** cualquier método que dependa de un `valueChange` para traer datos
+frescos (no solo para avanzar estado) tiene que:
+
+1. Llevar en la conexión el último valor real posteado por campo (`navLevel`,
+   `navCampus`, `navFaculty`, `navTipologia`, `navModo`, `navSedeElect`, `navFacElect`
+   en `sia.SIAConn`), independiente de `parked`.
+2. Si el valor objetivo ya coincide con el último conocido, **rebotar**: postear
+   cualquier otro valor válido primero (una repetición gratis, se descarta), y recién
+   ahí postear el valor real — así el POST que importa siempre es un cambio genuino.
+3. Si el método NO necesita los datos de vuelta (p. ej. `gotoProgram`, que solo le
+   importa que el servidor quede posicionado antes de `soc3`), no hace falta rebotar:
+   simplemente **saltarse el POST entero** si el valor no cambia. Sin red, sin riesgo.
+
+`sia/cascade.go`: `gotoProgram` usa la estrategia (3) para `soc1`/`soc9`/`soc2`.
+`FetchProgramDirectory` y `FetchElectives` usan la (2) vía el helper
+`postValueChangeFresh`, porque sí consumen la respuesta.
+
+Verificado con dos pruebas en vivo que reproducen exactamente el bug original:
+`TestLive_FetchProgramDirectory_AfterGotoProgram` (parquea con `FetchCatalog`, después
+pide el directorio en la misma conexión) y `TestLive_FetchElectives_TwiceOnSameConn`
+(dos programas distintos, misma sede, misma conexión). Las dos fallaban antes del
+arreglo y pasan después, sin tocar nada más.

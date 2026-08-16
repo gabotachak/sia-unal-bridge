@@ -1,0 +1,15 @@
+meta {
+  name: 03 Levels
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/levels
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}

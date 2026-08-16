@@ -34,6 +34,26 @@ type SIAConn struct {
 	ParkedAt catalog.ProgramKey // cascade already done for this program; zero value = never cascaded
 	parked   bool
 
+	// navLevel/navCampus/navFaculty track the LAST VALUE actually posted to
+	// soc1/soc9/soc2 on this connection — independent of `parked`, which
+	// only means "a full program was selected". A pooled connection can
+	// arrive here already sitting on some level/campus/faculty from a
+	// completely different prior request (FetchProgramDirectory,
+	// gotoProgram, ...). Re-posting a valueChange with the value it
+	// already has does not make ADF re-render the dependent dropdown —
+	// GOTCHAS §30 — so every step that changes one of these must check
+	// first. -1 means "unknown", forcing the first post on a fresh
+	// connection (see Bootstrap, which resets these).
+	navLevel, navCampus, navFaculty int
+
+	// navTipologia/navModo/navSedeElect/navFacElect are the electives
+	// cascade's equivalent tracking (soc4, soc5, soc10, soc6). Fase 1 only
+	// ever targets ONE campus (Bogotá), so every FetchElectives call posts
+	// the exact same four values — the SECOND time any pooled connection
+	// is reused for electives, all four would repost unchanged and noop
+	// without this guard. "" = unset (matches formState's zero value).
+	navTipologia, navModo, navSedeElect, navFacElect string
+
 	// DetailRegion: 0 = in the search region; >0 = an open detail region.
 	// Back is pt1:r1:<DetailRegion>:cb4 and the number grows with every
 	// detail opened in the session. Never hardcode it. GOTCHAS §20.
@@ -52,8 +72,11 @@ func NewConn(baseURL string) (*SIAConn, error) {
 		return nil, fmt.Errorf("sia: cookiejar: %w", err)
 	}
 	return &SIAConn{
-		baseURL: baseURL,
-		client:  &http.Client{Jar: jar, Timeout: 30 * time.Second},
+		baseURL:    baseURL,
+		client:     &http.Client{Jar: jar, Timeout: 30 * time.Second},
+		navLevel:   -1,
+		navCampus:  -1,
+		navFaculty: -1,
 	}, nil
 }
 
@@ -90,6 +113,8 @@ func (c *SIAConn) Bootstrap(ctx context.Context) ([]byte, error) {
 	c.form = formState{Modo: "", SedeElect: "0"}
 	c.ParkedAt = catalog.ProgramKey{}
 	c.parked = false
+	c.navLevel, c.navCampus, c.navFaculty = -1, -1, -1
+	c.navTipologia, c.navModo, c.navSedeElect, c.navFacElect = "", "", "", ""
 	c.DetailRegion = 0
 	c.LastUsed = time.Now()
 	return body, nil

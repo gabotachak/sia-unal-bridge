@@ -1,0 +1,19 @@
+meta {
+  name: 02 Status
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/status
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Cobertura de cache: programas con catálogo bajado vs. programas conocidos.
+}

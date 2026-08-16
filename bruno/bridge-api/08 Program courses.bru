@@ -1,0 +1,21 @@
+meta {
+  name: 08 Program courses
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/programs/{{program}}/courses
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Miss en frío: 2 POSTs al SIA (regular + electivas), ~5-10s. Mirar
+  X-Cache/X-SIA-Fetch-Ms en la respuesta. Filtros opcionales: ?q= ?credits=
+  ?typology=
+}

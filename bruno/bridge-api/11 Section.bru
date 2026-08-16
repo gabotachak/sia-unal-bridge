@@ -1,0 +1,20 @@
+meta {
+  name: 11 Section
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/programs/{{program}}/courses/{{code}}/sections/{{key}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  key es el token entre paréntesis del grupo ('1', 'AMAZ-01', 'TUMA-01'),
+  no el número de "Grupo N".
+}

@@ -1,0 +1,15 @@
+meta {
+  name: 10 Course sections
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/programs/{{program}}/courses/{{code}}/sections
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}

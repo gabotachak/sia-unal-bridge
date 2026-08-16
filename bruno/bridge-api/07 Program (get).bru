@@ -1,0 +1,20 @@
+meta {
+  name: 07 Program (get)
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/programs/{{program}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Miss en frío camina facultad->programa en vivo (ResolveProgram) — barato,
+  no dispara el censo completo.
+}

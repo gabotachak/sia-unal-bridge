@@ -1,0 +1,25 @@
+meta {
+  name: 14 Course search
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/courses?q={{q}}
+  body: none
+  auth: none
+}
+
+params:query {
+  q: {{q}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Store-only, NUNCA dispara al SIA. Respuesta trae coverage (cuántos
+  programas están cacheados) para que el cliente sepa qué tan completo es
+  el resultado.
+}

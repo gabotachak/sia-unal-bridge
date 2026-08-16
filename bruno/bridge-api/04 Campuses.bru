@@ -1,0 +1,15 @@
+meta {
+  name: 04 Campuses
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/campuses
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}

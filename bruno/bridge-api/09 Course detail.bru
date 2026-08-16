@@ -1,0 +1,20 @@
+meta {
+  name: 09 Course detail
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/programs/{{program}}/courses/{{code}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  El endpoint canónico. Correr dos veces: 1ra X-Cache: miss (con
+  X-SIA-Fetch-Ms), 2da X-Cache: hit. ?max_age=0 fuerza refetch.
+}

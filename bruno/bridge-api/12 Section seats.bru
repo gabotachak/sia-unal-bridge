@@ -1,0 +1,19 @@
+meta {
+  name: 12 Section seats
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/programs/{{program}}/courses/{{code}}/sections/{{key}}/seats
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Body siempre trae age_seconds — nunca se sirve un cupo sin decir de cuándo es.
+}

@@ -68,8 +68,9 @@
 }
 
 .brand__word {
-  font-family: var(--serif);
-  font-size: 1.15rem;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.05rem;
   letter-spacing: var(--track-title);
   line-height: 1;
 }

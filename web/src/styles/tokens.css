@@ -144,21 +144,29 @@
 
 :root {
   /* ── Tipografía ────────────────────────────────────────────────
-     Serif editorial para los títulos, monoespaciada para todo lo demás.
-     El contraste entre las dos es el carácter de la app: la serif dice
-     "esto es un documento", la mono dice "esto es una medición". */
-  --serif: 'Instrument Serif', ui-serif, Georgia, serif;
+     Dos familias, no tres. La sans lleva todo el texto — títulos incluidos,
+     que se distinguen por peso y tamaño, no por familia — y la mono se queda
+     donde sí aporta: códigos, horarios, cupos. Ahí sigue diciendo "esto es
+     una medición"; en párrafos solo se leía apretada, porque todas las letras
+     ocupan lo mismo y no hay ritmo donde apoyarse.
+
+     `--display` es el alias de títulos: existe para que cambiar la familia de
+     los encabezados sea una línea, no un grep. */
+  --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --display: var(--sans);
   --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* Escala fluida: se adapta al ancho sin media queries. */
-  --t-display: clamp(2.4rem, 6vw, 4rem);
-  --t-title: clamp(1.7rem, 3.4vw, 2.5rem);
-  --t-lead: clamp(1rem, 1.5vw, 1.15rem);
-  --t-body: 0.9rem;
-  --t-small: 0.8rem;
-  --t-micro: 0.69rem;
+  /* Más chicos que con la serif: la sans a peso 600 ocupa y pesa más a
+     igual tamaño, y a 4rem el título se comía la página. */
+  --t-display: clamp(2.1rem, 5vw, 3.2rem);
+  --t-title: clamp(1.5rem, 3vw, 2.1rem);
+  --t-lead: clamp(1.05rem, 1.5vw, 1.2rem);
+  --t-body: 0.95rem;
+  --t-small: 0.85rem;
+  --t-micro: 0.72rem;
 
-  /* El tracking depende del tamaño: la serif grande necesita apretarse,
+  /* El tracking depende del tamaño: el título grande necesita apretarse,
      el micro-texto en versalitas necesita abrirse. Un solo valor para
      todo estaría mal en algún lado. */
   --track-display: -0.022em;

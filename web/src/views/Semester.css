@@ -125,13 +125,25 @@
 }
 
 .card__remove {
-  color: var(--rule-strong);
-  font-size: 0.9rem;
-  padding: 0.2rem 0.4rem;
-  transition: color var(--fast) var(--ease);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--paper-dim);
+  font-size: 0.8rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition:
+    color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    background var(--fast) var(--ease);
 }
 .card__remove:hover {
   color: var(--rust);
+  border-color: var(--rust);
+  background: color-mix(in srgb, var(--rust) 10%, transparent);
 }
 
 .card__error {

@@ -13,6 +13,15 @@ import './Semester.css';
 /** El pool del back son 4 sesiones ADF. Pedir de a más no acelera nada. */
 const CONCURRENCY = 4;
 
+/** Cuántas veces reintentar un error transitorio antes de mostrárselo al usuario. */
+const MAX_RETRIES = 3;
+
+/** Errores del SIA que suelen resolverse solos al reintentar. */
+const TRANSIENT_CODES = new Set(['sia_noop', 'sia_session_lost', 'busy']);
+
+/** Espera `ms` milisegundos. */
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 type Row = {
   item: PlanItem;
   detail: CourseDetail | null;
@@ -53,6 +62,10 @@ export function Semester() {
    * Una petición POR MATERIA, no por grupo: el detalle trae todos los grupos
    * con sus cupos en el mismo POST, así que pedir grupo por grupo sería
    * multiplicar el trabajo del SIA por nada.
+   *
+   * Los errores transitorios del SIA (sesión caducada, respuesta vacía, pool
+   * lleno) se reintentan silenciosamente hasta MAX_RETRIES veces con backoff
+   * exponencial. El error solo se muestra si todos los intentos fallan.
    */
   const fetchAll = useCallback(
     async (force: boolean) => {
@@ -65,16 +78,31 @@ export function Semester() {
       await pooled(targets, CONCURRENCY, async (item) => {
         const id = itemId(item);
         const scope = { level: item.level, campus: item.campus, faculty: item.faculty };
-        const path = routes.course(scope, item.program, item.code, force ? 0 : undefined);
-        try {
-          const res = await get<CourseDetail>(path);
-          patch(id, { detail: res.data, status: 'done' });
-        } catch (e) {
-          patch(id, {
-            status: 'error',
-            error: e instanceof ApiError ? e.humane : 'no se pudo consultar',
-          });
+
+        let lastError: unknown;
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          // En reintentos, forzar max_age=0: si el primer intento falló por
+          // sesión caducada o respuesta vacía, repetir con cache no va a ayudar.
+          const forceRetry = force || attempt > 0;
+          const path = routes.course(scope, item.program, item.code, forceRetry ? 0 : undefined);
+          try {
+            const res = await get<CourseDetail>(path);
+            patch(id, { detail: res.data, status: 'done' });
+            return; // éxito → no seguir reintentando
+          } catch (e) {
+            lastError = e;
+            const isTransient = e instanceof ApiError && TRANSIENT_CODES.has(e.code);
+            if (!isTransient || attempt === MAX_RETRIES) break;
+            // Backoff exponencial: ~600ms, ~1200ms, ~2400ms con jitter.
+            await sleep(300 * 2 ** attempt + Math.random() * 300);
+          }
         }
+
+        patch(id, {
+          status: 'error',
+          error:
+            lastError instanceof ApiError ? lastError.humane : 'no se pudo consultar',
+        });
       });
 
       setRunning(false);
@@ -214,7 +242,7 @@ function CourseCard({
           )}
           {status === 'loading' && <span className="card__tallyLabel">midiendo…</span>}
           <button className="card__remove" onClick={onRemove} title="Quitar del semestre">
-            ✕
+            🗑️ <span>quitar</span>
           </button>
         </div>
       </header>

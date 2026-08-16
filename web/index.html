@@ -9,6 +9,28 @@
       content="Catálogo de asignaturas de la Universidad Nacional de Colombia. Cupos con su edad, siempre."
     />
 
+    <!-- La barra del navegador acompaña al tema en vez de quedarse blanca. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f7fa" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1218" />
+
+    <!--
+      El tema, antes de pintar.
+
+      Va acá y no en React a propósito: React monta después del primer pintado,
+      así que leer localStorage allá significaría un fogonazo blanco antes de
+      que se aplique el modo oscuro. Este script corre síncrono, con el <body>
+      todavía sin pintar, y por eso nadie ve el salto.
+
+      Escribe el atributo SOLO si hay elección explícita: sin atributo manda
+      prefers-color-scheme, que es lo que significa "seguir al sistema".
+    -->
+    <script>
+      try {
+        var t = localStorage.getItem('tablero.tema.v1');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -18,7 +40,7 @@
 
     <link
       rel="icon"
-      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230b0908'/><text y='25' x='5' font-family='monospace' font-size='22' fill='%23ffb02e'>▚</text></svg>"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230b62d6'/><rect x='8' y='7' width='4.5' height='18' rx='1.2' fill='white'/><rect x='15.5' y='7' width='4.5' height='11' rx='1.2' fill='%2334d399'/><rect x='23' y='7' width='4.5' height='15' rx='1.2' fill='white' opacity='.55'/></svg>"
     />
   </head>
   <body>

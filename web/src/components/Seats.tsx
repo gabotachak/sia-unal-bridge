@@ -6,8 +6,6 @@ type Props = {
   available: number;
   measuredAt: string;
   ageSeconds: number;
-  onRefresh?: () => void;
-  busy?: boolean;
 };
 
 /** Los cupos tienen TTL de 5 min en la API. Pasado eso, el dato está vencido. */
@@ -21,7 +19,7 @@ const SEATS_TTL = 300;
  * animación CSS de montaje se ejecuta. Los dígitos que no cambiaron conservan
  * su key y se quedan quietos — que es exactamente lo que hace un tablero real.
  */
-export function Seats({ available, measuredAt, ageSeconds, onRefresh, busy }: Props) {
+export function Seats({ available, measuredAt, ageSeconds }: Props) {
   // La edad avanza sola mientras mirás la pantalla. Un dato que envejece a la
   // vista es el argumento entero de esta API, así que se ve envejecer.
   const [age, setAge] = useState(ageSeconds);
@@ -37,7 +35,7 @@ export function Seats({ available, measuredAt, ageSeconds, onRefresh, busy }: Pr
 
   return (
     <div className={`seats ${empty ? 'seats--empty' : ''} ${stale ? 'seats--stale' : ''}`}>
-      <div className="seats__figure" aria-hidden="true">
+      <div className="seats__figure tnum" aria-hidden="true">
         {digits.map((d, i) => (
           <span key={`${i}-${d}`} className="seats__flap">
             {d}
@@ -51,15 +49,9 @@ export function Seats({ available, measuredAt, ageSeconds, onRefresh, busy }: Pr
 
       <div className="seats__meta">
         <span className="seats__label">{empty ? 'sin cupos' : 'cupos'}</span>
-        <span className="seats__age" title={new Date(measuredAt).toLocaleString('es-CO')}>
-          {stale ? '⚠ ' : ''}
+        <span className="seats__age tnum" title={new Date(measuredAt).toLocaleString('es-CO')}>
           hace {formatAge(age)}
         </span>
-        {onRefresh && (
-          <button className="btn seats__btn" onClick={onRefresh} disabled={busy}>
-            {busy ? 'midiendo…' : 'medir ahora'}
-          </button>
-        )}
       </div>
 
       {/* Barra que se vacía a medida que el dato se acerca a su vencimiento. */}

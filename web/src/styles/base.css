@@ -12,35 +12,27 @@ html {
 
 body {
   margin: 0;
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--bg);
+  color: var(--text);
   font-family: var(--mono);
   font-size: var(--t-body);
   line-height: 1.55;
-  font-weight: 400;
+  letter-spacing: var(--track-body);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* El cambio de tema no puede ser un fogonazo. */
+  transition: background-color var(--slow) var(--ease-out);
 }
 
-/* Grano. Una capa fija de ruido que le quita el plano digital al fondo.
-   Es un SVG en línea: cero peticiones, cero archivos. */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  pointer-events: none;
-  opacity: 0.04;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
+/* La serif solo en títulos. Apretada, porque a tamaño grande las letras
+   se leen demasiado separadas si se dejan como vienen. */
 h1,
 h2,
 h3 {
   font-family: var(--serif);
   font-weight: 400;
-  line-height: 1.02;
-  letter-spacing: -0.015em;
+  line-height: 1.05;
+  letter-spacing: var(--track-title);
   margin: 0;
 }
 
@@ -65,22 +57,30 @@ select {
 
 /* Foco visible de verdad. Se navega entera con teclado. */
 :focus-visible {
-  outline: 2px solid var(--amber);
-  outline-offset: 3px;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 ::selection {
-  background: var(--amber);
-  color: var(--ink);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* ── Piezas compartidas ─────────────────────────────────────────── */
 
 .eyebrow {
   font-size: var(--t-micro);
-  letter-spacing: 0.22em;
+  letter-spacing: var(--track-micro);
   text-transform: uppercase;
-  color: var(--paper-faint);
+  color: var(--text-faint);
+  margin: 0;
+}
+
+/* Números que no bailan: en una tabla de cupos, los dígitos tienen que
+   caer siempre en la misma columna aunque cambie el valor. */
+.tnum {
+  font-variant-numeric: tabular-nums;
 }
 
 .rule {
@@ -89,32 +89,78 @@ select {
   margin: 0;
 }
 
+/* ── Botón ──────────────────────────────────────────────────────── */
+
 .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-xs);
   font-size: var(--t-small);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding: 0.5rem 1rem;
+  padding: 0.45rem 0.8rem;
   border: 1px solid var(--rule-strong);
-  color: var(--paper-dim);
-  transition: color var(--fast) var(--ease), border-color var(--fast) var(--ease),
-    background var(--fast) var(--ease);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-dim);
+  /* Nunca `all`: solo lo que de verdad cambia, y solo cosas que corren
+     en el compositor. */
+  transition:
+    color var(--fast) var(--ease-out),
+    border-color var(--fast) var(--ease-out),
+    background-color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
 }
-.btn:hover:not(:disabled) {
-  color: var(--ink);
-  background: var(--amber);
-  border-color: var(--amber);
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover:not(:disabled) {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+}
+/* Se hunde al presionar. Es la confirmación de que la interfaz escuchó,
+   y llega en el pointer-down, no al soltar. */
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 .btn:disabled {
-  opacity: 0.4;
-  cursor: wait;
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
-/* Aparición escalonada. Un solo momento coreografiado al cargar vale más
-   que veinte microinteracciones sueltas. */
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn--primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    color: var(--accent-ink);
+  }
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+.btn--danger:not(:disabled) {
+  color: var(--bad);
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn--danger:hover:not(:disabled) {
+    color: var(--bad);
+    border-color: var(--bad);
+    background: var(--bad-soft);
+  }
+}
+
+/* ── Aparición ──────────────────────────────────────────────────── */
+
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -122,7 +168,22 @@ select {
   }
 }
 .rise {
-  animation: rise var(--slow) var(--ease) both;
+  animation: rise var(--mid) var(--ease-out) both;
+}
+
+/* Quien pidió menos movimiento, recibe menos movimiento: se van los
+   desplazamientos, se queda el fundido, que sigue explicando qué cambió. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .rise {
+    animation: none;
+  }
 }
 
 /* Solo para lectores de pantalla. */

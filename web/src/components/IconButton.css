@@ -1,0 +1,162 @@
+.iconbtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  transition:
+    color var(--fast) var(--ease-out),
+    background-color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
+}
+
+.iconbtn__glyph {
+  display: grid;
+  place-items: center;
+  line-height: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .iconbtn:hover:not(:disabled) {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+}
+
+/* La confirmación de que se escuchó el clic llega al presionar, no al soltar. */
+.iconbtn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.iconbtn.is-on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.iconbtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Variante de peligro: los iconos que borran se tiñen de rojo recién al
+   apuntarlos. En reposo son grises como los demás — un botón permanentemente
+   rojo en la esquina de cada tarjeta convertiría la lista en una alarma. */
+@media (hover: hover) and (pointer: fine) {
+  .iconbtn--danger:hover:not(:disabled) {
+    color: var(--bad);
+    background: var(--bad-soft);
+  }
+}
+
+/* Gira mientras algo está en vuelo. Es la única animación en bucle de la app,
+   y existe solo mientras dura la petición. */
+@keyframes iconspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.iconbtn.is-spinning .iconbtn__glyph {
+  animation: iconspin 900ms linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .iconbtn.is-spinning .iconbtn__glyph {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+/* El contador de materias. Va pegado a la esquina del icono para que se lea
+   como una propiedad de ESE icono y no como un número suelto. */
+.iconbtn__badge {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  padding: 0 0.2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1;
+  border: 2px solid var(--bg);
+}
+
+/* ── El globito ─────────────────────────────────────────────────────
+   CSS puro sobre data-tip. Sin JS, sin librería, sin nodos de más.
+
+   Entra con retraso (400ms) para no dispararse al pasar de largo por la
+   barra, y sale al instante — un globito que se queda colgado cuando ya
+   te fuiste se lee como un bug. Esa asimetría es deliberada.
+
+   No se anuncia a lectores de pantalla: para eso está el aria-label del
+   botón, que dice lo mismo. */
+.iconbtn::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 60;
+  padding: 0.28rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--text);
+  color: var(--bg);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-md);
+
+  opacity: 0;
+  /* Nunca desde scale(0): nada en el mundo real aparece de la nada. */
+  transform: scale(0.96);
+  transition:
+    opacity var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
+  transition-delay: 0ms;
+}
+
+/* Sale del borde de abajo, o del izquierdo si el botón vive contra el
+   borde derecho de la ventana y un globito centrado se saldría. */
+.iconbtn[data-tip-side='bottom']::after {
+  top: calc(100% + 6px);
+  left: 50%;
+  transform-origin: top center;
+  translate: -50% 0;
+}
+.iconbtn[data-tip-side='left']::after {
+  top: 50%;
+  right: calc(100% + 6px);
+  transform-origin: right center;
+  translate: 0 -50%;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .iconbtn:hover::after {
+    opacity: 1;
+    transform: scale(1);
+    transition-delay: 400ms;
+  }
+}
+/* Con teclado no hay "pasar de largo": el globito no debe hacerse esperar. */
+.iconbtn:focus-visible::after {
+  opacity: 1;
+  transform: scale(1);
+  transition-delay: 0ms;
+}
+
+/* En pantallas táctiles el globito no tiene a quién mostrarse: no hay hover,
+   y al tocar ya pasó la acción. */
+@media (hover: none) {
+  .iconbtn::after {
+    display: none;
+  }
+}

@@ -1,97 +1,108 @@
 .seats {
-  display: grid;
-  gap: var(--gap-xs);
-  justify-items: end;
-  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+  min-width: 4.5rem;
 }
+
+/* ── La cifra ───────────────────────────────────────────────────────
+   Dos dígitos independientes, cada uno en su propia cajita. Cuando uno
+   cambia, React lo remonta y solo ESE gira: el otro se queda quieto, que
+   es lo que hace un tablero de verdad. */
 
 .seats__figure {
   display: flex;
-  gap: 3px;
-  font-family: var(--serif);
-  font-size: clamp(2.6rem, 5vw, 3.8rem);
-  line-height: 0.9;
-  color: var(--amber);
+  gap: 2px;
 }
 
-/* Cada dígito es una tapa del tablero. Se monta girando sobre su eje
-   superior, como las de una estación. */
 .seats__flap {
-  display: block;
-  min-width: 0.72em;
-  padding: 0.08em 0.1em 0.06em;
-  background: var(--ink-sunken);
-  border: 1px solid var(--rule);
-  border-radius: 2px;
-  text-align: center;
-  transform-origin: 50% 0%;
-  animation: flap 340ms var(--ease) both;
-  /* Filete central: la ranura entre las dos mitades de la tapa. */
-  background-image: linear-gradient(to bottom, transparent 49.5%, #00000090 50%, transparent 50.5%);
+  display: grid;
+  place-items: center;
+  min-width: 1.5rem;
+  padding: 0.1rem 0.2rem;
+  border-radius: var(--radius-sm);
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.15;
+  animation: flap 260ms var(--ease-out) both;
 }
 
+/* Gira sobre su borde superior, como la aleta de un tablero. Nunca desde
+   scale(0) ni desde la nada: la aleta ya existía, solo cambió de cara. */
 @keyframes flap {
-  0% {
-    transform: rotateX(-88deg);
-    opacity: 0.25;
+  from {
+    transform: perspective(220px) rotateX(-72deg);
+    opacity: 0.35;
   }
-  55% {
-    transform: rotateX(12deg);
+  to {
+    transform: none;
     opacity: 1;
   }
-  100% {
-    transform: rotateX(0);
-  }
 }
 
-.seats--empty .seats__figure {
-  color: var(--rust);
+/* Sin cupos: rojo. Es el único estado que hay que ver de lejos en una lista
+   de doce grupos. */
+.seats--empty .seats__flap {
+  background: var(--bad-soft);
+  color: var(--bad);
 }
 
-.seats--stale .seats__figure {
-  color: var(--paper-faint);
+/* Dato vencido: pierde el color. Un número que ya no vale no puede seguir
+   pintado del verde de "hay lugar". */
+.seats--stale .seats__flap {
+  background: var(--surface-2);
+  color: var(--text-faint);
 }
+
+/* ── Rótulo y edad ──────────────────────────────────────────────── */
 
 .seats__meta {
   display: flex;
-  align-items: center;
-  gap: var(--gap-sm);
-  font-size: var(--t-micro);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--paper-faint);
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
 }
 
 .seats__label {
-  color: var(--paper-dim);
+  font-size: 0.6rem;
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--text-faint);
 }
 
-.seats--empty .seats__label,
-.seats--stale .seats__age {
-  color: var(--rust);
-}
-
-.seats__btn {
-  padding: 0.25rem 0.6rem;
+.seats__age {
   font-size: var(--t-micro);
+  color: var(--text-faint);
 }
+.seats--stale .seats__age {
+  color: var(--warn);
+}
+
+/* ── Barra de vencimiento ───────────────────────────────────────────
+   Se vacía a medida que el dato envejece. No es decoración: es la misma
+   idea que sostiene toda la app —ningún número se muestra sin decir de
+   cuándo es— dibujada en vez de escrita. */
 
 .seats__ttl {
   width: 100%;
-  max-width: 11rem;
   height: 2px;
+  border-radius: 999px;
   background: var(--rule);
   overflow: hidden;
 }
-
 .seats__ttl i {
   display: block;
   height: 100%;
-  background: var(--amber);
-  transform-origin: right center;
+  background: var(--ok);
+  transform-origin: left;
   transition: transform 1s linear;
 }
-
+.seats--empty .seats__ttl i {
+  background: var(--bad);
+}
 .seats--stale .seats__ttl i {
-  background: var(--rust);
+  background: var(--warn);
 }

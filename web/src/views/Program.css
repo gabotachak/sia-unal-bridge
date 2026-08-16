@@ -1,9 +1,5 @@
-.field--narrow {
-  min-width: 7rem !important;
-}
+/* ── Aviso de plan ajeno ────────────────────────────────────────── */
 
-/* Aviso de plan ajeno. No bloquea la lectura: el catálogo de abajo se ve
-   igual. Lo que corta es agregar, y eso lo dice el botón de cada fila. */
 .stray {
   display: flex;
   align-items: center;
@@ -11,183 +7,273 @@
   gap: var(--gap);
   flex-wrap: wrap;
   margin-bottom: var(--gap-lg);
-  padding: var(--gap);
-  border: 1px solid var(--rule-strong);
-  border-left: 3px solid var(--rust);
-  background: var(--ink-raised);
+  padding: var(--gap-sm) var(--gap);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
 
 .stray__text {
   margin: 0;
-  max-width: 44rem;
+  flex: 1;
+  min-width: 16rem;
   font-size: var(--t-small);
-  line-height: 1.7;
-  color: var(--paper-dim);
+  line-height: 1.6;
+  color: var(--text-dim);
 }
 .stray__text b {
-  color: var(--paper);
+  color: var(--text);
   font-weight: 500;
 }
 
 .stray__actions {
   display: flex;
   gap: var(--gap-sm);
-  align-items: center;
   flex: none;
 }
 
-/* El destructivo se pinta apagado: cambiar de plan borra el semestre, así que
-   no debería ser el botón que la vista invita a apretar. */
-.btn--ghost {
-  border-color: var(--rule);
-  color: var(--paper-faint);
-}
-.btn--ghost:hover:not(:disabled) {
-  color: var(--paper);
-  background: transparent;
-  border-color: var(--rust);
+/* ── Barra de filtros ───────────────────────────────────────────── */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  margin-bottom: var(--gap);
 }
 
-/* Tabla editorial: filete fino, sin bordes verticales, sin rayado cebra.
-   La densidad se controla con espacio, no con líneas. */
-.courses {
+.search--flex {
+  flex: 1;
+  min-width: 14rem;
+  max-width: 26rem;
+  margin-bottom: 0;
+}
+
+.toolbar__filters {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  flex: none;
+}
+
+.toolbar__icon {
+  color: var(--text-faint);
+  flex: none;
+}
+
+.pick select {
+  height: 2.5rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: var(--t-small);
+  cursor: pointer;
+  max-width: 12rem;
+  transition:
+    border-color var(--fast) var(--ease-out),
+    color var(--fast) var(--ease-out);
+}
+.pick select:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.pick--narrow select {
+  max-width: 5.5rem;
+}
+
+.toolbar__clear {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  transition:
+    color var(--fast) var(--ease-out),
+    background-color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
+}
+.toolbar__clear:hover {
+  color: var(--bad);
+  background: var(--bad-soft);
+}
+.toolbar__clear:active {
+  transform: scale(0.94);
+}
+
+/* ── La tabla ───────────────────────────────────────────────────────
+   La rejilla se declara UNA vez y la heredan la cabecera y todas las
+   filas. Es lo que garantiza que las columnas estén alineadas y —lo que
+   importa acá— que NUNCA se muevan: los anchos son fijos salvo el del
+   nombre, que es el único que cede.
+
+   La regla de fondo: antes recortar un nombre que empujar lo que sigue a
+   otra línea. Una tabla donde las filas cambian de alto según el largo
+   del texto es imposible de barrer con la vista, y ese salto es lo que
+   hacía que redimensionar la ventana se sintiera roto. */
+
+.table {
+  --cols: 6.2rem minmax(0, 1fr) 2.4rem 2.2rem 4.6rem 2.25rem;
+}
+
+.table__head,
+.row {
+  display: grid;
+  grid-template-columns: var(--cols);
+  align-items: center;
+  gap: var(--gap-sm);
+}
+
+.table__head {
+  padding: 0 0.6rem var(--gap-sm);
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.table__head .col-cr,
+.table__head .col-seats {
+  text-align: right;
+}
+.table__head .col-typ {
+  text-align: center;
+}
+
+.rows {
   list-style: none;
   margin: 0;
   padding: 0;
-  border-top: 1px solid var(--rule);
 }
 
-.courses__row {
+.row {
+  padding: 0.5rem 0.6rem;
   border-bottom: 1px solid var(--rule);
+  color: var(--text);
+  transition: background-color var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .row:hover {
+    background: var(--surface-2);
+  }
 }
 
-.courses__row a {
-  display: grid;
-  grid-template-columns: 7rem 1fr auto 3.4rem 4.6rem 1.7rem;
-  gap: var(--gap);
-  align-items: center;
-  padding: 0.55rem 0;
-  transition: background var(--fast) var(--ease), padding var(--fast) var(--ease);
-}
-
-.courses__row a:hover,
-.courses__row a:focus-visible {
-  background: var(--ink-raised);
-  padding-left: var(--gap-sm);
-  padding-right: var(--gap-sm);
-}
-
-.courses__code {
+.row__code {
   font-size: var(--t-micro);
-  color: var(--paper-faint);
-  letter-spacing: 0.06em;
-  font-variant-numeric: tabular-nums;
-}
-
-.courses__name {
-  font-size: var(--t-small);
-  line-height: 1.35;
-  min-width: 0;
-}
-.courses__row a:hover .courses__name {
-  color: var(--amber);
-}
-
-.courses__credits {
-  font-family: var(--serif);
-  font-size: 1.4rem;
-  text-align: right;
-  color: var(--paper-dim);
-  font-variant-numeric: tabular-nums;
-}
-.courses__credits small {
-  font-family: var(--mono);
-  font-size: 0.42rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--paper-faint);
-  margin-left: 0.2em;
-}
-
-/* Etiqueta de tipología: solo la letra del SIA, que es lo que informa.
-   El literal completo va en el title para quien lo necesite. */
-.tag {
-  font-size: var(--t-micro);
-  letter-spacing: 0.12em;
-  padding: 0.15rem 0.45rem;
-  border: 1px solid var(--rule-strong);
-  color: var(--paper-faint);
+  color: var(--text-faint);
+  letter-spacing: 0.02em;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.tag--libre {
-  border-color: var(--amber-deep);
-  color: var(--amber);
+.row:hover .row__code {
+  color: var(--accent);
+}
+
+/* El único que cede ancho — y cede recortándose, no partiéndose. */
+.row__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-small);
+  text-transform: lowercase;
+}
+
+.row__credits {
+  text-align: right;
+  font-size: var(--t-small);
+  color: var(--text-dim);
+}
+
+/* ── Celda de cupos ─────────────────────────────────────────────────
+   Número grande y edad chica, apilados y alineados a la derecha: los
+   dígitos de todas las filas caen en la misma vertical, así que la
+   columna se lee de un vistazo sin ir número por número. */
+
+.row__seats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+  text-align: right;
+}
+.row__seats b {
+  font-size: var(--t-small);
+  font-weight: 600;
+}
+.row__seats small {
+  font-size: 0.6rem;
+  color: var(--text-faint);
+}
+.row__seats.is-open b {
+  color: var(--ok);
+}
+.row__seats.is-zero b {
+  color: var(--bad);
+}
+.row__seats.is-unknown {
+  color: var(--text-faint);
+  font-size: var(--t-small);
+}
+
+/* ── Etiqueta de tipología ──────────────────────────────────────────
+   Una letra. El literal completo ('FUND. OBLIGATORIA (B)') vive en el
+   title: en una lista de 700 filas la letra es lo que se compara, y el
+   resto sería ruido repetido 700 veces. */
+
+.tag {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 1.35rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--surface-2);
+  color: var(--text-dim);
 }
 .tag--obligatoria {
-  border-color: var(--rule-strong);
-  color: var(--paper);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.tag--optativa {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.tag--libre {
+  background: var(--warn-soft);
+  color: var(--warn);
 }
 
-@media (max-width: 720px) {
-  .courses__row a {
-    grid-template-columns: 1fr auto auto;
-    grid-template-areas:
-      'name credits add'
-      'code tag seats';
-    gap: 0.2rem var(--gap-sm);
-    padding: var(--gap-sm) 0;
+/* ── Cómo se encoge ─────────────────────────────────────────────────
+   Las columnas se van por prioridad, de menos a más informativa. Lo que
+   nunca se va: el nombre (qué es), los cupos (para qué se entró) y el
+   botón de agregar (a qué se vino). Redefinir --cols basta: la cabecera
+   y las filas la heredan juntas, así que no pueden desalinearse. */
+
+@media (max-width: 700px) {
+  .table {
+    --cols: 6.2rem minmax(0, 1fr) 2.4rem 4.6rem 2.25rem;
   }
-  .courses__name {
-    grid-area: name;
-  }
-  .courses__code {
-    grid-area: code;
-  }
-  .tag {
-    grid-area: tag;
-    justify-self: end;
-  }
-  .courses__credits {
-    grid-area: credits;
-    font-size: 1.1rem;
-  }
-  .add--plus {
-    grid-area: add;
-    align-self: center;
+  .col-cr {
+    display: none;
   }
 }
 
-/* Cupos guardados de la asignatura. Cifra + edad, sin botón: lo que hay en la
-   base, no una invitación a consultar al SIA 313 veces. */
-.cseats {
-  display: grid;
-  justify-items: end;
-  line-height: 1.05;
-  font-variant-numeric: tabular-nums;
-}
-.cseats b {
-  font-family: var(--serif);
-  font-size: 1.25rem;
-  font-weight: 400;
-  color: var(--amber);
-}
-.cseats small {
-  font-size: 0.42rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--paper-faint);
-}
-.cseats.is-zero b {
-  color: var(--rust);
-}
-.cseats--none {
-  color: var(--rule-strong);
-  font-size: 0.9rem;
-}
-
-@media (max-width: 720px) {
-  .cseats {
-    grid-area: seats;
-    justify-items: start;
+/* En el teléfono queda lo irreductible: qué materia es, cuántos cupos tiene,
+   y el botón para meterla al semestre. El código sigue a un toque de
+   distancia, en la ficha de la asignatura. */
+@media (max-width: 520px) {
+  .table {
+    --cols: minmax(0, 1fr) 4.2rem 2.25rem;
+  }
+  .col-typ,
+  .col-code {
+    display: none;
   }
 }

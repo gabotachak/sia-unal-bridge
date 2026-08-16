@@ -2,8 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { usePlan } from './hooks/usePlan';
 import { selectionPath } from './lib/storage';
 import { PlanProvider } from './state/PlanProvider';
-import { Campuses } from './views/Campuses';
-import { Campus } from './views/Campus';
+import { PlanPicker } from './views/PlanPicker';
 import { Program } from './views/Program';
 import { Course } from './views/Course';
 import { Semester } from './views/Semester';
@@ -16,25 +15,32 @@ import { Semester } from './views/Semester';
  * lee con useParams().
  *
  * La forma imita a la de la API a propósito — la sede primero, siempre —
- * porque el código de un plan no identifica sin ella.
+ * porque el código de un plan no identifica sin ella. Por eso las rutas de
+ * catálogo y asignatura siguen cargando nivel/sede/plan aunque la interfaz ya
+ * no haga navegar por ellos: son lo que hace que un enlace pegado signifique
+ * lo mismo para quien lo recibe.
+ *
+ * Lo que SÍ desapareció son las rutas intermedias (/nivel/x, /nivel/x/sede/y).
+ * Existían para recorrer la cascada del SIA a pie, y eso ahora se hace una
+ * sola vez en /plan.
  *
  * PlanProvider envuelve todo porque la lista del semestre se toca desde varias
- * pantallas: se agrega en el catálogo y en la ficha, se cuenta en el raíl, y
+ * pantallas: se agrega en el catálogo y en la ficha, se cuenta en la barra, y
  * se lee en /semestre.
  */
+
 /**
  * La raíz.
  *
- * Con un plan ya elegido, el tablero ES el catálogo de ese plan: volver a la
- * marca no vuelve a preguntar nivel ni sede. Sin plan, la única pantalla que
- * tiene sentido es la de elegirlo.
+ * Con un plan ya elegido, el tablero ES el catálogo de ese plan. Sin plan, la
+ * única pantalla que tiene sentido es la de elegirlo.
  *
  * `replace` en las dos: la redirección no debe quedar en el historial, o el
  * botón de atrás rebotaría contra ella para siempre.
  */
 function Home() {
   const { selection } = usePlan();
-  return <Navigate to={selection ? selectionPath(selection) : '/nivel/pregrado'} replace />;
+  return <Navigate to={selection ? selectionPath(selection) : '/plan'} replace />;
 }
 
 export function App() {
@@ -42,17 +48,18 @@ export function App() {
     <PlanProvider>
       <BrowserRouter>
         <Routes>
-          {/* La cascada del SIA empieza por el nivel, así que la URL también.
-              Sin nivel no hay default silencioso: se redirige, y queda escrito
-              en la barra de direcciones cuál se está mirando. */}
           <Route path="/" element={<Home />} />
-          <Route path="/nivel/:level" element={<Campuses />} />
-          <Route path="/nivel/:level/sede/:campus" element={<Campus />} />
+
+          {/* El único sitio donde se elige plan. Se llega a propósito, desde
+              el chip de la barra, y al terminar devuelve al catálogo. */}
+          <Route path="/plan" element={<PlanPicker />} />
+
           <Route path="/nivel/:level/sede/:campus/plan/:program" element={<Program />} />
           <Route
             path="/nivel/:level/sede/:campus/plan/:program/asignatura/:code"
             element={<Course />}
           />
+
           <Route path="/semestre" element={<Semester />} />
           <Route path="*" element={<Home />} />
         </Routes>

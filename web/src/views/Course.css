@@ -1,233 +1,265 @@
-.course {
-  max-width: 52rem;
-  margin-bottom: var(--gap-xl);
+/* La salida. Discreta y arriba de todo: es lo primero que se busca al
+   terminar de mirar una asignatura. */
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-xs);
+  margin-bottom: var(--gap-lg);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--text-faint);
+  transition:
+    color var(--fast) var(--ease-out),
+    gap var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .back:hover {
+    color: var(--accent);
+    /* La flecha se despega un pelo hacia atrás: el movimiento apunta a
+       donde lleva el enlace. */
+    gap: 0.55rem;
+  }
 }
 
-.course__sep {
-  margin: 0 0.55rem;
-  color: var(--rule-strong);
+/* ── Cabecera de la asignatura ──────────────────────────────────── */
+
+.course {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  margin-bottom: var(--gap);
+}
+
+.course__id {
+  min-width: 0;
 }
 
 .course__title {
   font-size: var(--t-title);
-  margin: var(--gap-xs) 0 var(--gap);
-  text-wrap: balance;
+  margin: 0.15rem 0 0;
+  /* El nombre sí puede ocupar dos líneas: es el título de la pantalla, no
+     una fila de una lista. Lo que no puede es desbordar. */
+  overflow-wrap: anywhere;
 }
 
 .course__desc {
-  color: var(--paper-dim);
+  max-width: 46rem;
+  margin: 0 0 var(--gap-lg);
   font-size: var(--t-small);
   line-height: 1.75;
-  white-space: pre-line; /* el SIA manda saltos de línea reales */
-  max-width: 44rem;
-  /* Descripciones larguísimas: se recorta con degradado y se expande al pasar */
-  max-height: 9.5rem;
-  overflow: hidden;
-  position: relative;
-  mask-image: linear-gradient(to bottom, #000 70%, transparent);
-  transition: max-height var(--slow) var(--ease);
+  color: var(--text-dim);
 }
-.course__desc:hover {
-  max-height: 60rem;
-  mask-image: none;
+
+.course__cooldown {
+  margin: 0 0 var(--gap);
+  padding: var(--gap-sm) var(--gap);
+  border-radius: var(--radius);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: var(--t-small);
+}
+
+/* ── Barra de los grupos ────────────────────────────────────────── */
+
+.groups__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding-bottom: var(--gap-sm);
+  border-bottom: 1px solid var(--rule);
 }
 
 .groups__head {
   font-family: var(--mono);
   font-size: var(--t-micro);
-  font-weight: 500;
-  letter-spacing: 0.2em;
+  letter-spacing: var(--track-micro);
   text-transform: uppercase;
-  color: var(--amber);
-  padding-bottom: var(--gap-xs);
-  border-bottom: 1px solid var(--rule-strong);
-  margin-bottom: 0;
+  color: var(--text-faint);
+  margin: 0;
 }
+
+.groups__wait {
+  font-size: var(--t-micro);
+  color: var(--text-faint);
+}
+
+.groups__note {
+  margin: var(--gap-sm) 0 var(--gap);
+  font-size: var(--t-micro);
+  color: var(--text-faint);
+  max-width: 42rem;
+}
+
+/* ── Un grupo ───────────────────────────────────────────────────────
+   Tres zonas de ancho estable: identidad, contenido, cupos. La del medio
+   es la única elástica, y su contenido se recorta antes que empujar a la
+   columna de cupos fuera de sitio. */
 
 .groups {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+  transition: opacity var(--mid) var(--ease-out);
+}
+.groups.is-measuring {
+  opacity: 0.5;
 }
 
-/* Cada grupo es una fila del tablero: identidad · datos · cifra. */
 .group {
   display: grid;
-  grid-template-columns: 8rem 1fr auto;
-  gap: var(--gap-lg);
+  grid-template-columns: 9.5rem minmax(0, 1fr) 7rem;
+  gap: var(--gap);
   align-items: start;
-  padding: var(--gap) 0;
-  border-bottom: 1px solid var(--rule);
+  padding: var(--gap-sm) var(--gap);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
 
 .group__id {
-  display: grid;
-  gap: 0.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
 }
 
 .group__key {
-  font-family: var(--serif);
-  font-size: 1.9rem;
-  line-height: 1;
-  color: var(--paper);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--accent);
+  line-height: 1.2;
 }
 
 .group__label,
 .group__site {
   font-size: var(--t-micro);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--paper-faint);
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.group__site {
-  color: var(--amber-deep);
+.group__body {
+  min-width: 0;
 }
 
 .group__teacher {
-  margin: 0 0 var(--gap-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--gap-xs);
+  margin: 0 0 var(--gap-xs);
   font-size: var(--t-small);
-  color: var(--paper);
+  color: var(--text);
+  text-transform: lowercase;
 }
-
-/* ── Horario ─────────────────────────────────────────────────────── */
+.group__teacher svg {
+  flex: none;
+  color: var(--text-faint);
+}
+.group__teacher span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .sched {
   list-style: none;
-  margin: 0 0 var(--gap-sm);
+  margin: 0;
   padding: 0;
-  display: grid;
-  gap: 0.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
 .sched__row {
-  display: grid;
-  grid-template-columns: 6rem 7.5rem 1fr;
-  gap: var(--gap-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--gap-xs);
   font-size: var(--t-micro);
-  color: var(--paper-dim);
-  padding: 0.2rem 0;
-  border-left: 2px solid var(--rule-strong);
-  padding-left: var(--gap-sm);
+  color: var(--text-dim);
+  min-width: 0;
+}
+.sched__row svg {
+  flex: none;
+  color: var(--text-faint);
 }
 
 .sched__day {
-  color: var(--paper);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  min-width: 4.5rem;
+  color: var(--text);
 }
 
 .sched__time {
-  font-variant-numeric: tabular-nums;
-  color: var(--amber);
+  min-width: 6.5rem;
 }
 
 .sched__where {
-  color: var(--paper-faint);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-faint);
 }
 
 .sched__none {
   font-size: var(--t-micro);
-  color: var(--paper-faint);
-  font-style: italic;
-  padding-left: var(--gap-sm);
-  border-left: 2px solid var(--rust);
+  color: var(--text-faint);
 }
 
 .group__tags {
   display: flex;
-  gap: var(--gap-sm);
   flex-wrap: wrap;
-  margin: 0;
-  font-size: var(--t-micro);
-  letter-spacing: 0.1em;
-  color: var(--paper-faint);
+  gap: var(--gap-xs);
+  margin: var(--gap-xs) 0 0;
 }
-.group__tags span::before {
-  content: '· ';
-  color: var(--rule-strong);
+.group__tags span {
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-faint);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
 }
 
 .group__seats {
-  min-width: 11rem;
-}
-
-@media (max-width: 860px) {
-  .group {
-    grid-template-columns: 1fr;
-    gap: var(--gap);
-  }
-  .group__id {
-    display: flex;
-    align-items: baseline;
-    gap: var(--gap-sm);
-  }
-  .group__seats {
-    justify-self: start;
-  }
-  .seats {
-    justify-items: start;
-    text-align: left;
-  }
-  .sched__row {
-    grid-template-columns: 5rem 6.5rem;
-    grid-template-areas: 'day time' 'where where';
-  }
-  .sched__day {
-    grid-area: day;
-  }
-  .sched__time {
-    grid-area: time;
-  }
-  .sched__where {
-    grid-area: where;
-  }
-}
-
-/* Barra de la sección de grupos: título + el único botón de medir. */
-.groups__bar {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--gap);
-  border-bottom: 1px solid var(--rule-strong);
-  padding-bottom: var(--gap-xs);
-}
-
-.groups__bar .groups__head {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-
-.groups__note {
-  font-size: var(--t-micro);
-  color: var(--paper-faint);
-  margin: var(--gap-xs) 0 0;
-}
-
-/* Mientras se mide, los cupos viejos se atenúan: siguen ahí (con su edad
-   real) pero se ve que están por cambiar. */
-.groups.is-measuring .seats {
-  opacity: 0.4;
-  transition: opacity var(--fast) var(--ease);
+  justify-self: end;
 }
 
 .group__noseats {
-  font-size: var(--t-micro);
-  color: var(--paper-faint);
   margin: 0;
-  font-style: italic;
-}
-
-.course__actions {
-  margin: var(--gap) 0;
-}
-
-/* El aviso de cooldown NO es un error: la asignatura sigue en pantalla y el
-   dato que se ve es bueno. Tono de nota, no de fallo. */
-.course__cooldown {
   font-size: var(--t-micro);
-  color: var(--paper-faint);
-  margin: var(--gap-xs) 0 0;
-  font-style: italic;
+  color: var(--text-faint);
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  /* Dos columnas: los cupos se quedan a la derecha —son el motivo de la
+     pantalla— y la identidad del grupo pasa arriba del contenido. */
+  .group {
+    grid-template-columns: minmax(0, 1fr) 5.5rem;
+    gap: var(--gap-sm);
+  }
+  .group__id {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--gap-sm);
+  }
+  .group__body {
+    grid-column: 1;
+  }
+  .group__seats {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+  }
 }

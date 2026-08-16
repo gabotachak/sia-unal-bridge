@@ -1,26 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
+import { Eraser, Filter, RefreshCw, Trash2 } from 'lucide-react';
 import { ApiError, get, routes } from '../api/client';
 import type { CourseDetail } from '../api/types';
 import { usePlan } from '../hooks/usePlan';
 import { formatAge } from '../lib/format';
 import { pooled } from '../lib/pooled';
+import { MAX_RETRIES, backoffMs, isTransient, sleep } from '../lib/retry';
 import { itemId, selectionPath, type PlanItem } from '../lib/storage';
 import { Layout } from '../components/Layout';
+import { IconButton } from '../components/IconButton';
 import { Empty } from '../components/States';
 import './Semester.css';
 
 /** El pool del back son 4 sesiones ADF. Pedir de a más no acelera nada. */
 const CONCURRENCY = 4;
 
-/** Cuántas veces reintentar un error transitorio antes de mostrárselo al usuario. */
-const MAX_RETRIES = 3;
-
-/** Errores del SIA que suelen resolverse solos al reintentar. */
-const TRANSIENT_CODES = new Set(['sia_noop', 'sia_session_lost', 'busy']);
-
-/** Espera `ms` milisegundos. */
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const DAYS_SHORT = ['', 'lu', 'ma', 'mi', 'ju', 'vi', 'sa', 'do'];
 
 type Row = {
   item: PlanItem;
@@ -91,17 +87,14 @@ export function Semester() {
             return; // éxito → no seguir reintentando
           } catch (e) {
             lastError = e;
-            const isTransient = e instanceof ApiError && TRANSIENT_CODES.has(e.code);
-            if (!isTransient || attempt === MAX_RETRIES) break;
-            // Backoff exponencial: ~600ms, ~1200ms, ~2400ms con jitter.
-            await sleep(300 * 2 ** attempt + Math.random() * 300);
+            if (!isTransient(e) || attempt === MAX_RETRIES) break;
+            await sleep(backoffMs(attempt));
           }
         }
 
         patch(id, {
           status: 'error',
-          error:
-            lastError instanceof ApiError ? lastError.humane : 'no se pudo consultar',
+          error: lastError instanceof ApiError ? lastError.humane : 'no se pudo consultar',
         });
       });
 
@@ -123,16 +116,39 @@ export function Semester() {
     if (plan.items.length > 0) void fetchAll(false);
   }, [plan.items.length, fetchAll]);
 
+  /**
+   * Vaciar la lista sin tocar el plan.
+   *
+   * Antes la única forma de empezar de cero era cambiar de plan y volver, que
+   * es una operación mucho más grande —y que además obligaba a pasar por el
+   * selector dos veces— para conseguir esto. Son dos decisiones distintas:
+   * "ya no quiero estas materias" no es "me cambié de carrera".
+   *
+   * Con confirmación porque borra trabajo y no hay deshacer.
+   */
+  function clearAll() {
+    const n = plan.items.length;
+    if (n === 0) return;
+    const ok = window.confirm(
+      `Vaciar Mi semestre.\n\n` +
+        `Se quitan las ${n} ${n === 1 ? 'materia' : 'materias'} de la lista. ` +
+        `Tu plan sigue siendo el mismo, así que podés volver a agregarlas desde el catálogo.`,
+    );
+    if (!ok) return;
+    plan.clear();
+  }
+
   const done = rows.filter((r) => r.status === 'done').length;
   const totals = summarize(rows);
+  const empty = plan.items.length === 0;
 
   return (
-    <Layout crumbs={[{ label: 'tablero', to: '/' }, { label: 'mi semestre' }]}>
-      <header className="head sem__head">
+    <Layout>
+      <header className="head">
         <div>
           <p className="eyebrow">planificador</p>
           <h1 className="head__title">Mi semestre</h1>
-          <p className="head__meta">
+          <p className="head__meta tnum">
             {plan.items.length} de 10 materias
             {totals.sections > 0 && (
               <>
@@ -143,24 +159,40 @@ export function Semester() {
           </p>
         </div>
 
-        {plan.items.length > 0 && (
-          <div className="sem__actions">
-            <button className="btn btn--hero" onClick={() => void fetchAll(true)} disabled={running}>
-              {running ? `midiendo ${done}/${plan.items.length}…` : 'medir todos los cupos'}
-            </button>
-            <label className="sem__toggle">
-              <input
-                type="checkbox"
-                checked={onlyOpen}
-                onChange={(e) => setOnlyOpen(e.target.checked)}
-              />
-              solo grupos con cupo
-            </label>
+        {!empty && (
+          <div className="head__actions">
+            <IconButton
+              onClick={() => void fetchAll(true)}
+              disabled={running}
+              label={running ? `Midiendo ${done}/${plan.items.length}…` : 'Medir todos los cupos'}
+              className={running ? 'is-spinning' : ''}
+            >
+              <RefreshCw size={18} strokeWidth={1.75} />
+            </IconButton>
+
+            <IconButton
+              onClick={() => setOnlyOpen((v) => !v)}
+              pressed={onlyOpen}
+              label="Mostrar solo los grupos con cupo"
+            >
+              <Filter size={18} strokeWidth={1.75} />
+            </IconButton>
+
+            <span className="head__sep" aria-hidden="true" />
+
+            <IconButton
+              onClick={clearAll}
+              label="Vaciar la lista (el plan no se toca)"
+              tip="left"
+              className="iconbtn--danger"
+            >
+              <Eraser size={18} strokeWidth={1.75} />
+            </IconButton>
           </div>
         )}
       </header>
 
-      {plan.items.length === 0 ? (
+      {empty ? (
         <>
           <Empty
             title="Todavía no agregaste materias"
@@ -168,7 +200,7 @@ export function Semester() {
           />
           {plan.selection && (
             <p className="sem__back">
-              <Link className="btn" to={selectionPath(plan.selection)}>
+              <Link className="btn btn--primary" to={selectionPath(plan.selection)}>
                 ir al catálogo de {plan.selection.programName}
               </Link>
             </p>
@@ -176,11 +208,12 @@ export function Semester() {
         </>
       ) : (
         <>
-          {running && (
-            <div className="sem__progress" aria-hidden="true">
-              <i style={{ transform: `scaleX(${done / plan.items.length})` }} />
-            </div>
-          )}
+          {/* La barra de progreso ocupa sitio SIEMPRE, aunque esté vacía: si
+              apareciera y desapareciera, la lista entera daría un salto de
+              4px cada vez que se mide. */}
+          <div className={`sem__progress ${running ? 'is-on' : ''}`} aria-hidden="true">
+            <i style={{ transform: `scaleX(${running ? done / plan.items.length : 0})` }} />
+          </div>
 
           <ul className="sem">
             {rows.map((r) => (
@@ -215,11 +248,10 @@ function CourseCard({
   onRemove: () => void;
 }) {
   const { item, detail, status, error } = row;
-  const sections = (detail?.sections ?? []).filter(
-    (s) => !onlyOpen || (s.seats?.available ?? 0) > 0,
-  );
-  const open = (detail?.sections ?? []).filter((s) => (s.seats?.available ?? 0) > 0).length;
-  const totalSeats = (detail?.sections ?? []).reduce((n, s) => n + (s.seats?.available ?? 0), 0);
+  const all = detail?.sections ?? [];
+  const sections = all.filter((s) => !onlyOpen || (s.seats?.available ?? 0) > 0);
+  const open = all.filter((s) => (s.seats?.available ?? 0) > 0).length;
+  const totalSeats = all.reduce((n, s) => n + (s.seats?.available ?? 0), 0);
 
   return (
     <li className={`card ${status === 'loading' ? 'is-loading' : ''}`}>
@@ -231,56 +263,62 @@ function CourseCard({
           >
             {item.name}
           </Link>
-          <p className="card__meta">
+          <p className="card__meta tnum">
             {item.code}
             <span className="head__dot">·</span>
             {item.credits} cr
             <span className="head__dot">·</span>
-            {item.level} · sede {item.campus} · plan {item.program}
+            {item.typology}
           </p>
         </div>
 
-        <div className="card__tally">
+        <div className="card__end">
           {status === 'done' && detail && (
-            <>
-              <span className={`card__big ${open === 0 ? 'is-zero' : ''}`}>{totalSeats}</span>
-              <span className="card__tallyLabel">
-                cupos en {open}/{detail.sections.length} grupos
+            <div className="card__tally">
+              <span className={`card__big tnum ${totalSeats === 0 ? 'is-zero' : ''}`}>
+                {totalSeats}
               </span>
-            </>
+              <span className="card__tallyLabel tnum">
+                cupos · {open}/{all.length} grupos
+              </span>
+            </div>
           )}
           {status === 'loading' && <span className="card__tallyLabel">midiendo…</span>}
-          <button className="card__remove" onClick={onRemove} title="Quitar del semestre">
-            🗑️ <span>quitar</span>
-          </button>
+
+          <IconButton onClick={onRemove} label="Quitar del semestre" tip="left" className="iconbtn--danger">
+            <Trash2 size={16} strokeWidth={1.75} />
+          </IconButton>
         </div>
       </header>
 
       {status === 'error' && <p className="card__error">{error}</p>}
 
-      {status === 'done' && detail?.sections.length === 0 && (
+      {status === 'done' && all.length === 0 && (
         <p className="card__error card__error--soft">Sin grupos este semestre.</p>
+      )}
+
+      {onlyOpen && all.length > 0 && sections.length === 0 && (
+        <p className="card__error card__error--soft">Ningún grupo con cupo ahora mismo.</p>
       )}
 
       {sections.length > 0 && (
         <ul className="slots">
           {sections.map((s) => {
             const seats = s.seats?.available ?? null;
-            const zero = seats === 0;
             return (
-              <li key={s.key} className={`slot ${zero ? 'is-zero' : ''}`}>
-                <span className="slot__key">{s.key}</span>
+              <li key={s.key} className={`slot ${seats === 0 ? 'is-zero' : ''}`}>
+                <span className="slot__key tnum">{s.key}</span>
                 <span className="slot__who">{s.instructor || '—'}</span>
-                <span className="slot__when">
+                <span className="slot__when tnum">
                   {s.schedule.length === 0
                     ? 'sin horario'
                     : s.schedule
-                        .map((c) => `${['', 'lu', 'ma', 'mi', 'ju', 'vi', 'sa', 'do'][c.weekday]} ${c.start_time}`)
+                        .map((c) => `${DAYS_SHORT[c.weekday]} ${c.start_time}`)
                         .join(' · ')}
                 </span>
                 <span className="slot__seats">
-                  {seats === null ? '—' : seats}
-                  {s.seats && <small>hace {formatAge(s.seats.age_seconds)}</small>}
+                  <b className="tnum">{seats === null ? '—' : seats}</b>
+                  {s.seats && <small className="tnum">{formatAge(s.seats.age_seconds)}</small>}
                 </span>
               </li>
             );

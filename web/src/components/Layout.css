@@ -1,240 +1,84 @@
 .shell {
-  display: grid;
-  grid-template-columns: var(--rail-w) 1fr;
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
-}
-
-/* Raíl fijo con la marca en vertical. Es el gesto que da carácter de tablero
-   institucional y libera todo el ancho para los datos. */
-.rail {
-  border-right: 1px solid var(--rule);
-  background: var(--ink-sunken);
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  /* columna, para que el acceso al semestre pueda empujarse al fondo
-     con margin-top: auto */
-  display: flex;
-  flex-direction: column;
-}
-
-.rail__mark {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--gap);
-  padding: var(--gap) 0;
-  color: var(--paper-dim);
-  transition: color var(--fast) var(--ease);
-}
-.rail__mark:hover {
-  color: var(--amber);
-}
-
-.rail__glyph {
-  font-size: 1.4rem;
-  color: var(--amber);
-  line-height: 1;
-}
-
-.rail__name {
-  writing-mode: vertical-rl;
-  font-size: var(--t-micro);
-  letter-spacing: 0.42em;
-}
-
-.shell__body {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  min-width: 0; /* deja que el contenido angosto encoja en vez de desbordar */
-}
-
-.masthead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gap);
-  flex-wrap: wrap;
-  padding: var(--gap) var(--gap-lg);
-  border-bottom: 1px solid var(--rule);
-  position: sticky;
-  top: 0;
-  background: color-mix(in srgb, var(--ink) 88%, transparent);
-  backdrop-filter: blur(8px);
-  z-index: 10;
-}
-
-/* El extremo del mástil: el plan elegido y la frescura del dato. */
-.masthead__end {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-  min-width: 0;
-}
-
-/* El plan elegido, siempre a la vista. Es lo que explica por qué el tablero
-   abre donde abre, y el único camino a cambiarlo. */
-.planchip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--gap-sm);
-  max-width: 22rem;
-  padding: 0.3rem 0.6rem;
-  border: 1px solid var(--rule-strong);
-  background: transparent;
-  color: var(--paper-dim);
-  font: inherit;
-  font-size: var(--t-micro);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: border-color var(--fast) var(--ease), color var(--fast) var(--ease);
-}
-.planchip:hover,
-.planchip:focus-visible {
-  border-color: var(--amber);
-  color: var(--amber);
-}
-
-.planchip__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.planchip__swap {
-  color: var(--paper-faint);
-  letter-spacing: 0.18em;
-  flex: none;
-}
-.planchip:hover .planchip__swap,
-.planchip:focus-visible .planchip__swap {
-  color: var(--amber-deep);
-}
-
-.crumbs {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-  font-size: var(--t-micro);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--paper-faint);
-}
-.crumbs__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.crumbs a {
-  transition: color var(--fast) var(--ease);
-}
-.crumbs a:hover {
-  color: var(--amber);
-}
-.crumbs [aria-current='page'] {
-  color: var(--paper);
-}
-.crumbs__sep {
-  color: var(--rule-strong);
-  font-style: normal;
+  min-height: 100dvh;
 }
 
 .content {
-  padding: var(--gap-lg);
-  max-width: var(--measure);
+  flex: 1;
   width: 100%;
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: var(--gap-lg) var(--gap) var(--gap-xl);
+  /* Sin esto, una tabla ancha estira al contenedor y aparece scroll
+     horizontal en toda la página. */
+  min-width: 0;
+}
+
+@media (max-width: 620px) {
+  .content {
+    padding: var(--gap) var(--gap-sm) var(--gap-lg);
+  }
 }
 
 .colophon {
-  padding: var(--gap-lg);
   border-top: 1px solid var(--rule);
+  padding: var(--gap-lg) var(--gap);
   font-size: var(--t-micro);
-  line-height: 1.8;
-  color: var(--paper-faint);
+  line-height: 1.9;
+  color: var(--text-faint);
+}
+.colophon p {
   max-width: 46rem;
+  margin: 0 auto;
 }
 .colophon strong {
-  color: var(--paper-dim);
+  color: var(--text-dim);
   font-weight: 500;
 }
 
-@media (max-width: 720px) {
-  .shell {
-    grid-template-columns: 1fr;
-  }
-  .rail {
-    position: static;
-    height: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--rule);
-  }
-  .rail__mark {
-    flex-direction: row;
-    padding: var(--gap-sm) var(--gap);
-  }
-  .rail__name {
-    writing-mode: horizontal-tb;
-    letter-spacing: 0.3em;
-  }
-  .masthead,
-  .content,
-  .colophon {
-    padding: var(--gap);
-  }
-}
+/* ── Cabecera de pantalla ───────────────────────────────────────────
+   La usan el catálogo, la asignatura y el semestre. Vive acá y no en cada
+   hoja porque las tres tienen que verse como la misma app. */
 
-/* Acceso al semestre desde el raíl. */
-.rail__plan {
+.head {
   display: flex;
-  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  margin-bottom: var(--gap-lg);
+}
+
+.head__title {
+  font-size: var(--t-title);
+  margin: 0.1rem 0 0;
+}
+
+.head__meta {
+  margin: 0.35rem 0 0;
+  font-size: var(--t-small);
+  color: var(--text-dim);
+}
+
+.head__dot {
+  color: var(--text-faint);
+  margin: 0 0.4rem;
+}
+
+/* La fila de acciones de una cabecera: iconos, no palabras. */
+.head__actions {
+  display: flex;
   align-items: center;
-  gap: var(--gap-sm);
-  margin-top: auto;
-  padding: var(--gap) 0;
-  color: var(--paper-faint);
-  transition: color var(--fast) var(--ease);
-}
-.rail__plan:hover,
-.rail__plan.has-items {
-  color: var(--amber);
+  gap: 0.15rem;
+  flex: none;
 }
 
-.rail__count {
-  font-family: var(--serif);
-  font-size: 1.35rem;
-  line-height: 1;
-  border: 1px solid currentColor;
-  min-width: 1.7rem;
-  text-align: center;
-  padding: 0.1rem 0;
-}
-
-.rail__planName {
-  writing-mode: vertical-rl;
-  font-size: var(--t-micro);
-  letter-spacing: 0.34em;
-}
-
-.rail__mark {
-  /* deja que el acceso al semestre caiga al fondo del raíl */
-  margin-bottom: 0;
-}
-
-@media (max-width: 720px) {
-  .rail {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .rail__plan {
-    flex-direction: row;
-    margin-top: 0;
-    padding: var(--gap-sm) var(--gap);
-  }
-  .rail__planName {
-    writing-mode: horizontal-tb;
-    letter-spacing: 0.24em;
-  }
+.head__sep {
+  width: 1px;
+  height: 1.4rem;
+  background: var(--rule);
+  margin: 0 var(--gap-xs);
+  flex: none;
 }

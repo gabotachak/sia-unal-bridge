@@ -1,73 +1,47 @@
-.sem__head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--gap-lg);
-  flex-wrap: wrap;
-  max-width: none;
-}
+/* ── Progreso de la medición ────────────────────────────────────────
+   Reserva su franja siempre. Si apareciera y desapareciera, toda la
+   lista saltaría 3px cada vez que se aprieta el botón de medir. */
 
-.sem__actions {
-  display: grid;
-  gap: var(--gap-sm);
-  justify-items: end;
-}
-
-/* El botón principal de la app: el que mide todo de una. */
-.btn--hero {
-  font-size: var(--t-small);
-  padding: 0.8rem 1.6rem;
-  border-color: var(--amber);
-  color: var(--amber);
-}
-.btn--hero:hover:not(:disabled) {
-  background: var(--amber);
-  color: var(--ink);
-}
-
-.sem__toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: var(--t-micro);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--paper-faint);
-  cursor: pointer;
-}
-.sem__toggle input {
-  accent-color: var(--amber);
-}
-
-/* Barra de avance: cuántas materias van medidas. */
 .sem__progress {
-  height: 2px;
+  height: 3px;
+  border-radius: 999px;
   background: var(--rule);
-  margin-bottom: var(--gap-lg);
   overflow: hidden;
+  margin-bottom: var(--gap);
+  opacity: 0;
+  transition: opacity var(--mid) var(--ease-out);
+}
+.sem__progress.is-on {
+  opacity: 1;
 }
 .sem__progress i {
   display: block;
   height: 100%;
-  background: var(--amber);
-  transform-origin: left center;
-  transition: transform var(--slow) var(--ease);
+  background: var(--accent);
+  transform-origin: left;
+  /* Solo transform: es lo que corre en el compositor, sin recalcular
+     layout en cada una de las 10 materias. */
+  transition: transform var(--slow) var(--ease-out);
 }
+
+/* ── Lista de materias ──────────────────────────────────────────── */
 
 .sem {
   list-style: none;
-  margin: 0 0 var(--gap-lg);
+  margin: 0;
   padding: 0;
-  display: grid;
-  gap: var(--gap-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
 }
 
-/* ── Una materia ─────────────────────────────────────────────────── */
-
 .card {
-  border-top: 1px solid var(--rule-strong);
-  padding-top: var(--gap-sm);
-  transition: opacity var(--fast) var(--ease);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: opacity var(--mid) var(--ease-out);
 }
 .card.is-loading {
   opacity: 0.55;
@@ -78,185 +52,185 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--gap);
-  flex-wrap: wrap;
+  padding: var(--gap-sm) var(--gap);
+  border-bottom: 1px solid var(--rule);
+}
+
+.card__id {
+  min-width: 0;
 }
 
 .card__name {
+  display: block;
   font-family: var(--serif);
-  font-size: clamp(1.4rem, 2.6vw, 2rem);
-  line-height: 1.1;
-  transition: color var(--fast) var(--ease);
+  font-size: 1.3rem;
+  line-height: 1.15;
+  letter-spacing: var(--track-title);
+  color: var(--text);
+  /* Un nombre largo se recorta: la altura de la tarjeta no puede depender
+     del largo del título o la lista deja de ser una lista. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--fast) var(--ease-out);
 }
-.card__name:hover {
-  color: var(--amber);
+@media (hover: hover) and (pointer: fine) {
+  .card__name:hover {
+    color: var(--accent);
+  }
 }
 
 .card__meta {
+  margin: 0.15rem 0 0;
   font-size: var(--t-micro);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--paper-faint);
-  margin: 0.2rem 0 0;
-}
-
-.card__tally {
-  display: flex;
-  align-items: baseline;
-  gap: var(--gap-sm);
-}
-
-/* La cifra que importa: cupos sumados de toda la materia. */
-.card__big {
-  font-family: var(--serif);
-  font-size: clamp(2rem, 4vw, 2.8rem);
-  line-height: 1;
-  color: var(--amber);
-  font-variant-numeric: tabular-nums;
-}
-.card__big.is-zero {
-  color: var(--rust);
-}
-
-.card__tallyLabel {
-  font-size: var(--t-micro);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--paper-faint);
-}
-
-.card__remove {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--paper-dim);
-  font-size: 0.8rem;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: 4px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  transition:
-    color var(--fast) var(--ease),
-    border-color var(--fast) var(--ease),
-    background var(--fast) var(--ease);
-}
-.card__remove:hover {
-  color: var(--rust);
-  border-color: var(--rust);
-  background: color-mix(in srgb, var(--rust) 10%, transparent);
-}
-
-.card__error {
-  font-size: var(--t-small);
-  color: var(--rust);
-  margin: var(--gap-sm) 0 0;
-}
-.card__error--soft {
-  color: var(--paper-faint);
-  font-style: italic;
-}
-
-/* ── Grupos de la materia ────────────────────────────────────────── */
-
-.slots {
-  list-style: none;
-  margin: var(--gap-sm) 0 0;
-  padding: 0;
-}
-
-.slot {
-  display: grid;
-  grid-template-columns: 4rem 1fr 1fr auto;
-  gap: var(--gap);
-  align-items: baseline;
-  padding: 0.4rem 0;
-  border-bottom: 1px solid var(--rule);
-  font-size: var(--t-micro);
-}
-
-.slot__key {
-  font-family: var(--serif);
-  font-size: 1.15rem;
-  color: var(--paper);
-}
-
-.slot__who {
-  color: var(--paper-dim);
-  text-transform: none;
-  letter-spacing: 0;
+  color: var(--text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.slot__when {
-  color: var(--paper-faint);
+.card__end {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  flex: none;
 }
 
-/* La cifra de cupos del grupo, con su edad debajo. */
-.slot__seats {
-  display: grid;
-  justify-items: end;
+.card__tally {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.1;
+}
+
+.card__big {
   font-family: var(--serif);
-  font-size: 1.45rem;
-  line-height: 1.05;
-  color: var(--amber);
-  font-variant-numeric: tabular-nums;
-  min-width: 4.5rem;
+  font-size: 1.9rem;
+  color: var(--ok);
+}
+.card__big.is-zero {
+  color: var(--bad);
+}
+
+.card__tallyLabel {
+  font-size: var(--t-micro);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.card__error {
+  margin: 0;
+  padding: var(--gap-sm) var(--gap);
+  font-size: var(--t-small);
+  color: var(--bad);
+  background: var(--bad-soft);
+}
+.card__error--soft {
+  color: var(--text-faint);
+  background: transparent;
+}
+
+/* ── Grupos de una materia ──────────────────────────────────────────
+   Misma regla que el catálogo: columnas fijas, y lo que sobra se recorta.
+   El profesor y el horario son los que ceden; la clave del grupo y los
+   cupos nunca, porque son los que se comparan entre filas. */
+
+.slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  --slot-cols: 4.5rem minmax(0, 1fr) minmax(0, 15rem) 4rem;
+}
+
+.slot {
+  display: grid;
+  grid-template-columns: var(--slot-cols);
+  align-items: center;
+  gap: var(--gap-sm);
+  padding: 0.35rem var(--gap);
+  font-size: var(--t-small);
+  border-top: 1px solid var(--rule);
+}
+.slot:first-child {
+  border-top: 0;
+}
+
+.slot__key {
+  font-size: var(--t-micro);
+  color: var(--accent);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot__who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  text-transform: lowercase;
+}
+
+.slot__when {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-faint);
+  font-size: var(--t-micro);
+}
+
+.slot__seats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.1;
+  text-align: right;
+}
+.slot__seats b {
+  font-weight: 600;
+  color: var(--ok);
 }
 .slot__seats small {
-  font-family: var(--mono);
-  font-size: 0.42rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--paper-faint);
+  font-size: 0.6rem;
+  color: var(--text-faint);
 }
 
-.slot.is-zero .slot__seats {
-  color: var(--rust);
+.slot.is-zero .slot__seats b {
+  color: var(--bad);
 }
-.slot.is-zero .slot__key,
-.slot.is-zero .slot__who {
-  color: var(--paper-faint);
-}
-
-.sem__note {
-  font-size: var(--t-micro);
-  line-height: 1.8;
-  color: var(--paper-faint);
-  max-width: 44rem;
-  border-top: 1px solid var(--rule);
-  padding-top: var(--gap);
+.slot.is-zero .slot__who,
+.slot.is-zero .slot__key {
+  color: var(--text-faint);
 }
 
-@media (max-width: 760px) {
-  .slot {
-    grid-template-columns: 3rem 1fr auto;
-    grid-template-areas:
-      'key who seats'
-      'key when seats';
-    gap: 0.15rem var(--gap-sm);
-  }
-  .slot__key {
-    grid-area: key;
-  }
-  .slot__who {
-    grid-area: who;
+@media (max-width: 640px) {
+  .slots {
+    --slot-cols: 3.5rem minmax(0, 1fr) 3.5rem;
   }
   .slot__when {
-    grid-area: when;
+    display: none;
   }
-  .slot__seats {
-    grid-area: seats;
-  }
-  .sem__actions {
-    justify-items: start;
+  .card__head,
+  .slot {
+    padding-left: var(--gap-sm);
+    padding-right: var(--gap-sm);
   }
 }
 
-/* Salida del semestre vacío: el catálogo del plan ya elegido, sin volver a
-   pasar por nivel y sede. */
-.sem__back {
-  margin-top: var(--gap-lg);
-  text-align: center;
+/* ── Pie ────────────────────────────────────────────────────────── */
+
+.sem__note {
+  margin: var(--gap-lg) 0 0;
+  max-width: 46rem;
+  font-size: var(--t-micro);
+  line-height: 1.9;
+  color: var(--text-faint);
 }
+
+.sem__back {
+  margin-top: var(--gap);
+}
+

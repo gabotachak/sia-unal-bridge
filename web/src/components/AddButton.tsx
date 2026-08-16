@@ -1,3 +1,4 @@
+import { Ban, Check, Plus } from 'lucide-react';
 import { usePlan } from '../hooks/usePlan';
 import { itemId, selectionId, type PlanItem } from '../lib/storage';
 import './AddButton.css';
@@ -17,9 +18,7 @@ export function AddButton({ item, variant = 'plus' }: Props) {
   // El semestre es de UN plan. Una asignatura de otro plan traería grupos y
   // tipología que no son los que este plan ve, así que el botón se apaga en
   // vez de dejar mezclar. Quitar sigue permitido: sacar nunca hace daño.
-  const foreign =
-    !!plan.selection && selectionId(plan.selection) !== selectionId(item);
-
+  const foreign = !!plan.selection && selectionId(plan.selection) !== selectionId(item);
   const blocked = !added && (plan.full || foreign);
 
   const label = added
@@ -47,11 +46,17 @@ export function AddButton({ item, variant = 'plus' }: Props) {
       aria-label={label}
       aria-pressed={added}
     >
-      <span className="add__glyph" aria-hidden="true">
-        {added ? '✓' : '+'}
-      </span>
+      {/* El icono dice el estado sin leer nada: la tilde es "ya está", la cruz
+          es "se puede", el prohibido es "acá no". */}
+      {added ? (
+        <Check size={16} strokeWidth={2.5} aria-hidden="true" />
+      ) : blocked ? (
+        <Ban size={16} strokeWidth={1.75} aria-hidden="true" />
+      ) : (
+        <Plus size={16} strokeWidth={2} aria-hidden="true" />
+      )}
       {variant === 'full' && (
-        <span className="add__text">{added ? 'en el semestre' : 'agregar al semestre'}</span>
+        <span className="add__text">{added ? 'en mi semestre' : 'agregar al semestre'}</span>
       )}
     </button>
   );

@@ -1,0 +1,172 @@
+/* La barra flota sobre el contenido en vez de comerse una franja opaca: el
+   catálogo sigue por debajo, apenas difuminado, y eso conserva la sensación
+   de una sola superficie continua. */
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--chrome);
+  backdrop-filter: blur(14px) saturate(160%);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* Sin translucidez disponible (o no querida), la barra se vuelve sólida en
+   vez de quedar como un vidrio sucio ilegible. */
+@media (prefers-reduced-transparency: reduce) {
+  .bar {
+    background: var(--bg);
+    backdrop-filter: none;
+  }
+}
+
+.bar__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  height: var(--bar-h);
+  padding: 0 var(--gap);
+  max-width: var(--measure);
+  margin: 0 auto;
+}
+
+.bar__spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.bar__nav {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex: none;
+}
+
+/* ── Marca ──────────────────────────────────────────────────────── */
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  flex: none;
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+}
+
+.brand__mark {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+  fill: var(--accent);
+}
+.brand__mark--ok {
+  fill: var(--ok);
+}
+.brand__mark--faint {
+  fill: var(--accent);
+  opacity: 0.42;
+}
+
+.brand__word {
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  letter-spacing: var(--track-title);
+  line-height: 1;
+}
+
+/* ── El chip del plan ───────────────────────────────────────────── */
+
+.planchip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  /* min-width: 0 es lo que le da permiso a un hijo de flex a encogerse por
+     debajo de su contenido. Sin esto el nombre largo empuja la barra entera
+     y los iconos se van fuera de la pantalla. */
+  min-width: 0;
+  max-width: 30rem;
+  height: 2.25rem;
+  padding: 0 0.4rem 0 0.55rem;
+  margin-left: var(--gap-xs);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: var(--t-small);
+  transition:
+    border-color var(--fast) var(--ease-out),
+    background-color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .planchip:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+}
+.planchip:active {
+  transform: scale(0.98);
+}
+
+.planchip__code {
+  flex: none;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+/* Este es el que cede cuando falta ancho: se recorta con puntos suspensivos
+   en vez de partirse en dos líneas o empujar a los iconos. */
+.planchip__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  text-transform: lowercase;
+}
+
+.planchip__campus {
+  flex: none;
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding-left: var(--gap-sm);
+  border-left: 1px solid var(--rule);
+}
+
+.planchip__caret {
+  flex: none;
+  color: var(--text-faint);
+}
+
+/* ── Cómo se encoge ─────────────────────────────────────────────────
+   El orden en que se van las cosas está pensado: primero la palabra de
+   la marca (el logo ya identifica), después la sede (el código de plan
+   ya identifica), y el nombre del plan se recorta pero nunca se va. Los
+   iconos no se tocan nunca: son la navegación. */
+
+@media (max-width: 860px) {
+  .planchip__campus {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .brand__word {
+    display: none;
+  }
+  .bar__inner {
+    padding: 0 var(--gap-sm);
+  }
+  .planchip {
+    max-width: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .planchip__name {
+    display: none;
+  }
+}

@@ -1,60 +1,65 @@
 .add {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  border: 1px solid var(--rule-strong);
-  color: var(--paper-faint);
-  transition: color var(--fast) var(--ease), border-color var(--fast) var(--ease),
-    background var(--fast) var(--ease), transform var(--fast) var(--ease);
-}
-
-.add__glyph {
-  line-height: 1;
-  font-weight: 500;
-}
-
-/* Variante de fila: un cuadrado discreto que solo se enciende al pasar. */
-.add--plus {
-  width: 1.7rem;
-  height: 1.7rem;
   justify-content: center;
-  font-size: 1rem;
+  gap: var(--gap-xs);
+  flex: none;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  color: var(--text-faint);
+  transition:
+    color var(--fast) var(--ease-out),
+    background-color var(--fast) var(--ease-out),
+    border-color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
 }
 
-.add--plus:hover:not(:disabled),
-.add--plus:focus-visible {
-  color: var(--ink);
-  background: var(--amber);
-  border-color: var(--amber);
-  transform: scale(1.08);
+/* El de las filas del catálogo: cuadrado, del tamaño de la fila. */
+.add--plus {
+  width: 2rem;
+  height: 2rem;
 }
 
-/* Variante de ficha: con texto, para la pantalla de la materia. */
+/* El de la ficha de la asignatura, donde hay sitio para decirlo con palabras. */
 .add--full {
-  padding: 0.55rem 1rem;
-  font-size: var(--t-micro);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  height: 2.5rem;
+  padding: 0 0.9rem;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: var(--t-small);
+}
+.add__text {
+  white-space: nowrap;
 }
 
-.add--full:hover:not(:disabled) {
-  color: var(--ink);
-  background: var(--amber);
-  border-color: var(--amber);
+@media (hover: hover) and (pointer: fine) {
+  .add--plus:hover:not(:disabled) {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .add--full:hover:not(:disabled) {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
 }
 
-/* Ya está en la lista: ámbar permanente, sin gritar. */
+.add:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+/* Ya está adentro: verde, el mismo verde de "hay cupos". Es la señal de
+   afirmación de esta app y no vale la pena tener dos. */
 .add.is-added {
-  color: var(--amber);
-  border-color: var(--amber-deep);
+  color: var(--ok);
+  background: var(--ok-soft);
+  border-color: transparent;
 }
-.add.is-added:hover {
-  color: var(--ink);
-  background: var(--rust);
-  border-color: var(--rust);
+.add--full.is-added {
+  border-color: var(--ok);
 }
 
 .add:disabled {
-  opacity: 0.28;
+  opacity: 0.35;
   cursor: not-allowed;
 }

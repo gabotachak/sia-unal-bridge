@@ -1,66 +1,195 @@
 /* Tokens. Un solo sitio donde vive la identidad visual.
-   Cambiar --amber acá lo cambia en toda la app. */
+   Todo color de la app sale de acá: ningún componente escribe un hex. */
+
+/* ─────────────────────────────────────────────────────────────────
+   TEMA CLARO — el default.
+
+   Los neutros son FRÍOS (tienen azul dentro, no gris puro). Es lo que
+   hace que el azul de acción y el verde de los cupos no se lean como
+   manchas pegadas encima de una interfaz gris: pertenecen al mismo
+   sitio.
+
+   El color significa UNA cosa cada uno, y siempre la misma:
+     azul  → se puede tocar (enlaces, botones, foco, lo activo)
+     verde → hay cupos / el dato es de recién
+     rojo  → sin cupos / falló
+     gris  → todo lo demás
+   Un cuarto color no existe a propósito: cuando todo resalta, nada resalta.
+   ───────────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  /* Superficies, de atrás hacia adelante. */
+  --bg: #f4f7fa;
+  --surface: #ffffff;
+  --surface-2: #eef3f8;
+  --sunken: #e7eef5;
+
+  /* Texto, de más a menos importante. */
+  --text: #0d1b26;
+  --text-dim: #4d6376;
+  --text-faint: #7d93a5;
+
+  /* Líneas. */
+  --rule: #dbe5ee;
+  --rule-strong: #bfcedd;
+
+  /* Azul: lo interactivo. */
+  --accent: #0b62d6;
+  --accent-hover: #0951b3;
+  --accent-soft: #e4eefc; /* fondo de lo seleccionado */
+  --accent-ink: #ffffff; /* texto sobre azul sólido */
+
+  /* Verde: hay cupos, el dato está vivo. */
+  --ok: #0a7d55;
+  --ok-soft: #dcf3e8;
+
+  /* Rojo: sin cupos, error, dato vencido. */
+  --bad: #c33a2c;
+  --bad-soft: #fce7e4;
+
+  /* Ámbar: aviso tibio (dato envejeciendo). No es un acento de marca. */
+  --warn: #9a6414;
+  --warn-soft: #fbeed6;
+
+  /* Sombras. Más grande la superficie, más pesada la sombra. */
+  --shadow-sm: 0 1px 2px rgb(13 27 38 / 0.06), 0 1px 3px rgb(13 27 38 / 0.08);
+  --shadow-md: 0 4px 12px rgb(13 27 38 / 0.08), 0 1px 3px rgb(13 27 38 / 0.06);
+  --shadow-lg: 0 16px 48px rgb(13 27 38 / 0.16), 0 2px 8px rgb(13 27 38 / 0.08);
+
+  /* Chrome translúcido: la barra deja pasar el contenido por debajo. */
+  --chrome: color-mix(in srgb, var(--bg) 78%, transparent);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   TEMA OSCURO.
+
+   Dos entradas, no una: el `@media` cubre a quien no eligió nada y deja
+   que mande el sistema; el `[data-theme]` cubre a quien sí eligió, y por
+   eso va después — tiene que poder ganarle al sistema en los dos sentidos.
+   ───────────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --bg: #0b1218;
+    --surface: #111b23;
+    --surface-2: #16222c;
+    --sunken: #070d12;
+
+    --text: #e3edf5;
+    --text-dim: #9ab0c2;
+    --text-faint: #6b8296;
+
+    --rule: #1e2b36;
+    --rule-strong: #2e404e;
+
+    --accent: #4d9dff;
+    --accent-hover: #6fb0ff;
+    --accent-soft: #12283f;
+    --accent-ink: #04121f;
+
+    --ok: #34d399;
+    --ok-soft: #0d2b23;
+
+    --bad: #ff7a68;
+    --bad-soft: #331616;
+
+    --warn: #e0a83c;
+    --warn-soft: #302512;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 12px rgb(0 0 0 / 0.45);
+    --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.6);
+
+    --chrome: color-mix(in srgb, var(--bg) 76%, transparent);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0b1218;
+  --surface: #111b23;
+  --surface-2: #16222c;
+  --sunken: #070d12;
+
+  --text: #e3edf5;
+  --text-dim: #9ab0c2;
+  --text-faint: #6b8296;
+
+  --rule: #1e2b36;
+  --rule-strong: #2e404e;
+
+  --accent: #4d9dff;
+  --accent-hover: #6fb0ff;
+  --accent-soft: #12283f;
+  --accent-ink: #04121f;
+
+  --ok: #34d399;
+  --ok-soft: #0d2b23;
+
+  --bad: #ff7a68;
+  --bad-soft: #331616;
+
+  --warn: #e0a83c;
+  --warn-soft: #302512;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.45);
+  --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.6);
+
+  --chrome: color-mix(in srgb, var(--bg) 76%, transparent);
+}
 
 :root {
-  /* ── Color ──────────────────────────────────────────────────────
-     Negro CÁLIDO, no gris azulado: la diferencia entre un tablero de
-     estación y un dashboard genérico está casi entera en esto. */
-  --ink: #0b0908;
-  --ink-raised: #12100d;
-  --ink-sunken: #070605;
-
-  --rule: #2a231c;
-  --rule-strong: #3d332a;
-
-  --paper: #f0e7d8;
-  --paper-dim: #9c8f7c;
-  --paper-faint: #6a6055;
-
-  /* Un solo acento. Fósforo ámbar = recién medido, vivo. */
-  --amber: #ffb02e;
-  --amber-deep: #b87516;
-
-  /* Solo alarma: sin cupos, dato vencido, error. */
-  --rust: #d1502a;
-
   /* ── Tipografía ────────────────────────────────────────────────
-     Serif editorial de alto contraste contra monoespaciada técnica.
-     El contraste entre las dos ES el diseño. */
+     Serif editorial para los títulos, monoespaciada para todo lo demás.
+     El contraste entre las dos es el carácter de la app: la serif dice
+     "esto es un documento", la mono dice "esto es una medición". */
   --serif: 'Instrument Serif', ui-serif, Georgia, serif;
   --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* Escala fluida: se adapta al ancho sin media queries. */
-  --t-display: clamp(2.6rem, 7vw, 5.5rem);
-  --t-title: clamp(1.9rem, 4vw, 3.1rem);
-  --t-lead: clamp(1.05rem, 1.6vw, 1.25rem);
-  --t-body: 0.95rem;
+  --t-display: clamp(2.4rem, 6vw, 4rem);
+  --t-title: clamp(1.7rem, 3.4vw, 2.5rem);
+  --t-lead: clamp(1rem, 1.5vw, 1.15rem);
+  --t-body: 0.9rem;
   --t-small: 0.8rem;
   --t-micro: 0.69rem;
 
+  /* El tracking depende del tamaño: la serif grande necesita apretarse,
+     el micro-texto en versalitas necesita abrirse. Un solo valor para
+     todo estaría mal en algún lado. */
+  --track-display: -0.022em;
+  --track-title: -0.016em;
+  --track-body: 0;
+  --track-micro: 0.14em;
+
   /* ── Espacio ───────────────────────────────────────────────────*/
   --gap-xs: 0.35rem;
-  --gap-sm: 0.7rem;
-  --gap: 1.2rem;
-  --gap-lg: 2.4rem;
-  --gap-xl: 4.5rem;
+  --gap-sm: 0.6rem;
+  --gap: 1rem;
+  --gap-lg: 2rem;
+  --gap-xl: 3.5rem;
 
-  --rail-w: 3.5rem;
-  --measure: 74rem;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
 
-  /* ── Movimiento ────────────────────────────────────────────────*/
-  --ease: cubic-bezier(0.2, 0.7, 0.25, 1);
-  --fast: 140ms;
-  --slow: 420ms;
-}
+  --bar-h: 3.25rem;
+  --measure: 82rem;
 
-/* Quien pidió menos movimiento, recibe menos movimiento. No es opcional:
-   la animación de cupos es un giro, y para algunas personas eso marea. */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+  /* ── Movimiento ────────────────────────────────────────────────
+     Las curvas del navegador son flojas. Estas tienen la salida rápida
+     que hace que una interfaz se sienta despierta.
+
+     Nada de `ease-in` en UI: empieza lento justo en el instante en que
+     alguien está mirando, y eso se lee como lag aunque dure lo mismo. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+  --fast: 120ms; /* presión de un botón */
+  --mid: 180ms; /* menús, filas, apariciones */
+  --slow: 260ms; /* superficies grandes: overlays */
 }

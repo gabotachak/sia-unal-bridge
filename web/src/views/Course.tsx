@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
+import { ArrowLeft, Clock, MapPin, RefreshCw, User } from 'lucide-react';
 import { FETCH_COOLDOWN, routes } from '../api/client';
 import type { ClassSession, CourseDetail, Section } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { Layout } from '../components/Layout';
 import { AddButton } from '../components/AddButton';
+import { IconButton } from '../components/IconButton';
 import { Empty, Fault, Loading } from '../components/States';
 import { Seats } from '../components/Seats';
 import './Course.css';
@@ -18,7 +20,9 @@ export function Course() {
 
   const scope = { level, campus, faculty };
   const path = routes.course(scope, program, code);
-  const { data, error, loading, freshness, elapsed, reload } = useApi<CourseDetail>(path);
+  const { data, error, loading, freshness, elapsed, attempt, reload } = useApi<CourseDetail>(path);
+
+  const backToCatalog = `/nivel/${level}/sede/${campus}/plan/${program}${faculty ? `?f=${faculty}` : ''}`;
 
   /**
    * Medir los cupos = volver a pedir la asignatura con max_age=0.
@@ -52,7 +56,8 @@ export function Course() {
   // La medición más reciente de la asignatura: el POST del SIA las sella todas
   // a la vez, así que la más nueva marca cuándo se habló con el SIA.
   const freshestSeats = data?.sections?.reduce<number | null>(
-    (min, s) => (s.seats ? (min === null ? s.seats.age_seconds : Math.min(min, s.seats.age_seconds)) : min),
+    (min, s) =>
+      s.seats ? (min === null ? s.seats.age_seconds : Math.min(min, s.seats.age_seconds)) : min,
     null,
   );
   useEffect(() => {
@@ -84,51 +89,50 @@ export function Course() {
   const fault = error && !rateLimited ? error : null;
 
   return (
-    <Layout
-      crumbs={[
-        { label: 'tablero', to: '/' },
-        {
-          label: `plan ${program}`,
-          to: `/nivel/${level}/sede/${campus}/plan/${program}${faculty ? `?f=${faculty}` : ''}`,
-        },
-        { label: code },
-      ]}
-      freshness={freshness}
-    >
-      {loading && !data && <Loading elapsed={elapsed} what="Trayendo la asignatura y sus grupos" />}
+    <Layout freshness={freshness}>
+      {/* Sin migas de pan, hace falta una salida explícita. Una sola, y al
+          sitio del que se vino: el catálogo de este plan. */}
+      <Link className="back" to={backToCatalog}>
+        <ArrowLeft size={15} strokeWidth={1.75} aria-hidden="true" />
+        catálogo del plan {program}
+      </Link>
+
+      {loading && !data && (
+        <Loading elapsed={elapsed} attempt={attempt} what="Trayendo la asignatura y sus grupos" />
+      )}
       {fault && <Fault error={fault} onRetry={() => reload()} />}
       {rateLimited && <p className="course__cooldown">{rateLimited.humane}</p>}
 
       {data && (
         <>
           <header className="course">
-            <p className="eyebrow">
-              {data.code}
-              <span className="course__sep">·</span>
-              {data.credits} créditos
-              <span className="course__sep">·</span>
-              {data.typology}
-            </p>
-            <h1 className="course__title">{data.name}</h1>
-
-            <div className="course__actions">
-              <AddButton
-                variant="full"
-                item={{
-                  level,
-                  campus,
-                  program,
-                  faculty,
-                  code: data.code,
-                  name: data.name,
-                  credits: data.credits,
-                  typology: data.typology,
-                }}
-              />
+            <div className="course__id">
+              <p className="eyebrow tnum">
+                {data.code}
+                <span className="head__dot">·</span>
+                {data.credits} créditos
+                <span className="head__dot">·</span>
+                {data.typology}
+              </p>
+              <h1 className="course__title">{data.name}</h1>
             </div>
 
-            {data.description && <p className="course__desc">{data.description}</p>}
+            <AddButton
+              variant="full"
+              item={{
+                level,
+                campus,
+                program,
+                faculty,
+                code: data.code,
+                name: data.name,
+                credits: data.credits,
+                typology: data.typology,
+              }}
+            />
           </header>
+
+          {data.description && <p className="course__desc">{data.description}</p>}
 
           {data.sections.length === 0 ? (
             <Empty
@@ -141,14 +145,29 @@ export function Course() {
                 <h2 className="groups__head">
                   {data.sections.length} {data.sections.length === 1 ? 'grupo' : 'grupos'}
                 </h2>
-                <button
-                  className="btn"
-                  onClick={measureAll}
-                  disabled={measuring || cooldownLeft > 0}
-                >
-                  {measuring ? 'midiendo…' : cooldownLeft > 0 ? `esperar ${cooldownLeft} s` : 'medir cupos'}
-                </button>
+
+                <div className="head__actions">
+                  {cooldownLeft > 0 && !measuring && (
+                    <span className="groups__wait tnum">{cooldownLeft} s</span>
+                  )}
+                  <IconButton
+                    onClick={measureAll}
+                    disabled={measuring || cooldownLeft > 0}
+                    tip="left"
+                    className={measuring ? 'is-spinning' : ''}
+                    label={
+                      measuring
+                        ? 'Midiendo…'
+                        : cooldownLeft > 0
+                          ? `Recién medido: esperar ${cooldownLeft} s`
+                          : 'Medir los cupos de todos los grupos'
+                    }
+                  >
+                    <RefreshCw size={18} strokeWidth={1.75} />
+                  </IconButton>
+                </div>
               </div>
+
               <p className="groups__note">
                 Una sola consulta trae los cupos de todos los grupos: el SIA los devuelve
                 juntos en la misma respuesta.
@@ -173,13 +192,16 @@ function SectionRow({ section }: { section: Section }) {
       <div className="group__id">
         {/* La clave, no el número: cinco grupos pueden llamarse "Grupo 1" y
             lo único que los distingue es este token. */}
-        <span className="group__key">{section.key}</span>
+        <span className="group__key tnum">{section.key}</span>
         <span className="group__label">{section.label ?? `Grupo ${section.number}`}</span>
         {section.site && <span className="group__site">{section.site}</span>}
       </div>
 
       <div className="group__body">
-        <p className="group__teacher">{section.instructor || 'sin profesor asignado'}</p>
+        <p className="group__teacher">
+          <User size={14} strokeWidth={1.75} aria-hidden="true" />
+          <span>{section.instructor || 'sin profesor asignado'}</span>
+        </p>
 
         <ul className="sched">
           {section.schedule.length === 0 ? (
@@ -212,14 +234,17 @@ function SectionRow({ section }: { section: Section }) {
 }
 
 function ScheduleRow({ c }: { c: ClassSession }) {
+  const where = [c.room, c.building].filter(Boolean).join(' · ');
   return (
     <li className="sched__row">
+      <Clock size={13} strokeWidth={1.75} aria-hidden="true" />
       <span className="sched__day">{DAYS[c.weekday] ?? '—'}</span>
-      <span className="sched__time">
+      <span className="sched__time tnum">
         {c.start_time}–{c.end_time}
       </span>
       <span className="sched__where">
-        {[c.room, c.building].filter(Boolean).join(' · ') || 'aula no informada'}
+        <MapPin size={13} strokeWidth={1.75} aria-hidden="true" />
+        {where || 'aula no informada'}
       </span>
     </li>
   );

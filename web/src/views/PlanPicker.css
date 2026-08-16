@@ -1,0 +1,256 @@
+.setup__head {
+  max-width: 44rem;
+  margin-bottom: var(--gap-xl);
+}
+
+.setup__title {
+  font-size: var(--t-display);
+  letter-spacing: var(--track-display);
+  margin: 0.2rem 0 0.6rem;
+}
+
+.setup__lead {
+  margin: 0;
+  font-size: var(--t-lead);
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.setup__lead b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* El aviso de que se va a perder el semestre. Ámbar, no rojo: todavía no pasó
+   nada, y un rojo acá gritaría lo mismo que un error real. */
+.setup__warn {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-sm);
+  margin: var(--gap) 0 0;
+  padding: var(--gap-sm) var(--gap);
+  border-radius: var(--radius);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: var(--t-small);
+  line-height: 1.6;
+}
+.setup__warn svg {
+  flex: none;
+  margin-top: 0.2rem;
+}
+
+.setup__back {
+  margin-top: var(--gap);
+}
+
+/* ── Un escalón ─────────────────────────────────────────────────── */
+
+.step {
+  margin-bottom: var(--gap-xl);
+}
+
+.step__label {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0 0 var(--gap);
+  padding-bottom: var(--gap-sm);
+  border-bottom: 1px solid var(--rule);
+}
+
+.step__count {
+  margin-left: auto;
+  color: var(--text-faint);
+}
+
+.step__hint {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--t-small);
+}
+
+/* ── Fichas de nivel y sede ─────────────────────────────────────── */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-xs);
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: var(--t-small);
+  transition:
+    color var(--fast) var(--ease-out),
+    border-color var(--fast) var(--ease-out),
+    background-color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+}
+.chip:active {
+  transform: scale(0.97);
+}
+
+.chip.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.chip__code {
+  font-size: var(--t-micro);
+  opacity: 0.55;
+}
+
+/* ── Buscador ───────────────────────────────────────────────────── */
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  max-width: 30rem;
+  padding: 0 0.7rem;
+  height: 2.5rem;
+  margin-bottom: var(--gap-lg);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-faint);
+  transition: border-color var(--fast) var(--ease-out);
+}
+.search:focus-within {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font-size: var(--t-body);
+}
+.search input::placeholder {
+  color: var(--text-faint);
+}
+/* La crucecita nativa del type=search es de otro sistema de diseño. */
+.search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+/* ── Facultades y planes ────────────────────────────────────────── */
+
+.faculty {
+  margin-bottom: var(--gap-lg);
+}
+
+.faculty__name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-sm);
+  font-family: var(--mono);
+  font-size: var(--t-small);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  color: var(--text-dim);
+  margin: 0 0 var(--gap-sm);
+}
+
+.faculty__code {
+  font-size: var(--t-micro);
+  color: var(--text-faint);
+}
+
+.plans {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  /* Columnas que se acomodan solas: en pantalla ancha son tres, en el
+     teléfono una, sin una sola media query. */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: 1px;
+}
+
+.plan {
+  /* Grid y no flex: el código ocupa una columna FIJA, así que los nombres
+     arrancan todos en la misma vertical aunque el código sea más corto. */
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--gap-sm);
+  width: 100%;
+  padding: 0.55rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  text-align: left;
+  font-size: var(--t-small);
+  color: var(--text);
+  transition:
+    background-color var(--fast) var(--ease-out),
+    border-color var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .plan:hover {
+    background: var(--accent-soft);
+  }
+}
+.plan:active {
+  transform: scale(0.995);
+}
+
+.plan__code {
+  color: var(--text-faint);
+  font-size: var(--t-micro);
+  letter-spacing: 0.04em;
+}
+.plan:hover .plan__code,
+.plan.is-mine .plan__code {
+  color: var(--accent);
+}
+
+/* Un nombre largo se recorta. Nunca parte la fila en dos líneas: una lista de
+   125 planes con alturas distintas es imposible de barrer con la vista. */
+.plan__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: lowercase;
+}
+
+/* El punto de "esto ya está en Postgres": abrirlo va a ser instantáneo. */
+.plan__cached {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--ok);
+  opacity: 0.65;
+}
+
+.plan.is-mine {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.plan__check {
+  color: var(--accent);
+}

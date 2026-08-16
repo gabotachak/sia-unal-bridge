@@ -420,7 +420,11 @@ func (s *Service) Catalog(ctx context.Context, program Program, maxAge time.Dura
 		if err := s.store.UpsertCatalog(ctx, program, combined); err != nil {
 			return nil, err
 		}
-		return combined, nil
+		// Se relee de la base en vez de devolver lo recién parseado: el listado
+		// del SIA no trae cupos, así que `combined` los tiene todos en nil y la
+		// tabla saldría con "—" aunque la base ya guarde mediciones de detalles
+		// anteriores. ProgramCourses reengancha current_seats.
+		return s.store.ProgramCourses(ctx, program.ID)
 	})
 	res := FetchResult{Cache: CacheMiss, FetchMs: time.Since(start).Milliseconds()}
 	if err != nil {

@@ -4,58 +4,62 @@
 /* ─────────────────────────────────────────────────────────────────
    TEMA CLARO — el default.
 
-   Los neutros son FRÍOS (tienen azul dentro, no gris puro). Es lo que
-   hace que el azul de acción y el verde de los cupos no se lean como
-   manchas pegadas encima de una interfaz gris: pertenecen al mismo
-   sitio.
+   Los neutros son CÁLIDOS: papel, no pantalla. Un gris azulado hace que
+   cualquier interfaz se parezca al panel de control de otra cosa; el
+   papel tibio la ancla en algo impreso, que es lo que esto es — un
+   catálogo, no un dashboard.
 
    El color significa UNA cosa cada uno, y siempre la misma:
-     azul  → se puede tocar (enlaces, botones, foco, lo activo)
-     verde → hay cupos / el dato es de recién
-     rojo  → sin cupos / falló
-     gris  → todo lo demás
-   Un cuarto color no existe a propósito: cuando todo resalta, nada resalta.
+     jade  → se puede tocar (enlaces, botones, foco, lo activo)
+     musgo → hay cupos / el dato es de recién
+     ocre  → cuidado (queda poco, el dato envejece)
+     óxido → sin cupos / falló
+   Jade y musgo son los dos verdes, y separarlos es deliberado: el jade
+   tira a azul (frío, saturado, oscuro) y el musgo a amarillo (terroso,
+   apagado). Es lo que evita que "esto es tocable" se lea como "esto es
+   una medición" — el ocre y el óxido ya están lejos por hue.
    ───────────────────────────────────────────────────────────────── */
 :root {
   color-scheme: light;
 
   /* Superficies, de atrás hacia adelante. */
-  --bg: #f4f7fa;
-  --surface: #ffffff;
-  --surface-2: #eef3f8;
-  --sunken: #e7eef5;
+  --bg: #f6f2ea;
+  --surface: #fffdf8;
+  --surface-2: #efe9dd;
+  --sunken: #e5ddce;
 
   /* Texto, de más a menos importante. */
-  --text: #0d1b26;
-  --text-dim: #4d6376;
-  --text-faint: #7d93a5;
+  --text: #1e1813;
+  --text-dim: #5f5346;
+  --text-faint: #8a7c6b;
 
   /* Líneas. */
-  --rule: #dbe5ee;
-  --rule-strong: #bfcedd;
+  --rule: #e2dacc;
+  --rule-strong: #c7bba8;
 
-  /* Azul: lo interactivo. */
-  --accent: #0b62d6;
-  --accent-hover: #0951b3;
-  --accent-soft: #e4eefc; /* fondo de lo seleccionado */
-  --accent-ink: #ffffff; /* texto sobre azul sólido */
+  /* Jade: lo interactivo. */
+  --accent: #1a6b5a;
+  --accent-hover: #12513f;
+  --accent-soft: #dfeee7; /* fondo de lo seleccionado */
+  --accent-ink: #fffdf8; /* texto sobre jade sólido */
 
-  /* Verde: hay cupos, el dato está vivo. */
-  --ok: #0a7d55;
-  --ok-soft: #dcf3e8;
+  /* Musgo: hay cupos, el dato está vivo. */
+  --ok: #3f7a34;
+  --ok-soft: #e6f0da;
 
-  /* Rojo: sin cupos, error, dato vencido. */
-  --bad: #c33a2c;
-  --bad-soft: #fce7e4;
+  /* Óxido: sin cupos, error, dato vencido. */
+  --bad: #b3301f;
+  --bad-soft: #fae2dc;
 
-  /* Ámbar: aviso tibio (dato envejeciendo). No es un acento de marca. */
-  --warn: #9a6414;
-  --warn-soft: #fbeed6;
+  /* Ocre: aviso tibio (queda poco, el dato envejece). */
+  --warn: #8a5a10;
+  --warn-soft: #f8ecd4;
 
-  /* Sombras. Más grande la superficie, más pesada la sombra. */
-  --shadow-sm: 0 1px 2px rgb(13 27 38 / 0.06), 0 1px 3px rgb(13 27 38 / 0.08);
-  --shadow-md: 0 4px 12px rgb(13 27 38 / 0.08), 0 1px 3px rgb(13 27 38 / 0.06);
-  --shadow-lg: 0 16px 48px rgb(13 27 38 / 0.16), 0 2px 8px rgb(13 27 38 / 0.08);
+  /* Sombras. Tintadas con el marrón del texto, no negras: una sombra gris
+     sobre papel cálido se ve sucia. */
+  --shadow-sm: 0 1px 2px rgb(30 24 19 / 0.06), 0 1px 3px rgb(30 24 19 / 0.08);
+  --shadow-md: 0 4px 12px rgb(30 24 19 / 0.08), 0 1px 3px rgb(30 24 19 / 0.06);
+  --shadow-lg: 0 16px 48px rgb(30 24 19 / 0.16), 0 2px 8px rgb(30 24 19 / 0.08);
 
   /* Chrome translúcido: la barra deja pasar el contenido por debajo. */
   --chrome: color-mix(in srgb, var(--bg) 78%, transparent);
@@ -63,6 +67,15 @@
 
 /* ─────────────────────────────────────────────────────────────────
    TEMA OSCURO.
+
+   Negro CÁLIDO, no gris azulado: la diferencia entre un tablero de
+   estación y un dashboard genérico está casi entera en esto. En oscuro
+   el jade se abre a menta —un jade oscuro sobre fondo oscuro no se ve—
+   y el texto vuelve al hueso del papel.
+
+   La menta se aleja del musgo claro (--ok) por saturación y por hue: si
+   los dos verdes se acercan en oscuro, un botón activo y un "hay cupos"
+   pasan a ser el mismo color.
 
    Dos entradas, no una: el `@media` cubre a quien no eligió nada y deja
    que mande el sistema; el `[data-theme]` cubre a quien sí eligió, y por
@@ -72,35 +85,35 @@
   :root:not([data-theme='light']) {
     color-scheme: dark;
 
-    --bg: #0b1218;
-    --surface: #111b23;
-    --surface-2: #16222c;
-    --sunken: #070d12;
+    --bg: #14110d;
+    --surface: #1d1913;
+    --surface-2: #262019;
+    --sunken: #0c0a07;
 
-    --text: #e3edf5;
-    --text-dim: #9ab0c2;
-    --text-faint: #6b8296;
+    --text: #f0e7d8;
+    --text-dim: #a99a85;
+    --text-faint: #7c7061;
 
-    --rule: #1e2b36;
-    --rule-strong: #2e404e;
+    --rule: #2c251d;
+    --rule-strong: #43392e;
 
-    --accent: #4d9dff;
-    --accent-hover: #6fb0ff;
-    --accent-soft: #12283f;
-    --accent-ink: #04121f;
+    --accent: #5ed7b4;
+    --accent-hover: #8ae7cb;
+    --accent-soft: #15302a;
+    --accent-ink: #0a1a15;
 
-    --ok: #34d399;
-    --ok-soft: #0d2b23;
+    --ok: #7fc06a;
+    --ok-soft: #1b2915;
 
-    --bad: #ff7a68;
-    --bad-soft: #331616;
+    --bad: #f0745c;
+    --bad-soft: #331a14;
 
     --warn: #e0a83c;
-    --warn-soft: #302512;
+    --warn-soft: #2e2312;
 
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-    --shadow-md: 0 4px 12px rgb(0 0 0 / 0.45);
-    --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.6);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.45);
+    --shadow-md: 0 4px 12px rgb(0 0 0 / 0.5);
+    --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.65);
 
     --chrome: color-mix(in srgb, var(--bg) 76%, transparent);
   }
@@ -109,68 +122,75 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --bg: #0b1218;
-  --surface: #111b23;
-  --surface-2: #16222c;
-  --sunken: #070d12;
+  --bg: #14110d;
+  --surface: #1d1913;
+  --surface-2: #262019;
+  --sunken: #0c0a07;
 
-  --text: #e3edf5;
-  --text-dim: #9ab0c2;
-  --text-faint: #6b8296;
+  --text: #f0e7d8;
+  --text-dim: #a99a85;
+  --text-faint: #7c7061;
 
-  --rule: #1e2b36;
-  --rule-strong: #2e404e;
+  --rule: #2c251d;
+  --rule-strong: #43392e;
 
-  --accent: #4d9dff;
-  --accent-hover: #6fb0ff;
-  --accent-soft: #12283f;
-  --accent-ink: #04121f;
+  --accent: #5ed7b4;
+  --accent-hover: #8ae7cb;
+  --accent-soft: #15302a;
+  --accent-ink: #0a1a15;
 
-  --ok: #34d399;
-  --ok-soft: #0d2b23;
+  --ok: #7fc06a;
+  --ok-soft: #1b2915;
 
-  --bad: #ff7a68;
-  --bad-soft: #331616;
+  --bad: #f0745c;
+  --bad-soft: #331a14;
 
   --warn: #e0a83c;
-  --warn-soft: #302512;
+  --warn-soft: #2e2312;
 
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.45);
-  --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.6);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.45);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.65);
 
   --chrome: color-mix(in srgb, var(--bg) 76%, transparent);
 }
 
 :root {
   /* ── Tipografía ────────────────────────────────────────────────
-     Dos familias, no tres. La sans lleva todo el texto — títulos incluidos,
-     que se distinguen por peso y tamaño, no por familia — y la mono se queda
-     donde sí aporta: códigos, horarios, cupos. Ahí sigue diciendo "esto es
-     una medición"; en párrafos solo se leía apretada, porque todas las letras
-     ocupan lo mismo y no hay ritmo donde apoyarse.
+     Tres familias con tres trabajos que no se pisan:
 
-     `--display` es el alias de títulos: existe para que cambiar la familia de
-     los encabezados sea una línea, no un grep. */
+       serif → los títulos y nada más. Es de donde sale la voz.
+       sans  → todo el texto corrido: párrafos, botones, filas.
+       mono  → códigos, horarios, cupos. Dice "esto es una medición".
+
+     La serif se cayó en un intento anterior de unificar en una sola
+     familia, y con ella se fue la personalidad: una sans a peso 600
+     titulando sobre sans a 400 es la portada de cualquier producto.
+     El contraste entre la serif de alto contraste y la mono técnica ES
+     el diseño; el cuerpo en sans existe para que se pueda leer.
+
+     `--display` es el alias de títulos: cambiar la familia de los
+     encabezados sigue siendo una línea, no un grep. */
+  --serif: 'Instrument Serif', ui-serif, Georgia, 'Times New Roman', serif;
   --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --display: var(--sans);
+  --display: var(--serif);
   --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* Escala fluida: se adapta al ancho sin media queries. */
-  /* Más chicos que con la serif: la sans a peso 600 ocupa y pesa más a
-     igual tamaño, y a 4rem el título se comía la página. */
-  --t-display: clamp(2.1rem, 5vw, 3.2rem);
-  --t-title: clamp(1.5rem, 3vw, 2.1rem);
+  /* Más grande que con la sans: la serif es de trazo fino y peso 400, así
+     que a igual tamaño pesa menos en la página y aguanta —pide— más caja. */
+  --t-display: clamp(2.8rem, 7vw, 4.8rem);
+  --t-title: clamp(1.8rem, 3.6vw, 2.6rem);
   --t-lead: clamp(1.05rem, 1.5vw, 1.2rem);
   --t-body: 0.95rem;
   --t-small: 0.85rem;
   --t-micro: 0.72rem;
 
-  /* El tracking depende del tamaño: el título grande necesita apretarse,
-     el micro-texto en versalitas necesita abrirse. Un solo valor para
-     todo estaría mal en algún lado. */
-  --track-display: -0.022em;
-  --track-title: -0.016em;
+  /* El tracking depende del tamaño y de la familia: la serif ya viene
+     apretada de fábrica, así que casi no hay que ayudarla; el micro-texto
+     en versalitas sí necesita abrirse o se lee como una mancha. */
+  --track-display: -0.012em;
+  --track-title: -0.008em;
   --track-body: 0;
   --track-micro: 0.14em;
 

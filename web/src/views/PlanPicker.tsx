@@ -131,9 +131,25 @@ export function PlanPicker() {
   return (
     <Layout>
       <header className="setup__head">
-        <p className="eyebrow">{first ? 'catálogo de asignaturas · sia unal' : 'ajustes'}</p>
-        <h1 className="setup__title">{first ? 'Elegí tu plan' : 'Cambiar de plan'}</h1>
-        <p className="setup__lead">
+        <p className="eyebrow rise">{first ? 'catálogo de asignaturas · sia unal' : 'ajustes'}</p>
+
+        {/* La primera vez esto es una portada, no un formulario: la pregunta
+            grande en serif y la palabra que importa en cursiva. Volviendo a
+            cambiar de plan ya no hay nada que presentar, así que el título se
+            achica y dice lo que hace. */}
+        <h1 className="setup__title rise" style={{ animationDelay: '60ms' }}>
+          {first ? (
+            <>
+              ¿Dónde
+              <br />
+              <em>estudiás?</em>
+            </>
+          ) : (
+            'Cambiar de plan'
+          )}
+        </h1>
+
+        <p className="setup__lead rise" style={{ animationDelay: '120ms' }}>
           {first ? (
             <>
               Todo lo demás cuelga de acá. El mismo código de plan existe en varias sedes,
@@ -166,7 +182,7 @@ export function PlanPicker() {
       {/* ── 1. Nivel ─────────────────────────────────────────────────
           No está hardcodeado a los tres de siempre: sale de /v1/levels,
           igual que en el back. Si la UNAL agrega uno, aparece acá solo. */}
-      <section className="step">
+      <section className="step rise" style={{ animationDelay: '180ms' }}>
         <h2 className="step__label">
           <GraduationCap size={16} strokeWidth={1.75} aria-hidden="true" />
           Nivel
@@ -187,7 +203,7 @@ export function PlanPicker() {
       </section>
 
       {/* ── 2. Sede ───────────────────────────────────────────────── */}
-      <section className="step">
+      <section className="step rise" style={{ animationDelay: '230ms' }}>
         <h2 className="step__label">
           <Building2 size={16} strokeWidth={1.75} aria-hidden="true" />
           Sede
@@ -218,7 +234,7 @@ export function PlanPicker() {
       </section>
 
       {/* ── 3. Plan ───────────────────────────────────────────────── */}
-      <section className="step">
+      <section className="step rise" style={{ animationDelay: '280ms' }}>
         <h2 className="step__label">
           <Layers size={16} strokeWidth={1.75} aria-hidden="true" />
           Plan de estudios

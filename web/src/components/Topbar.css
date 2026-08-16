@@ -69,8 +69,10 @@
 
 .brand__word {
   font-family: var(--display);
-  font-weight: 600;
-  font-size: 1.05rem;
+  font-weight: 400;
+  /* Más grande que la sans de al lado a propósito: la serif a 400 pesa
+     menos, y a igual tamaño se leería como un pie de foto. */
+  font-size: 1.3rem;
   letter-spacing: var(--track-title);
   line-height: 1;
 }

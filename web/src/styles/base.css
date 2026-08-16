@@ -24,17 +24,28 @@ body {
   transition: background-color var(--slow) var(--ease-out);
 }
 
-/* Los títulos ya no cambian de familia, así que la jerarquía la cargan el
-   peso y el tracking: apretados, porque a tamaño grande las letras se leen
-   demasiado separadas si se dejan como vienen. */
+/* Los títulos cambian de FAMILIA, no de peso: la serif ya se distingue del
+   cuerpo a cualquier tamaño, así que no hace falta engordarla. Peso 400 y
+   nada más — Instrument Serif solo trae ese, y pedirle 600 hace que el
+   navegador se lo invente engrosando los trazos, que es exactamente lo que
+   arruina una serif de alto contraste. */
 h1,
 h2,
 h3 {
   font-family: var(--display);
-  font-weight: 600;
-  line-height: 1.12;
+  font-weight: 400;
+  line-height: 1.08;
   letter-spacing: var(--track-title);
   margin: 0;
+}
+
+/* La palabra en cursiva dentro de un título. Es el único sitio donde el
+   acento aparece sin ser tocable, y se lo permite porque no compite con
+   nada: es la voz de la página, no un control. */
+h1 em,
+h2 em {
+  font-style: italic;
+  color: var(--accent);
 }
 
 a {

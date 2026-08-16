@@ -6,7 +6,14 @@
 .setup__title {
   font-size: var(--t-display);
   letter-spacing: var(--track-display);
-  margin: 0.2rem 0 0.6rem;
+  margin: 0.2rem 0 0.8rem;
+}
+
+/* La cursiva de la portada se corrige a mano: las serif italic se inclinan
+   hacia adelante y dejan un hueco a la izquierda que rompe la vertical con
+   la línea de arriba. Medio punto de vuelta y vuelve a alinear. */
+.setup__title em {
+  margin-left: -0.03em;
 }
 
 .setup__lead {
@@ -207,11 +214,18 @@
   color: var(--text);
   transition:
     background-color var(--fast) var(--ease-out),
-    border-color var(--fast) var(--ease-out);
+    border-color var(--fast) var(--ease-out),
+    padding-left var(--fast) var(--ease-out);
 }
+/* El desplazamiento del hover es el gesto del tablero de estación viejo: la
+   fila se corre un pelo hacia adelante, como si se adelantara a la fila. Se
+   mueve el padding y no un `transform`, porque el fondo tiene que quedarse
+   quieto: una fila entera resbalando dentro de una grilla de 125 se lee como
+   un error de pintado. */
 @media (hover: hover) and (pointer: fine) {
   .plan:hover {
     background: var(--accent-soft);
+    padding-left: 0.85rem;
   }
 }
 .plan:active {

@@ -63,8 +63,8 @@
 .card__name {
   display: block;
   font-family: var(--display);
-  font-weight: 600;
-  font-size: 1.1rem;
+  font-weight: 400;
+  font-size: 1.35rem;
   line-height: 1.15;
   letter-spacing: var(--track-title);
   color: var(--text);

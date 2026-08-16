@@ -103,7 +103,20 @@ function parseMaxAge(header: string | null): number {
 export async function get<T>(path: string): Promise<Result<T>> {
   let res: Response;
   try {
-    res = await fetch(`/v1${path}`, { headers: { Accept: 'application/json' } });
+    // `cache: 'no-store'` no es paranoia: la API manda
+    // `Cache-Control: max-age=604800` en el catálogo —siete días— porque para
+    // ELLA eso es cierto, el catálogo casi no cambia. Pero el navegador lo
+    // toma al pie de la letra y sirve el JSON de su disco sin preguntar, así
+    // que una pestaña que cargó antes de que se midieran unos cupos nunca los
+    // vería aparecer: ni recargar ni volver a la pestaña llegan a la red.
+    //
+    // Quien decide qué está fresco es el read-through del back, que ya tiene
+    // el dato en Postgres y responde en milisegundos. La caché del navegador
+    // encima de eso solo agrega una copia vieja que nadie puede invalidar.
+    res = await fetch(`/v1${path}`, {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
   } catch {
     // fetch solo rechaza si la red falló: el servidor no respondió en absoluto.
     throw new ApiError(0, 'offline', 'sin conexión con la API');

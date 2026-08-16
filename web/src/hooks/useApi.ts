@@ -54,6 +54,23 @@ export function useApi<T>(path: string | null): State<T> {
     setNonce((n) => n + 1);
   }, []);
 
+  // Volver a la pestaña vuelve a pedir. Sin esto, una pestaña abierta una hora
+  // muestra el estado de hace una hora: el efecto de abajo solo se dispara al
+  // montar o al cambiar `path`, y nada de eso pasa mientras la pestaña vive
+  // en segundo plano.
+  //
+  // Es una petición normal, SIN `max_age=0`: el read-through responde desde
+  // Postgres mientras el dato esté fresco (catálogo 7 d, detalle 24 h), así
+  // que volver a la pestaña no le cuesta nada al SIA.
+  useEffect(() => {
+    if (!path) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') reload();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [path, reload]);
+
   useEffect(() => {
     if (!path) return;
     const target = override.current ?? path;

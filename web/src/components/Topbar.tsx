@@ -1,10 +1,9 @@
-import { Link } from 'react-router';
-import { CalendarDays, ChevronsUpDown, LayoutList, Monitor, Moon, Sun } from 'lucide-react';
-import type { Freshness as F } from '../api/client';
+import { Link, useNavigate } from 'react-router';
+import { CalendarDays, LayoutList, Monitor, Moon, Sun, Trash2 } from 'lucide-react';
+import { useConfirm } from './Confirm';
 import { useTheme } from '../hooks/useTheme';
 import { usePlan } from '../hooks/usePlan';
 import { selectionPath } from '../lib/storage';
-import { Freshness } from './Freshness';
 import { IconButton } from './IconButton';
 import './Topbar.css';
 
@@ -24,10 +23,41 @@ const STROKE = 1.75;
  * El chip del plan es la única pieza con palabras, porque es la única cuyo
  * contenido cambia y no hay forma de dibujarlo.
  */
-export function Topbar({ freshness }: { freshness?: F | null }) {
+export function Topbar() {
   const plan = usePlan();
   const { theme, resolved, cycle } = useTheme();
+  const navigate = useNavigate();
+  const [ask, confirmDialog] = useConfirm();
   const sel = plan.selection;
+
+  /** Empezar de nuevo. Borra el plan y el semestre —todo lo guardado menos el
+   *  tema— y deja el onboarding tal como se ve la primera vez.
+   *
+   *  Confirma siempre: es la única acción de la app que destruye datos y no
+   *  tiene deshacer. */
+  async function startOver() {
+    const n = plan.items.length;
+    const ok = await ask({
+      title: 'Empezar de nuevo',
+      danger: true,
+      confirmLabel: 'Empezar de nuevo',
+      body:
+        n > 0 ? (
+          <>
+            <p>
+              Se borran el plan <b>{sel?.programName}</b> y las {n}{' '}
+              {n === 1 ? 'materia guardada' : 'materias guardadas'} en Mi semestre.
+            </p>
+            <p>No se puede deshacer.</p>
+          </>
+        ) : (
+          <p>Se borra el plan elegido y todo vuelve al comienzo.</p>
+        ),
+    });
+    if (!ok) return;
+    plan.reset();
+    navigate('/plan', { replace: true });
+  }
 
   const themeLabel =
     theme === 'system' ? 'Tema: el del sistema' : theme === 'light' ? 'Tema: claro' : 'Tema: oscuro';
@@ -46,21 +76,20 @@ export function Topbar({ freshness }: { freshness?: F | null }) {
 
         <div className="bar__spacer" />
 
-        {/* El plan elegido. Es contexto y es puerta: dice de qué plan es todo
-            lo que hay debajo, y al tocarlo se cambia. El chevron doble es la
-            convención de "acá se elige entre varios". Vive con el resto de
-            controles, a la derecha. */}
+        {/* El plan elegido. Es contexto y es botón: dice de qué plan es todo lo
+            que hay debajo, y al tocarlo se empieza de cero. No es un selector
+            —cambiar de plan sin más dejaba un semestre a medio borrar— así que
+            no lleva el chevron de "elegí entre varios" sino una caneca, que es
+            lo que de verdad pasa al tocarlo. */}
         {sel && (
-          <Link className="planchip" to="/plan">
+          <button type="button" className="planchip" onClick={startOver}>
             <span className="planchip__code tnum">{sel.program}</span>
             <span className="planchip__name">{sel.programName}</span>
             <span className="planchip__campus">{sel.campusName.replace(/^SEDE\s+/i, '')}</span>
-            <ChevronsUpDown className="planchip__caret" size={14} strokeWidth={STROKE} aria-hidden="true" />
-            <span className="sr-only">Cambiar de plan</span>
-          </Link>
+            <Trash2 className="planchip__caret" size={14} strokeWidth={STROKE} aria-hidden="true" />
+            <span className="sr-only">Empezar de nuevo</span>
+          </button>
         )}
-
-        <Freshness value={freshness ?? null} />
 
         <nav className="bar__nav" aria-label="Secciones">
           {sel && (
@@ -84,6 +113,11 @@ export function Topbar({ freshness }: { freshness?: F | null }) {
           </IconButton>
         </nav>
       </div>
+
+      {/* Va acá por comodidad, no por sitio: un <dialog> modal se pinta en la
+          capa superior del documento, así que dónde esté escrito no cambia
+          nada de dónde aparece. */}
+      {confirmDialog}
     </header>
   );
 }

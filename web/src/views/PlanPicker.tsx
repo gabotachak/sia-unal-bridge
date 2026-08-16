@@ -19,6 +19,7 @@ import type {
 import { useApi } from '../hooks/useApi';
 import { usePlan } from '../hooks/usePlan';
 import { Layout } from '../components/Layout';
+import { useConfirm } from '../components/Confirm';
 import { Empty, Fault, Loading } from '../components/States';
 import { fold } from '../lib/format';
 import { selectionId, selectionPath } from '../lib/storage';
@@ -41,6 +42,7 @@ import './PlanPicker.css';
  */
 export function PlanPicker() {
   const plan = usePlan();
+  const [ask, confirmDialog] = useConfirm();
   const navigate = useNavigate();
   const current = plan.selection;
 
@@ -100,7 +102,7 @@ export function PlanPicker() {
    * y los grupos visibles dependen del plan, no de la asignatura— así que
    * arrastrarlo a otro plan mostraría datos que ahí no existen.
    */
-  function choose(p: ProgramRef) {
+  async function choose(p: ProgramRef) {
     const next = {
       level,
       campus,
@@ -114,11 +116,23 @@ export function PlanPicker() {
     const isSwitch = current && selectionId(current) !== selectionId(next);
     if (isSwitch && plan.items.length > 0) {
       const n = plan.items.length;
-      const ok = window.confirm(
-        `Cambiar a «${p.name}» reinicia el tablero.\n\n` +
-          `Se van a borrar las ${n} ${n === 1 ? 'materia guardada' : 'materias guardadas'} en Mi semestre, ` +
-          `porque son del plan ${current.programName} y sus grupos no son los mismos acá.`,
-      );
+      const ok = await ask({
+        title: 'Cambiar de plan',
+        danger: true,
+        confirmLabel: `Cambiar a ${p.code}`,
+        body: (
+          <>
+            <p>
+              Pasar a <b>{p.name}</b> reinicia el tablero.
+            </p>
+            <p>
+              Se van a borrar las {n} {n === 1 ? 'materia guardada' : 'materias guardadas'} en Mi
+              semestre, porque son del plan <b>{current.programName}</b> y sus grupos no son los
+              mismos acá.
+            </p>
+          </>
+        ),
+      });
       if (!ok) return;
     }
 
@@ -130,6 +144,7 @@ export function PlanPicker() {
 
   return (
     <Layout>
+      {confirmDialog}
       <header className="setup__head">
         <p className="eyebrow rise">{first ? 'catálogo de asignaturas · sia unal' : 'ajustes'}</p>
 

@@ -9,6 +9,7 @@ import { pooled } from '../lib/pooled';
 import { MAX_RETRIES, backoffMs, isTransient, sleep } from '../lib/retry';
 import { itemId, selectionPath, type PlanItem } from '../lib/storage';
 import { Layout } from '../components/Layout';
+import { useConfirm } from '../components/Confirm';
 import { IconButton } from '../components/IconButton';
 import { Empty } from '../components/States';
 import './Semester.css';
@@ -27,6 +28,7 @@ type Row = {
 
 export function Semester() {
   const plan = usePlan();
+  const [ask, confirmDialog] = useConfirm();
   const [rows, setRows] = useState<Row[]>([]);
   const [running, setRunning] = useState(false);
   const [onlyOpen, setOnlyOpen] = useState(false);
@@ -126,14 +128,24 @@ export function Semester() {
    *
    * Con confirmación porque borra trabajo y no hay deshacer.
    */
-  function clearAll() {
+  async function clearAll() {
     const n = plan.items.length;
     if (n === 0) return;
-    const ok = window.confirm(
-      `Vaciar Mi semestre.\n\n` +
-        `Se quitan las ${n} ${n === 1 ? 'materia' : 'materias'} de la lista. ` +
-        `Tu plan sigue siendo el mismo, así que podés volver a agregarlas desde el catálogo.`,
-    );
+    const ok = await ask({
+      title: 'Vaciar Mi semestre',
+      danger: true,
+      confirmLabel: 'Vaciar la lista',
+      body: (
+        <>
+          <p>
+            Se quitan las {n} {n === 1 ? 'materia' : 'materias'} de la lista.
+          </p>
+          <p>
+            Tu plan sigue siendo el mismo, así que podés volver a agregarlas desde el catálogo.
+          </p>
+        </>
+      ),
+    });
     if (!ok) return;
     plan.clear();
   }
@@ -144,6 +156,7 @@ export function Semester() {
 
   return (
     <Layout>
+      {confirmDialog}
       <header className="head">
         <div>
           <p className="eyebrow">planificador</p>

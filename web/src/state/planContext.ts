@@ -19,6 +19,9 @@ export type PlanApi = {
    *  guardadas son de un plan concreto —los grupos visibles y la tipología
    *  dependen de él— así que mezclarlas mostraría datos que no existen. */
   select: (s: Selection) => void;
+  /** Borra todo lo guardado —plan y semestre— y deja la app como en la primera
+   *  visita. El tema NO se toca: es una preferencia del navegador, no del plan. */
+  reset: () => void;
 };
 
 // El contexto vive en su propio archivo .ts —sin JSX— porque un archivo que

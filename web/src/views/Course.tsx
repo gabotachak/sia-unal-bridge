@@ -20,7 +20,7 @@ export function Course() {
 
   const scope = { level, campus, faculty };
   const path = routes.course(scope, program, code);
-  const { data, error, loading, freshness, elapsed, attempt, reload } = useApi<CourseDetail>(path);
+  const { data, error, loading, elapsed, attempt, reload } = useApi<CourseDetail>(path);
 
   const backToCatalog = `/nivel/${level}/sede/${campus}/plan/${program}${faculty ? `?f=${faculty}` : ''}`;
 
@@ -89,7 +89,7 @@ export function Course() {
   const fault = error && !rateLimited ? error : null;
 
   return (
-    <Layout freshness={freshness}>
+    <Layout>
       {/* Sin migas de pan, hace falta una salida explícita. Una sola, y al
           sitio del que se vino: el catálogo de este plan. */}
       <Link className="back" to={backToCatalog}>

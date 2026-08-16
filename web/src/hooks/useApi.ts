@@ -5,14 +5,13 @@
 // después de pintar). Se escriben bien UNA vez y las vistas no vuelven a verlos.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, get, type Freshness } from '../api/client';
+import { ApiError, get } from '../api/client';
 import { MAX_RETRIES, backoffMs, isTransient, sleep } from '../lib/retry';
 
 export type State<T> = {
   data: T | null;
   error: ApiError | null;
   loading: boolean;
-  freshness: Freshness | null;
   /** Segundos transcurridos en la petición en curso. Para el cronómetro. */
   elapsed: number;
   /** En qué reintento va, 0 mientras sea el primer intento. */
@@ -39,7 +38,6 @@ export function useApi<T>(path: string | null): State<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(false);
-  const [freshness, setFreshness] = useState<Freshness | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const [nonce, setNonce] = useState(0);
@@ -98,7 +96,6 @@ export function useApi<T>(path: string | null): State<T> {
           const res = await get<T>(target);
           if (cancelled) return;
           setData(res.data);
-          setFreshness(res.freshness);
           setError(null);
           return;
         } catch (e) {
@@ -131,5 +128,5 @@ export function useApi<T>(path: string | null): State<T> {
     };
   }, [path, nonce]);
 
-  return { data, error, loading, freshness, elapsed, attempt, reload };
+  return { data, error, loading, elapsed, attempt, reload };
 }

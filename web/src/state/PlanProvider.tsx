@@ -91,6 +91,15 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
     [selection],
   );
 
+  /** Empezar de nuevo: se va el plan y se va el semestre, en ese orden lógico
+   *  pero en un solo repintado. Los dos efectos de persistencia se disparan
+   *  solos y dejan localStorage sin ninguna de las dos claves. El tema no pasa
+   *  por acá a propósito. */
+  const reset = useCallback(() => {
+    setItems([]);
+    setSelection(null);
+  }, []);
+
   // useMemo evita construir un objeto nuevo en cada repintado: si cambiara la
   // identidad del valor, TODO lo que consume el contexto se repintaría al
   // pedo.
@@ -104,8 +113,9 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       full: items.length >= MAX_ITEMS,
       selection,
       select,
+      reset,
     }),
-    [items, has, add, remove, clear, selection, select],
+    [items, has, add, remove, clear, selection, select, reset],
   );
 
   return <PlanContext value={api}>{children}</PlanContext>;

@@ -6,6 +6,7 @@ import type { CoursesResponse, CourseSummary, ProgramsResponse } from '../api/ty
 import { useApi } from '../hooks/useApi';
 import { usePlan } from '../hooks/usePlan';
 import { Layout } from '../components/Layout';
+import { useConfirm } from '../components/Confirm';
 import { AddButton } from '../components/AddButton';
 import { Empty, Fault, Loading } from '../components/States';
 import { fold, formatAge } from '../lib/format';
@@ -25,7 +26,7 @@ export function Program() {
   const faculty = params.get('f') ?? '';
 
   const path = routes.courses({ level, campus, faculty }, program);
-  const { data, error, loading, freshness, elapsed, attempt, reload } =
+  const { data, error, loading, elapsed, attempt, reload } =
     useApi<CoursesResponse>(path);
 
   const [q, setQ] = useState('');
@@ -68,6 +69,7 @@ export function Program() {
    *    haber tocado "atrás".
    */
   const plan = usePlan();
+  const [ask, confirmDialog] = useConfirm();
   const { selection, select } = plan;
   const here = { level, campus, program };
   const foreign = selection && selectionId(selection) !== selectionId(here);
@@ -115,22 +117,32 @@ export function Program() {
     });
   }, [directory.data, needsName, selection, select, level, campus, program]);
 
-  function adoptThis() {
+  async function adoptThis() {
     if (!selection) return;
     const n = plan.items.length;
     if (n > 0) {
-      const ok = window.confirm(
-        `Cambiar al plan ${program} reinicia el tablero.\n\n` +
-          `Se van a borrar las ${n} ${n === 1 ? 'materia guardada' : 'materias guardadas'} en Mi semestre, ` +
-          `porque son del plan ${selection.programName}.`,
-      );
+      const ok = await ask({
+        title: `Cambiar al plan ${program}`,
+        danger: true,
+        confirmLabel: 'Cambiar de plan',
+        body: (
+          <>
+            <p>
+              Se van a borrar las {n} {n === 1 ? 'materia guardada' : 'materias guardadas'} en Mi
+              semestre, porque son del plan <b>{selection.programName}</b>.
+            </p>
+            <p>Sus grupos y su tipología son de ese plan, no de este.</p>
+          </>
+        ),
+      });
       if (!ok) return;
     }
     select({ ...here, campusName: campus, faculty, facultyName: '', programName: program });
   }
 
   return (
-    <Layout freshness={freshness}>
+    <Layout>
+      {confirmDialog}
       {foreign && selection && (
         <div className="stray" role="status">
           <p className="stray__text">

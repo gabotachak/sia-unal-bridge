@@ -48,7 +48,10 @@ export function loadPlan(): PlanItem[] {
 
 export function savePlan(items: PlanItem[]): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(items));
+    // Lista vacía = clave borrada, no `[]` guardado. Empezar de nuevo tiene que
+    // dejar el navegador como estaba antes de la primera visita.
+    if (items.length === 0) localStorage.removeItem(KEY);
+    else localStorage.setItem(KEY, JSON.stringify(items));
   } catch {
     // Cuota llena o modo privado: no vale la pena romper la app por esto.
   }

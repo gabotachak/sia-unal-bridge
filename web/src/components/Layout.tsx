@@ -1,4 +1,3 @@
-import type { Freshness as F } from '../api/client';
 import { Topbar } from './Topbar';
 import './Layout.css';
 
@@ -10,16 +9,10 @@ import './Layout.css';
  * acá. El plan se elige una vez, en /plan, y desde entonces la barra lo
  * muestra como estado — que es lo que siempre fue.
  */
-export function Layout({
-  freshness,
-  children,
-}: {
-  freshness?: F | null;
-  children: React.ReactNode;
-}) {
+export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="shell">
-      <Topbar freshness={freshness} />
+      <Topbar />
 
       <main className="content">{children}</main>
 

@@ -1,0 +1,151 @@
+/* El modal.
+
+   Toda la animación es CSS sobre el elemento nativo. La parte que la hace
+   posible es `allow-discrete`: `display` y `overlay` son propiedades que
+   saltan de un valor a otro sin pasos intermedios, y sin esto el navegador
+   las cambiaría de una y se comería la salida — la caja desaparecería antes
+   de terminar de desvanecerse. Con esto, el salto espera a que la transición
+   acabe. `@starting-style` es el otro lado: define desde dónde entra algo que
+   acaba de aparecer, que hasta ahora obligaba a un keyframe o a un doble
+   requestAnimationFrame. */
+
+.modal {
+  /* El default del user-agent: caja con borde, márgenes automáticos y ancho
+     al contenido. Se limpia entero y se arma de nuevo. */
+  margin: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  max-width: min(30rem, calc(100vw - 2 * var(--gap)));
+  color: var(--text);
+
+  opacity: 0;
+  transform: translateY(8px) scale(0.97);
+  transition:
+    opacity var(--mid) var(--ease-out),
+    transform var(--mid) var(--ease-out),
+    overlay var(--mid) var(--ease-out) allow-discrete,
+    display var(--mid) var(--ease-out) allow-discrete;
+}
+
+.modal[open] {
+  opacity: 1;
+  transform: none;
+}
+
+/* De dónde viene al abrirse. Sin este bloque entra de golpe: el estado
+   inicial de arriba solo aplica al cerrar. */
+@starting-style {
+  .modal[open] {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+}
+
+.modal::backdrop {
+  background: rgb(20 17 13 / 0);
+  backdrop-filter: blur(0px);
+  transition:
+    background-color var(--mid) var(--ease-out),
+    backdrop-filter var(--mid) var(--ease-out),
+    overlay var(--mid) var(--ease-out) allow-discrete,
+    display var(--mid) var(--ease-out) allow-discrete;
+}
+
+.modal[open]::backdrop {
+  background: rgb(20 17 13 / 0.55);
+  backdrop-filter: blur(3px);
+}
+
+@starting-style {
+  .modal[open]::backdrop {
+    background: rgb(20 17 13 / 0);
+    backdrop-filter: blur(0px);
+  }
+}
+
+/* Quien pidió menos movimiento igual necesita ver que algo apareció: se queda
+   el fundido, se va el desplazamiento. */
+@media (prefers-reduced-motion: reduce) {
+  .modal,
+  .modal[open] {
+    transform: none;
+  }
+  @starting-style {
+    .modal[open] {
+      transform: none;
+    }
+  }
+  .modal::backdrop {
+    backdrop-filter: none;
+  }
+  .modal[open]::backdrop {
+    backdrop-filter: none;
+  }
+}
+
+/* ── La caja ──────────────────────────────────────────────────────── */
+
+.modal__box {
+  padding: var(--gap-lg);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.modal__title {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  margin: 0 0 var(--gap-sm);
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 1.6rem;
+  letter-spacing: var(--track-title);
+  line-height: 1.15;
+}
+
+.modal__warn {
+  flex: none;
+  color: var(--warn);
+}
+
+.modal__body {
+  color: var(--text-dim);
+  font-size: var(--t-body);
+  line-height: 1.55;
+}
+
+.modal__body p {
+  margin: 0 0 var(--gap-sm);
+}
+.modal__body p:last-child {
+  margin-bottom: 0;
+}
+
+.modal__body b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-lg);
+}
+
+/* La variante sólida de peligro. `.btn--danger` es el texto en óxido sobre
+   fondo neutro, que sirve para una acción secundaria en una fila; acá el
+   botón ES la acción principal del diálogo y tiene que pesar como tal. */
+.btn--danger-solid:not(:disabled) {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: var(--accent-ink);
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn--danger-solid:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+}

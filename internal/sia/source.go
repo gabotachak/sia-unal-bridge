@@ -21,6 +21,36 @@ func NewSource(pool *Pool) *Source {
 	return &Source{pool: pool}
 }
 
+func (s *Source) FetchLevels(ctx context.Context) ([]catalog.LabelOption, error) {
+	conn, release, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	opts, err := conn.FetchLevels(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]catalog.LabelOption, len(opts))
+	for i, o := range opts {
+		out[i] = catalog.LabelOption{Index: o.Index, Label: o.Label}
+	}
+	return out, nil
+}
+
+func (s *Source) FetchCampuses(ctx context.Context, level int) ([]catalog.DropdownOption, error) {
+	conn, release, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	campuses, err := conn.FetchCampuses(ctx, level)
+	if err != nil {
+		return nil, err
+	}
+	return toDomainOptions(campuses), nil
+}
+
 func (s *Source) FetchProgramDirectory(ctx context.Context, level, campusIdx int) ([]catalog.DropdownOption, map[int][]catalog.DropdownOption, error) {
 	conn, release, err := s.pool.Acquire(ctx)
 	if err != nil {

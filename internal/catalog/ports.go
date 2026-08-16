@@ -23,9 +23,26 @@ type DropdownOption struct {
 	Name  string
 }
 
+// LabelOption is a dropdown option with no institutional code in its label —
+// soc1 alone. Turning a Label into a stable public ID is Service's job (see
+// Level.Slug), never the adapter's.
+type LabelOption struct {
+	Index int
+	Label string
+}
+
 // SIASource is the driven port for everything that talks to the real SIA.
 // Implemented by internal/sia against the ADF protocol.
 type SIASource interface {
+	// FetchLevels returns the soc1 dropdown: the niveles de estudio. Their
+	// labels carry no institutional code, hence LabelOption.
+	FetchLevels(ctx context.Context) ([]LabelOption, error)
+
+	// FetchCampuses returns the soc9 dropdown for a level: the sedes, with
+	// their institutional code parsed off the label. Cheapest cascade there
+	// is — one valueChange on soc1.
+	FetchCampuses(ctx context.Context, level int) ([]DropdownOption, error)
+
 	// FetchProgramDirectory serves the reference endpoints: every faculty of
 	// (level, campusIdx) and every program under each. A miss is cheap and
 	// bounded — part of the bootstrap you pay anyway — unlike the full
@@ -48,10 +65,22 @@ type SIASource interface {
 
 // Store is the driven port for Postgres persistence and cache reads.
 type Store interface {
-	// Reference
+	// Reference. ReferenceFetchedAt is the 30 d TTL marker keyed by scope
+	// (docs/API.md "Frescura"); the Upsert* writes stamp it in the same
+	// transaction. Without it every campus/faculty/program read walks the
+	// live cascade instead of the cache.
 	UpsertProgram(ctx context.Context, p Program) (Program, error)
 	Program(ctx context.Context, campusCode, facultyCode, code string) (Program, bool, error)
 	Programs(ctx context.Context, campusCode, facultyCode string) ([]Program, error)
+	Campuses(ctx context.Context, level int) ([]Campus, error)
+	Levels(ctx context.Context) ([]Level, error)
+	ReferenceFetchedAt(ctx context.Context, scope string) (*time.Time, error)
+	UpsertPrograms(ctx context.Context, scope string, programs []Program) error
+	UpsertCampuses(ctx context.Context, scope string, campuses []Campus) error
+
+	// UpsertLevels matches on Name and must never rewrite an existing
+	// slug — see Level.
+	UpsertLevels(ctx context.Context, scope string, levels []Level) error
 
 	// Catalog — program granularity. UpsertCatalog writes BOTH halves
 	// (regular + electives) in one transaction and stamps

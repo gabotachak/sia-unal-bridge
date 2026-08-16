@@ -25,7 +25,10 @@ type fakeStore struct {
 		Typology  string
 		FetchedAt *time.Time
 	}
-	sections map[string][]catalog.Section
+	sections  map[string][]catalog.Section
+	reference map[string]time.Time
+	campuses  map[int][]catalog.Campus
+	levels    []catalog.Level
 }
 
 func newFakeStore() *fakeStore {
@@ -36,8 +39,74 @@ func newFakeStore() *fakeStore {
 			Typology  string
 			FetchedAt *time.Time
 		}{},
-		sections: map[string][]catalog.Section{},
+		sections:  map[string][]catalog.Section{},
+		reference: map[string]time.Time{},
+		campuses:  map[int][]catalog.Campus{},
 	}
+}
+
+func (f *fakeStore) ReferenceFetchedAt(_ context.Context, scope string) (*time.Time, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.reference[scope]
+	if !ok {
+		return nil, nil
+	}
+	return &t, nil
+}
+
+func (f *fakeStore) UpsertPrograms(ctx context.Context, scope string, programs []catalog.Program) error {
+	for _, p := range programs {
+		if _, err := f.UpsertProgram(ctx, p); err != nil {
+			return err
+		}
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reference[scope] = time.Now()
+	return nil
+}
+
+func (f *fakeStore) UpsertCampuses(_ context.Context, scope string, campuses []catalog.Campus) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, c := range campuses {
+		f.campuses[c.Level] = append(f.campuses[c.Level], c)
+	}
+	f.reference[scope] = time.Now()
+	return nil
+}
+
+func (f *fakeStore) Campuses(_ context.Context, level int) ([]catalog.Campus, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.campuses[level], nil
+}
+
+func (f *fakeStore) UpsertLevels(_ context.Context, scope string, levels []catalog.Level) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, l := range levels {
+		var matched bool
+		for i, existing := range f.levels {
+			if existing.Name == l.Name {
+				f.levels[i].Index = l.Index
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			f.levels = append(f.levels, l)
+		}
+	}
+	f.reference[scope] = time.Now()
+	return nil
+}
+
+func (f *fakeStore) Levels(context.Context) ([]catalog.Level, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.levels, nil
 }
 
 func ck(campus, code string) string    { return campus + "|" + code }
@@ -177,8 +246,26 @@ type fakeSIA struct {
 	detailCalls int
 }
 
+func (f *fakeSIA) FetchLevels(context.Context) ([]catalog.LabelOption, error) {
+	return []catalog.LabelOption{
+		{Index: 0, Label: "Pregrado"},
+		{Index: 1, Label: "Doctorado"},
+		{Index: 2, Label: "Postgrados y másteres"},
+	}, nil
+}
+
+func (f *fakeSIA) FetchCampuses(context.Context, int) ([]catalog.DropdownOption, error) {
+	return []catalog.DropdownOption{
+		{Index: 1, Code: "1125", Name: "SEDE AMAZONIA"},
+		{Index: 2, Code: "1101", Name: "SEDE BOGOTÁ"},
+	}, nil
+}
+
 func (f *fakeSIA) FetchProgramDirectory(context.Context, int, int) ([]catalog.DropdownOption, map[int][]catalog.DropdownOption, error) {
-	return nil, nil, nil
+	return []catalog.DropdownOption{{Index: 8, Code: "2055", Name: "FACULTAD DE INGENIERÍA"}},
+		map[int][]catalog.DropdownOption{
+			8: {{Index: 3, Code: "2A74", Name: "INGENIERÍA DE SISTEMAS Y COMPUTACIÓN"}},
+		}, nil
 }
 func (f *fakeSIA) FetchCatalog(context.Context, catalog.ProgramKey) ([]catalog.CourseOffering, error) {
 	return nil, nil

@@ -98,3 +98,49 @@ func TestLive_FetchElectives_TwiceOnSameConn(t *testing.T) {
 	}
 	t.Logf("call 1: %d rows, call 2: %d rows", len(rows1), len(rows2))
 }
+
+// TestLive_FetchCampuses confirms the soc9 dropdown really rides along the
+// soc1 valueChange response, and that a connection already sitting on the
+// level bounces instead of nooping (GOTCHAS §30). Skipped unless SIA_LIVE=1.
+func TestLive_FetchCampuses(t *testing.T) {
+	if os.Getenv("SIA_LIVE") != "1" {
+		t.Skip("set SIA_LIVE=1 to run against the real SIA server")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	c, err := NewConn("https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Bootstrap(ctx); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+
+	first, err := c.FetchCampuses(ctx, 0)
+	if err != nil {
+		t.Fatalf("FetchCampuses: %v", err)
+	}
+	if len(first) < 9 {
+		t.Fatalf("got %d campuses, want at least 9", len(first))
+	}
+	var bogota bool
+	for _, o := range first {
+		if o.Code == "1101" {
+			bogota = true
+		}
+	}
+	if !bogota {
+		t.Fatalf("no 1101 in %+v — the label split is wrong", first)
+	}
+
+	// Second call on the SAME connection, same level: must bounce, not noop.
+	second, err := c.FetchCampuses(ctx, 0)
+	if err != nil {
+		t.Fatalf("FetchCampuses (already parked at level): %v", err)
+	}
+	if len(second) != len(first) {
+		t.Fatalf("got %d campuses on reuse, want %d", len(second), len(first))
+	}
+	t.Logf("%d campuses, stable across reuse", len(second))
+}

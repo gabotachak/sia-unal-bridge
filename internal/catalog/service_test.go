@@ -18,6 +18,9 @@ type fakeStore struct {
 	courses    map[string]Course        // "campus|code"
 	courseProg map[string]courseProgRow // "programID|code"
 	sections   map[string][]Section     // "campus|code|programID"
+	reference  map[string]time.Time     // scope -> fetched_at
+	campuses   map[int][]Campus         // level
+	levels     []Level
 }
 
 type courseProgRow struct {
@@ -31,7 +34,75 @@ func newFakeStore() *fakeStore {
 		courses:    map[string]Course{},
 		courseProg: map[string]courseProgRow{},
 		sections:   map[string][]Section{},
+		reference:  map[string]time.Time{},
+		campuses:   map[int][]Campus{},
 	}
+}
+
+func (f *fakeStore) ReferenceFetchedAt(_ context.Context, scope string) (*time.Time, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.reference[scope]
+	if !ok {
+		return nil, nil
+	}
+	return &t, nil
+}
+
+func (f *fakeStore) UpsertPrograms(ctx context.Context, scope string, programs []Program) error {
+	for _, p := range programs {
+		if _, err := f.UpsertProgram(ctx, p); err != nil {
+			return err
+		}
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reference[scope] = time.Now()
+	return nil
+}
+
+func (f *fakeStore) UpsertCampuses(_ context.Context, scope string, campuses []Campus) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, c := range campuses {
+		f.campuses[c.Level] = append(f.campuses[c.Level], c)
+	}
+	f.reference[scope] = time.Now()
+	return nil
+}
+
+func (f *fakeStore) Campuses(_ context.Context, level int) ([]Campus, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.campuses[level], nil
+}
+
+// UpsertLevels mirrors the real store's conflict target: match on Name, and
+// never rewrite an existing slug.
+func (f *fakeStore) UpsertLevels(_ context.Context, scope string, levels []Level) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, l := range levels {
+		var matched bool
+		for i, existing := range f.levels {
+			if existing.Name == l.Name {
+				f.levels[i].Index = l.Index
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			f.levels = append(f.levels, l)
+		}
+	}
+	f.reference[scope] = time.Now()
+	return nil
+}
+
+func (f *fakeStore) Levels(context.Context) ([]Level, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.levels, nil
 }
 
 func courseKey(campus, code string) string { return campus + "|" + code }
@@ -163,14 +234,49 @@ func (f *fakeStore) CachedProgramCount(context.Context) (int, int, error)    { r
 
 // fakeSIA counts calls per key so tests can assert singleflight dedup.
 type fakeSIA struct {
-	delay         time.Duration
-	detailCalls   atomic.Int64
-	catalogCalls  atomic.Int64
-	electiveCalls atomic.Int64
+	delay          time.Duration
+	detailCalls    atomic.Int64
+	catalogCalls   atomic.Int64
+	electiveCalls  atomic.Int64
+	directoryCalls atomic.Int64
+	campusCalls    atomic.Int64
+	levelCalls     atomic.Int64
 }
 
+func (f *fakeSIA) FetchLevels(context.Context) ([]LabelOption, error) {
+	f.levelCalls.Add(1)
+	time.Sleep(f.delay)
+	return []LabelOption{
+		{Index: 0, Label: "Pregrado"},
+		{Index: 1, Label: "Doctorado"},
+		{Index: 2, Label: "Postgrados y másteres"},
+	}, nil
+}
+
+func (f *fakeSIA) FetchCampuses(context.Context, int) ([]DropdownOption, error) {
+	f.campusCalls.Add(1)
+	time.Sleep(f.delay)
+	return []DropdownOption{
+		{Index: 1, Code: "1125", Name: "SEDE AMAZONIA"},
+		{Index: 2, Code: "1101", Name: "SEDE BOGOTÁ"},
+	}, nil
+}
+
+// FetchProgramDirectory returns two faculties with one program each — enough
+// shape to assert that ONE cascade fills every faculty, not just the one
+// asked for.
 func (f *fakeSIA) FetchProgramDirectory(context.Context, int, int) ([]DropdownOption, map[int][]DropdownOption, error) {
-	return nil, nil, nil
+	f.directoryCalls.Add(1)
+	time.Sleep(f.delay)
+	faculties := []DropdownOption{
+		{Index: 8, Code: "2055", Name: "FACULTAD DE INGENIERÍA"},
+		{Index: 3, Code: "2054", Name: "FACULTAD DE CIENCIAS"},
+	}
+	programs := map[int][]DropdownOption{
+		8: {{Index: 3, Code: "2A74", Name: "INGENIERÍA DE SISTEMAS Y COMPUTACIÓN"}},
+		3: {{Index: 1, Code: "2A11", Name: "MATEMÁTICAS"}},
+	}
+	return faculties, programs, nil
 }
 
 func (f *fakeSIA) FetchCatalog(context.Context, ProgramKey) ([]CourseOffering, error) {
@@ -191,7 +297,10 @@ func (f *fakeSIA) FetchDetail(_ context.Context, _ ProgramKey, code, term string
 	return CourseOffering{
 		Course: Course{
 			CampusCode: "1101", Code: code, Name: "Cálculo diferencial", Credits: 4,
-			Sections: []Section{{CampusCode: "1101", Code: code, Term: term, Key: "1", Number: 1}},
+			Sections: []Section{{
+				CampusCode: "1101", Code: code, Term: term, Key: "1", Number: 1,
+				Seats: &SeatSnapshot{Available: 32, MeasuredAt: time.Now()},
+			}},
 		},
 	}, nil
 }
@@ -303,5 +412,299 @@ func TestCatalog_FetchesBothHalvesBeforeStamping(t *testing.T) {
 	}
 	if got := sia.electiveCalls.Load(); got != 1 {
 		t.Errorf("got %d electives calls, want 1 — the catalog of a plan is TWO queries", got)
+	}
+}
+
+// TestReference_SecondReadServesFromCache pins the rule the .md files set
+// and the code ignored: reference data (docs/API.md "Frescura": 30 d) goes
+// to the SIA only when it is missing or stale, never on every read. The
+// cascade costs ~15 POSTs, so "always live" made /faculties a ~20 s call.
+func TestReference_SecondReadServesFromCache(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+
+	first, err := svc.Faculties(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first) != 2 {
+		t.Fatalf("got %d faculties, want 2", len(first))
+	}
+	if got := sia.directoryCalls.Load(); got != 1 {
+		t.Fatalf("cold read: got %d cascades, want 1", got)
+	}
+
+	second, err := svc.Faculties(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second) != len(first) {
+		t.Fatalf("warm read returned %d faculties, want %d", len(second), len(first))
+	}
+	if got := sia.directoryCalls.Load(); got != 1 {
+		t.Fatalf("warm read hit the SIA: got %d cascades total, want still 1", got)
+	}
+}
+
+// TestReference_OneCascadeFillsEveryFaculty: the cascade pays for all 13
+// faculties' program lists to produce any one of them, so a miss on ONE
+// faculty must persist them all. Discarding twelve meant the next faculty
+// re-ran the whole thing.
+func TestReference_OneCascadeFillsEveryFaculty(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+
+	if _, err := svc.ProgramsInFaculty(ctx, "2055"); err != nil {
+		t.Fatal(err)
+	}
+	others, err := svc.ProgramsInFaculty(ctx, "2054")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(others) != 1 || others[0].Code != "2A11" {
+		t.Fatalf("got %v, want the other faculty's program filled by the same cascade", others)
+	}
+	if got := sia.directoryCalls.Load(); got != 1 {
+		t.Fatalf("second faculty re-ran the cascade: got %d, want 1", got)
+	}
+}
+
+// TestResolveProgram_UnknownCodeIsNotAnEndlessCascade: a fresh directory is
+// authoritative about which programs exist, so absence from it IS the 404.
+// Before, every 404 paid ~15 POSTs — a typo in a loop hammered the SIA.
+func TestResolveProgram_UnknownCodeIsNotAnEndlessCascade(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+
+	if _, err := svc.ResolveProgram(ctx, "2A74"); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		if _, err := svc.ResolveProgram(ctx, "NOPE"); err != ErrNotFound {
+			t.Fatalf("unknown code: got %v, want ErrNotFound", err)
+		}
+	}
+	if got := sia.directoryCalls.Load(); got != 1 {
+		t.Fatalf("got %d cascades, want 1 — unknown codes must not refetch a fresh directory", got)
+	}
+}
+
+// TestSectionSeats_StaleSeatsRefetchThoughDetailIsFresh is the seats rule of
+// docs/API.md "Frescura": cupos are governed by seat_snapshot.measured_at at
+// 5 min, NOT by detail_fetched_at's 24 h. Routing /seats through CourseDetail
+// served day-old seats under a Cache-Control of max-age=300.
+func TestSectionSeats_StaleSeatsRefetchThoughDetailIsFresh(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+	program, _ := store.UpsertProgram(ctx, testProgram(0))
+
+	// Detail fetched just now (fresh for 24 h), seats measured 10 min ago
+	// (stale past the 5 min seats TTL).
+	stale := time.Now().Add(-10 * time.Minute)
+	if err := store.UpsertDetail(ctx, program.ID, CourseOffering{Course: Course{
+		CampusCode: "1101", Code: "1000004-B",
+		Sections: []Section{{CampusCode: "1101", Code: "1000004-B", Term: "2026-2", Key: "1",
+			Seats: &SeatSnapshot{Available: 5, MeasuredAt: stale}}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The detail itself is fresh — this must NOT hit the SIA.
+	if _, res, err := svc.CourseDetail(ctx, program, "1000004-B", DefaultFreshness); err != nil {
+		t.Fatal(err)
+	} else if res.Cache != CacheHit {
+		t.Fatalf("detail: got %s, want hit — detail_fetched_at is minutes old", res.Cache)
+	}
+
+	section, res, err := svc.SectionSeats(ctx, program, "1000004-B", "1", DefaultFreshness)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Cache != CacheMiss {
+		t.Fatalf("seats: got %s, want miss — the snapshot is 10 min old", res.Cache)
+	}
+	if got := sia.detailCalls.Load(); got != 1 {
+		t.Fatalf("got %d SIA calls, want 1", got)
+	}
+	if section.Seats == nil || !section.Seats.MeasuredAt.After(stale) {
+		t.Fatalf("seats not refreshed: %+v", section.Seats)
+	}
+
+	// ARCH.md "Cupos": the same POST brings the whole group, so the refresh
+	// must have re-stamped the detail cache too, not just the snapshot.
+	if _, ok, err := store.CourseProgramFetchedAt(ctx, program.ID, "1000004-B"); err != nil || !ok {
+		t.Fatalf("seats refresh did not persist the whole course (ok=%v, err=%v)", ok, err)
+	}
+}
+
+// TestSectionSeats_FreshSeatsServeFromStore: the other half of the same
+// rule — inside the 5 min window, no POST.
+func TestSectionSeats_FreshSeatsServeFromStore(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+	program, _ := store.UpsertProgram(ctx, testProgram(0))
+
+	if err := store.UpsertDetail(ctx, program.ID, CourseOffering{Course: Course{
+		CampusCode: "1101", Code: "1000004-B",
+		Sections: []Section{{CampusCode: "1101", Code: "1000004-B", Term: "2026-2", Key: "1",
+			Seats: &SeatSnapshot{Available: 5, MeasuredAt: time.Now().Add(-30 * time.Second)}}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	section, res, err := svc.SectionSeats(ctx, program, "1000004-B", "1", DefaultFreshness)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Cache != CacheHit {
+		t.Fatalf("got %s, want hit — the snapshot is 30 s old", res.Cache)
+	}
+	if got := sia.detailCalls.Load(); got != 0 {
+		t.Fatalf("got %d SIA calls, want 0", got)
+	}
+	if section.Seats == nil || section.Seats.Available != 5 {
+		t.Fatalf("got %+v, want the cached snapshot", section.Seats)
+	}
+}
+
+// TestSectionSeats_MaxAgeZeroForcesFetch: docs/API.md "?max_age=0 fuerza
+// consulta al SIA".
+func TestSectionSeats_MaxAgeZeroForcesFetch(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+	program, _ := store.UpsertProgram(ctx, testProgram(0))
+
+	if err := store.UpsertDetail(ctx, program.ID, CourseOffering{Course: Course{
+		CampusCode: "1101", Code: "1000004-B",
+		Sections: []Section{{CampusCode: "1101", Code: "1000004-B", Term: "2026-2", Key: "1",
+			Seats: &SeatSnapshot{Available: 5, MeasuredAt: time.Now()}}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, res, err := svc.SectionSeats(ctx, program, "1000004-B", "1", 0); err != nil {
+		t.Fatal(err)
+	} else if res.Cache != CacheMiss {
+		t.Fatalf("got %s, want miss — max_age=0 forces the fetch", res.Cache)
+	}
+	if got := sia.detailCalls.Load(); got != 1 {
+		t.Fatalf("got %d SIA calls, want 1", got)
+	}
+}
+
+// TestCampuses_SecondReadServesFromCache: the sedes were a hardcoded slice
+// in the HTTP layer. Now they are a SIA dropdown cached at the reference
+// TTL, so the second read must not touch the SIA either.
+func TestCampuses_SecondReadServesFromCache(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+
+	first, err := svc.Campuses(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first) != 2 {
+		t.Fatalf("got %d campuses, want 2", len(first))
+	}
+	if first[1].Code != "1101" || first[1].Name != "SEDE BOGOTÁ" {
+		t.Fatalf("got %+v, want the code/name split off the soc9 label", first[1])
+	}
+	if got := sia.campusCalls.Load(); got != 1 {
+		t.Fatalf("cold read: got %d SIA calls, want 1", got)
+	}
+
+	if _, err := svc.Campuses(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := sia.campusCalls.Load(); got != 1 {
+		t.Fatalf("warm read hit the SIA: got %d calls total, want still 1", got)
+	}
+}
+
+// TestLevels_SlugSurvivesReshuffledSoc1 is the invariant that makes levels
+// cacheable at all: soc1's position is volatile (GOTCHAS §26) and its labels
+// carry no code, so the slug is the only public identity — and it must be
+// assigned once, never rewritten from a re-render. A client that bookmarked
+// /v1/levels/posgrado must not find it renamed because the SIA reordered a
+// dropdown.
+func TestLevels_SlugSurvivesReshuffledSoc1(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+
+	// Seeded exactly as the migration does: published slugs, real labels.
+	if err := store.UpsertLevels(ctx, "seed", []Level{
+		{Slug: "pregrado", Name: "Pregrado", Index: 0},
+		{Slug: "doctorado", Name: "Doctorado", Index: 1},
+		{Slug: "posgrado", Name: "Postgrados y másteres", Index: 2},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	delete(store.reference, "levels") // force a refresh from the SIA
+
+	levels, err := svc.Levels(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bySlug := map[string]Level{}
+	for _, l := range levels {
+		bySlug[l.Slug] = l
+	}
+	if _, ok := bySlug["posgrado"]; !ok {
+		t.Fatalf("published slug 'posgrado' was rewritten: got %+v", levels)
+	}
+	if got := bySlug["posgrado"].Name; got != "Postgrados y másteres" {
+		t.Fatalf("got name %q, want the SIA label", got)
+	}
+	if len(levels) != 3 {
+		t.Fatalf("got %d levels, want 3 — a derived slug duplicated a seeded one", len(levels))
+	}
+}
+
+// TestLevels_SecondReadServesFromCache: same rule as every other reference
+// list.
+func TestLevels_SecondReadServesFromCache(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+
+	if _, err := svc.Levels(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Levels(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := sia.levelCalls.Load(); got != 1 {
+		t.Fatalf("got %d SIA calls, want 1", got)
+	}
+}
+
+func TestSlugify(t *testing.T) {
+	cases := map[string]string{
+		"Pregrado":              "pregrado",
+		"Doctorado":             "doctorado",
+		"Postgrados y másteres": "postgrados-y-masteres",
+		"Especialización":       "especializacion",
+	}
+	for label, want := range cases {
+		if got := slugify(label); got != want {
+			t.Errorf("slugify(%q) = %q, want %q", label, got, want)
+		}
 	}
 }

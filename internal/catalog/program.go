@@ -42,26 +42,31 @@ func (k ProgramKey) String() string {
 	return fmt.Sprintf("%d-%d-%d-%d", k.Level, k.Campus, k.Faculty, k.Program)
 }
 
-// Level enum for soc1. Fase 1 scope: LevelUndergrad only.
-type Level int
+// Level is one soc1 option, cached like every other reference list.
+//
+// Unlike every other dropdown, soc1's labels carry no institutional code
+// ("Pregrado", not "1101 SEDE BOGOTÁ"), so there is nothing to split an
+// identity out of. Slug is that identity: ours, published in docs/API.md,
+// and assigned once — never rewritten from a re-render, because the only
+// other candidate is Index, and Index is volatile (GOTCHAS §26).
+type Level struct {
+	Slug string `db:"slug" json:"slug"` // 'pregrado'
+	Name string `db:"name" json:"name"` // 'Pregrado'
 
-const (
-	LevelUndergrad Level = iota // pregrado
-	LevelDoctorate              // doctorado
-	LevelGraduate               // posgrado / máster
-)
+	// soc1 position. VOLATILE — navigation coordinate, never an identity.
+	Index int `db:"level_idx" json:"-"`
+}
 
-// Campus enum for soc9/soc10. Fase 1 scope: CampusBogota only.
-type Campus int
+// Campus is one sede, as read from the soc9 dropdown and cached like every
+// other reference list. It replaces the hardcoded enum this type used to be:
+// the sede list is data the SIA owns (SEDE DE LA PAZ is recent), so a rename
+// or an addition must not need a redeploy.
+type Campus struct {
+	Level int    `db:"level" json:"-"`
+	Code  string `db:"code"  json:"code"` // '1101'
+	Name  string `db:"name"  json:"name"` // 'SEDE BOGOTÁ'
 
-const (
-	CampusAmazonia Campus = iota + 1
-	CampusBogota
-	CampusCaribe
-	CampusDeLaPaz
-	CampusManizales
-	CampusMedellin
-	CampusOrinoquia
-	CampusPalmira
-	CampusTumaco
-)
+	// soc9 position. VOLATILE — navigation coordinate, never an identity
+	// and never in a URL. Same rule as Program's *Idx fields.
+	Index int `db:"campus_idx" json:"-"`
+}

@@ -93,8 +93,8 @@ parte de la PK de `course`.
 
 | Método | Ruta | Notas |
 |---|---|---|
-| `GET` | `/v1/levels` | enum fijo de 3 |
-| `GET` | `/v1/campuses` | 9 sedes |
+| `GET` | `/v1/levels` | los niveles de `soc1`; cacheados, no fijos en código |
+| `GET` | `/v1/campuses` | las sedes de `soc9`; cacheadas, no fijas en código |
 | `GET` | `/v1/faculties?campus=1101` | |
 | `GET` | `/v1/programs?campus=1101&faculty=2055` | `faculty` opcional |
 | `GET` | `/v1/programs/{program}` | incluye `catalog_fetched_at` |
@@ -180,11 +180,12 @@ persiste. En ese orden.
 
 | Endpoint | Miss → SIA | Qué trae el miss |
 |---|---|---|
-| `/programs`, `/faculties`, `/campuses` | sí | cascada de dropdowns |
+| `/levels`, `/campuses` | solo si falta o pasó de 30 d | 1 POST → el dropdown entero |
+| `/programs`, `/faculties` | solo si falta o pasó de 30 d | ~15 POSTs → **todas** las facultades y sus programas |
 | `/programs/{p}/courses` | sí | 1 POST → ~98 asignaturas |
 | `/programs/{p}/courses/{code}` | sí | 1 POST → esa asignatura con sus grupos |
 | `/programs/{p}/courses/{code}/sections[/{n}]` | sí | igual |
-| `.../sections/{n}/seats` | sí | igual, responde solo los cupos |
+| `.../sections/{n}/seats` | solo si el snapshot pasó de 5 min | igual: refresca y guarda el grupo entero, responde solo los cupos |
 | `/courses/{code}` | **no** | — |
 | `/courses?q=` | **no** | — |
 

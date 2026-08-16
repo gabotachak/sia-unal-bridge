@@ -76,6 +76,91 @@ func (c *SIAConn) gotoProgram(ctx context.Context, key catalog.ProgramKey) error
 	return nil
 }
 
+// FetchLevels returns the soc1 dropdown — the niveles de estudio. soc1 is
+// the root of the cascade, so nothing upstream re-renders it; its own
+// valueChange response does (verified against the live server). Exactly one
+// POST: any genuine change works, so it just picks a level the connection
+// isn't already on and never needs the bounce the others do.
+//
+// The labels carry no code — see LabelOption. Turning them into a public ID
+// is the caller's job, not the parser's.
+func (c *SIAConn) FetchLevels(ctx context.Context) ([]LabelOption, error) {
+	if c.DetailRegion != 0 {
+		return nil, fmt.Errorf("sia: FetchLevels: connection is in detail region %d, call Volver first", c.DetailRegion)
+	}
+
+	target := 0
+	if c.navLevel == target {
+		target = 1
+	}
+	c.form.Nivel = strconv.Itoa(target)
+	body, env, err := c.postValueChange(ctx, "pt1:r1:0:soc1")
+	if err != nil {
+		return nil, err
+	}
+	if isNoop(body) {
+		return nil, newNoopError(body)
+	}
+	c.navLevel = target
+	c.navCampus, c.navFaculty = -1, -1
+	c.parked = false // soc1 wipes the downstream dropdowns
+
+	html, ok := env["pt1:r1:0:soc1"]
+	if !ok {
+		return nil, fmt.Errorf("sia: FetchLevels: no update id=%q in response", "pt1:r1:0:soc1")
+	}
+	return parseLabelOptionsHTML(html)
+}
+
+// FetchCampuses returns the soc9 dropdown — the sedes — for one level. The
+// soc1 valueChange response carries a fresh <update id="pt1:r1:0:soc9">
+// alongside soc2/soc3/soc4 (verified against the live server), so this is
+// one POST, two when the connection is already sitting on `level` and has to
+// bounce through another one to force a genuine change (GOTCHAS §30).
+//
+// The bootstrap page also carries the full soc9 list, but re-GETting it to
+// read a dropdown would cost up to 4.5 MB and reset the connection's whole
+// navigation state. One valueChange is cheaper.
+func (c *SIAConn) FetchCampuses(ctx context.Context, level int) ([]Option, error) {
+	if c.DetailRegion != 0 {
+		return nil, fmt.Errorf("sia: FetchCampuses: connection is in detail region %d, call Volver first", c.DetailRegion)
+	}
+
+	if c.navLevel == level {
+		bounce := 1
+		if level == 1 {
+			bounce = 0
+		}
+		c.form.Nivel = strconv.Itoa(bounce)
+		if body, _, err := c.postValueChange(ctx, "pt1:r1:0:soc1"); err != nil {
+			return nil, err
+		} else if isNoop(body) {
+			return nil, newNoopError(body)
+		}
+		c.navLevel = bounce
+		c.navCampus, c.navFaculty = -1, -1
+		c.parked = false
+	}
+
+	c.form.Nivel = strconv.Itoa(level)
+	body, env, err := c.postValueChange(ctx, "pt1:r1:0:soc1")
+	if err != nil {
+		return nil, err
+	}
+	if isNoop(body) {
+		return nil, newNoopError(body)
+	}
+	c.navLevel = level
+	c.navCampus, c.navFaculty = -1, -1
+	c.parked = false // soc1 wipes the downstream dropdowns
+
+	html, ok := env["pt1:r1:0:soc9"]
+	if !ok {
+		return nil, fmt.Errorf("sia: FetchCampuses: no update id=%q in response", "pt1:r1:0:soc9")
+	}
+	return parseOptionsHTML(html)
+}
+
 // FetchProgramDirectory walks the reference cascade for one (level, campus):
 // soc1, soc9, then soc2 once per faculty returned. Unlike gotoProgram, every
 // step here MUST return fresh response data (the actual options), so it

@@ -61,6 +61,41 @@ func parseOptionsHTML(html string) ([]Option, error) {
 	return opts, nil
 }
 
+// LabelOption is one <option> of a dropdown whose label carries NO
+// institutional code — soc1 is the only one ("Pregrado", not "1101 SEDE
+// BOGOTÁ"). Splitting it like the others would produce code="Postgrados",
+// name="y másteres": a public identity invented out of a prefix.
+type LabelOption struct {
+	Index int
+	Label string
+}
+
+// parseLabelOptionsHTML is parseOptionsHTML without the code/name split.
+func parseLabelOptionsHTML(html string) ([]LabelOption, error) {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		return nil, fmt.Errorf("sia: parseLabelOptionsHTML: %w", err)
+	}
+
+	var opts []LabelOption
+	doc.Find("option").Each(func(_ int, o *goquery.Selection) {
+		val, _ := o.Attr("value")
+		if val == "" {
+			return
+		}
+		idx, err := strconv.Atoi(val)
+		if err != nil {
+			return
+		}
+		label := strings.TrimSpace(o.Text())
+		if label == "" {
+			return
+		}
+		opts = append(opts, LabelOption{Index: idx, Label: label})
+	})
+	return opts, nil
+}
+
 // splitCodeName applies "first token = código, resto = nombre"
 // (DATA-MODEL.md §7): '2A74 INGENIERÍA DE SISTEMAS...' -> ("2A74",
 // "INGENIERÍA DE SISTEMAS...").

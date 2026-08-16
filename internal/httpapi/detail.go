@@ -108,13 +108,12 @@ func (a *api) sectionSeats(c *gin.Context) {
 		return
 	}
 
-	offering, res, err := a.svc.CourseDetail(c.Request.Context(), program, code, maxAge)
+	section, res, err := a.svc.SectionSeats(c.Request.Context(), program, code, key, maxAge)
 	if err != nil {
-		writeError(c, err, "unknown_course")
+		writeError(c, err, "unknown_section")
 		return
 	}
-	section, found := findSection(offering.Course.Sections, key)
-	if !found || section.Seats == nil {
+	if section.Seats == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "unknown_section", "message": "no such section key, or no seat data yet"})
 		return
 	}

@@ -27,6 +27,31 @@ sin volver a scrapear.
 ## Esquema
 
 ```sql
+-- ─── reference: dropdowns del SIA, TTL de 30 d ───────────────────
+-- Nivel, sede, facultad y programa son datos que el SIA posee. Estaban
+-- hardcodeados (nivel, sede) o sin marcador de frescura (programa), así que
+-- toda lectura de referencia bajaba a la cascada en vivo — ~15 POSTs — en vez
+-- de honrar el default de 30 d de API.md. Ver decisión 9.
+CREATE TABLE reference_fetch (             -- marcador de TTL, uno por lista
+    scope      text PRIMARY KEY,           -- 'campuses:0', 'programs:1101:0', 'levels'
+    fetched_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE level (                       -- soc1
+    slug      text PRIMARY KEY,            -- id público: 'pregrado'. Se asigna UNA vez
+    name      text NOT NULL,               -- etiqueta del SIA: 'Pregrado'
+    level_idx smallint NOT NULL,           -- posición soc1. VOLÁTIL
+    UNIQUE (name)                          -- el descubrimiento casa por etiqueta
+);
+
+CREATE TABLE campus (                      -- soc9
+    level      smallint NOT NULL,
+    code       text NOT NULL,              -- '1101'
+    name       text NOT NULL,              -- 'SEDE BOGOTÁ'
+    campus_idx smallint NOT NULL,          -- posición soc9. VOLÁTIL
+    PRIMARY KEY (level, code)
+);
+
 -- ─── catalog: cheap, near-immutable ──────────────────────────────
 CREATE TABLE course (
     campus_code text NOT NULL,             -- '1101'; qualifier, see decision 7
@@ -265,7 +290,7 @@ un rename mecánico.
 
 ---
 
-## Las ocho decisiones no obvias
+## Las nueve decisiones no obvias
 
 ### 1. `typology` vive en `course_program`, no en `course`
 
@@ -457,6 +482,33 @@ dice de qué sede es el grupo, dato que importa: un grupo PEAMA de Tumaco no es
 inscribible desde Bogotá, aunque salga en el detalle consultado desde Bogotá.
 
 Ver [GOTCHAS.md §24](GOTCHAS.md).
+
+---
+
+### 9. La referencia se cachea; el índice del dropdown nunca es la identidad
+
+Nivel y sede eran listas fijas en el código, y el directorio de programas no tenía
+marcador de frescura: cada lectura de referencia recorría la cascada en vivo. Medido,
+`GET /v1/faculties` tardaba ~8 s **siempre**. Ahora las tres listas salen del SIA una
+vez cada 30 d ([API.md "Frescura"](API.md)) y se sirven de Postgres.
+
+Un marcador único, `reference_fetch`, en vez de una tabla por lista: es una sola regla.
+La escritura y el sello van en la misma transacción — un sello sobre un conjunto parcial
+deja la cache *fresca e incompleta*, que es el fallo silencioso de siempre.
+
+**`soc1` es el caso raro y obliga a una decisión.** Sus etiquetas no traen código
+(`Pregrado`, no `1101 SEDE BOGOTÁ`), así que la regla de la decisión 7 —primer token es
+el código— produciría `code='Postgrados'`, `name='y másteres'`: una identidad pública
+inventada de un prefijo. La única identidad estable disponible es el **slug** que
+[API.md](API.md) ya publica, así que:
+
+- `level.slug` es la PK y **se asigna una vez**; jamás se reescribe desde un re-render.
+- El descubrimiento casa por **etiqueta** (`UNIQUE (name)`) y solo mueve `level_idx`.
+- Una etiqueta nueva es un nivel nuevo: entra con un slug derivado del texto.
+
+Si se casara por posición, un `soc1` reordenado renombraría IDs públicos — exactamente
+lo que [GOTCHAS §26](GOTCHAS.md) prohíbe para los índices. Los tres slugs publicados van
+sembrados en la migración para que el contrato sobreviva al primer contacto.
 
 ---
 

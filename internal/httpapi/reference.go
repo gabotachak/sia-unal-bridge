@@ -8,29 +8,36 @@ import (
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
 
-// levels is a fixed 3-value enum — no SIA round trip. FIELDS.md soc1.
+// levels serves the soc1 list (FIELDS.md) from the reference cache. It was a
+// hardcoded 3-value slice; the SIA owns the list, so a fourth nivel appears
+// without a redeploy. The slugs are ours and stable — see catalog.Level.
 func (a *api) levels(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"levels": []gin.H{
-		{"slug": "pregrado", "name": "Pregrado"},
-		{"slug": "doctorado", "name": "Doctorado"},
-		{"slug": "posgrado", "name": "Postgrados y másteres"},
-	}})
+	levels, err := a.svc.Levels(c.Request.Context())
+	if err != nil {
+		writeError(c, err, "unknown_level")
+		return
+	}
+	out := make([]gin.H, len(levels))
+	for i, l := range levels {
+		out[i] = gin.H{"slug": l.Slug, "name": l.Name}
+	}
+	c.JSON(http.StatusOK, gin.H{"levels": out})
 }
 
-// campuses is fixed too — FIELDS.md soc9/soc10, 9 sedes. Fase 1 only
-// resolves programs for Bogotá, but the list itself is free.
+// campuses serves the soc9 list (FIELDS.md) from the reference cache. Fase 1
+// only resolves programs for Bogotá, but the sede list itself is real data
+// the SIA owns — cached at the reference TTL, not hardcoded here.
 func (a *api) campuses(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"campuses": []gin.H{
-		{"code": "1125", "name": "SEDE AMAZONIA"},
-		{"code": "1101", "name": "SEDE BOGOTÁ"},
-		{"code": "1126", "name": "SEDE CARIBE"},
-		{"code": "9933", "name": "SEDE DE LA PAZ"},
-		{"code": "1103", "name": "SEDE MANIZALES"},
-		{"code": "1102", "name": "SEDE MEDELLÍN"},
-		{"code": "1124", "name": "SEDE ORINOQUIA"},
-		{"code": "1104", "name": "SEDE PALMIRA"},
-		{"code": "9920", "name": "SEDE TUMACO"},
-	}})
+	campuses, err := a.svc.Campuses(c.Request.Context())
+	if err != nil {
+		writeError(c, err, "unknown_campus")
+		return
+	}
+	out := make([]gin.H, len(campuses))
+	for i, cam := range campuses {
+		out[i] = gin.H{"code": cam.Code, "name": cam.Name}
+	}
+	c.JSON(http.StatusOK, gin.H{"campuses": out})
 }
 
 // faculties lists Bogotá's faculties — the only campus fase 1 resolves

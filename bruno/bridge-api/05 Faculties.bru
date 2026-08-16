@@ -5,12 +5,12 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/faculties?campus={{campus}}
+  url: {{baseUrl}}/campuses/{{campus}}/faculties
   body: none
   auth: none
 }
 
-params:query {
+params:path {
   campus: {{campus}}
 }
 
@@ -19,6 +19,12 @@ assert {
 }
 
 docs {
-  Fase 1 solo resuelve Bogotá (1101). Dispara cascada en vivo contra el SIA
-  si no está cacheado — puede tardar unos segundos.
+  Las facultades son de una sede, así que la sede va en la ruta.
+
+  Si el directorio de esa sede no está cacheado dispara la cascada en vivo
+  contra el SIA (~15 POSTs, varios segundos). La segunda llamada sale de
+  Postgres en milisegundos: la referencia tiene TTL de 30 d.
+
+  Funciona con cualquier sede: 1101 Bogotá, 1102 Medellín, 1125 Amazonia…
+  Ver GET /v1/campuses para la lista.
 }

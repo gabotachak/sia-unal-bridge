@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -19,7 +20,7 @@ type fakeStore struct {
 	courseProg map[string]courseProgRow // "programID|code"
 	sections   map[string][]Section     // "campus|code|programID"
 	reference  map[string]time.Time     // scope -> fetched_at
-	campuses   map[int][]Campus         // level
+	campuses   map[string][]Campus      // level slug
 	levels     []Level
 }
 
@@ -35,7 +36,7 @@ func newFakeStore() *fakeStore {
 		courseProg: map[string]courseProgRow{},
 		sections:   map[string][]Section{},
 		reference:  map[string]time.Time{},
-		campuses:   map[int][]Campus{},
+		campuses:   map[string][]Campus{},
 	}
 }
 
@@ -65,16 +66,16 @@ func (f *fakeStore) UpsertCampuses(_ context.Context, scope string, campuses []C
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, c := range campuses {
-		f.campuses[c.Level] = append(f.campuses[c.Level], c)
+		f.campuses[c.LevelSlug] = append(f.campuses[c.LevelSlug], c)
 	}
 	f.reference[scope] = time.Now()
 	return nil
 }
 
-func (f *fakeStore) Campuses(_ context.Context, level int) ([]Campus, error) {
+func (f *fakeStore) Campuses(_ context.Context, levelSlug string) ([]Campus, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.campuses[level], nil
+	return f.campuses[levelSlug], nil
 }
 
 // UpsertLevels mirrors the real store's conflict target: match on Name, and
@@ -143,7 +144,7 @@ func (f *fakeStore) Programs(_ context.Context, campusCode, facultyCode string) 
 	defer f.mu.Unlock()
 	var out []Program
 	for _, p := range f.programs {
-		if p.CampusCode == campusCode && (facultyCode == "" || p.FacultyCode == facultyCode) {
+		if (campusCode == "" || p.CampusCode == campusCode) && (facultyCode == "" || p.FacultyCode == facultyCode) {
 			out = append(out, p)
 		}
 	}
@@ -226,11 +227,15 @@ func (f *fakeStore) CourseProgramTypology(_ context.Context, programID int64, co
 func (f *fakeStore) CurrentSeats(context.Context, int64) (SeatSnapshot, bool, error) {
 	return SeatSnapshot{}, false, nil
 }
-func (f *fakeStore) ProgramsOfferingCourse(context.Context, string) ([]Program, error) {
+func (f *fakeStore) ProgramsOfferingCourse(context.Context, string, string) ([]Program, error) {
 	return nil, nil
 }
-func (f *fakeStore) SearchCourses(context.Context, string) ([]Course, error) { return nil, nil }
-func (f *fakeStore) CachedProgramCount(context.Context) (int, int, error)    { return 0, 0, nil }
+func (f *fakeStore) SearchCourses(context.Context, string, string) ([]Course, error) {
+	return nil, nil
+}
+func (f *fakeStore) ProgramCoverage(context.Context, string) (int, int, error) {
+	return 0, 0, nil
+}
 
 // fakeSIA counts calls per key so tests can assert singleflight dedup.
 type fakeSIA struct {
@@ -259,24 +264,39 @@ func (f *fakeSIA) FetchCampuses(context.Context, int) ([]DropdownOption, error) 
 	return []DropdownOption{
 		{Index: 1, Code: "1125", Name: "SEDE AMAZONIA"},
 		{Index: 2, Code: "1101", Name: "SEDE BOGOTÁ"},
+		{Index: 6, Code: "1102", Name: "SEDE MEDELLÍN"},
 	}, nil
 }
 
 // FetchProgramDirectory returns two faculties with one program each — enough
 // shape to assert that ONE cascade fills every faculty, not just the one
-// asked for.
-func (f *fakeSIA) FetchProgramDirectory(context.Context, int, int) ([]DropdownOption, map[int][]DropdownOption, error) {
+// asked for — and answers differently per campus, so nothing can pass by
+// assuming Bogotá. 2A74 exists in BOTH sedes on purpose: that is the PEAMA
+// collision of GOTCHAS §26 (136 of 852 codes repeat).
+func (f *fakeSIA) FetchProgramDirectory(_ context.Context, _, campusIdx int) ([]DropdownOption, map[int][]DropdownOption, error) {
 	f.directoryCalls.Add(1)
 	time.Sleep(f.delay)
-	faculties := []DropdownOption{
-		{Index: 8, Code: "2055", Name: "FACULTAD DE INGENIERÍA"},
-		{Index: 3, Code: "2054", Name: "FACULTAD DE CIENCIAS"},
+
+	switch campusIdx {
+	case 2: // Bogotá
+		return []DropdownOption{
+				{Index: 8, Code: "2055", Name: "FACULTAD DE INGENIERÍA"},
+				{Index: 3, Code: "2054", Name: "FACULTAD DE CIENCIAS"},
+			}, map[int][]DropdownOption{
+				8: {{Index: 3, Code: "2A74", Name: "INGENIERÍA DE SISTEMAS Y COMPUTACIÓN"}},
+				3: {{Index: 1, Code: "2A11", Name: "MATEMÁTICAS"}},
+			}, nil
+	case 6: // Medellín
+		return []DropdownOption{
+				{Index: 4, Code: "3059", Name: "FACULTAD DE MINAS"},
+			}, map[int][]DropdownOption{
+				4: {
+					{Index: 2, Code: "3534", Name: "INGENIERÍA DE SISTEMAS E INFORMÁTICA"},
+					{Index: 5, Code: "2A74", Name: "INGENIERÍA DE SISTEMAS Y COMPUTACIÓN (PEAMA)"},
+				},
+			}, nil
 	}
-	programs := map[int][]DropdownOption{
-		8: {{Index: 3, Code: "2A74", Name: "INGENIERÍA DE SISTEMAS Y COMPUTACIÓN"}},
-		3: {{Index: 1, Code: "2A11", Name: "MATEMÁTICAS"}},
-	}
-	return faculties, programs, nil
+	return nil, nil, ErrNotFound
 }
 
 func (f *fakeSIA) FetchCatalog(context.Context, ProgramKey) ([]CourseOffering, error) {
@@ -425,7 +445,7 @@ func TestReference_SecondReadServesFromCache(t *testing.T) {
 	svc := NewService(store, sia, "2026-2")
 	ctx := context.Background()
 
-	first, err := svc.Faculties(ctx)
+	first, err := svc.Faculties(ctx, "1101", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -436,7 +456,7 @@ func TestReference_SecondReadServesFromCache(t *testing.T) {
 		t.Fatalf("cold read: got %d cascades, want 1", got)
 	}
 
-	second, err := svc.Faculties(ctx)
+	second, err := svc.Faculties(ctx, "1101", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,10 +478,10 @@ func TestReference_OneCascadeFillsEveryFaculty(t *testing.T) {
 	svc := NewService(store, sia, "2026-2")
 	ctx := context.Background()
 
-	if _, err := svc.ProgramsInFaculty(ctx, "2055"); err != nil {
+	if _, err := svc.ProgramsInFaculty(ctx, "1101", "2055", ""); err != nil {
 		t.Fatal(err)
 	}
-	others, err := svc.ProgramsInFaculty(ctx, "2054")
+	others, err := svc.ProgramsInFaculty(ctx, "1101", "2054", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -482,11 +502,11 @@ func TestResolveProgram_UnknownCodeIsNotAnEndlessCascade(t *testing.T) {
 	svc := NewService(store, sia, "2026-2")
 	ctx := context.Background()
 
-	if _, err := svc.ResolveProgram(ctx, "2A74"); err != nil {
+	if _, err := svc.ResolveProgram(ctx, ProgramRef{Campus: "1101", Code: "2A74"}); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 3; i++ {
-		if _, err := svc.ResolveProgram(ctx, "NOPE"); err != ErrNotFound {
+		if _, err := svc.ResolveProgram(ctx, ProgramRef{Campus: "1101", Code: "NOPE"}); err != ErrNotFound {
 			t.Fatalf("unknown code: got %v, want ErrNotFound", err)
 		}
 	}
@@ -538,7 +558,7 @@ func TestSectionSeats_StaleSeatsRefetchThoughDetailIsFresh(t *testing.T) {
 		t.Fatalf("seats not refreshed: %+v", section.Seats)
 	}
 
-	// ARCH.md "Cupos": the same POST brings the whole group, so the refresh
+	// docs/ARCH.md "Cupos": the same POST brings the whole group, so the refresh
 	// must have re-stamped the detail cache too, not just the snapshot.
 	if _, ok, err := store.CourseProgramFetchedAt(ctx, program.ID, "1000004-B"); err != nil || !ok {
 		t.Fatalf("seats refresh did not persist the whole course (ok=%v, err=%v)", ok, err)
@@ -613,12 +633,12 @@ func TestCampuses_SecondReadServesFromCache(t *testing.T) {
 	svc := NewService(store, sia, "2026-2")
 	ctx := context.Background()
 
-	first, err := svc.Campuses(ctx)
+	first, err := svc.Campuses(ctx, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(first) != 2 {
-		t.Fatalf("got %d campuses, want 2", len(first))
+	if len(first) != 3 {
+		t.Fatalf("got %d campuses, want 3", len(first))
 	}
 	if first[1].Code != "1101" || first[1].Name != "SEDE BOGOTÁ" {
 		t.Fatalf("got %+v, want the code/name split off the soc9 label", first[1])
@@ -627,7 +647,7 @@ func TestCampuses_SecondReadServesFromCache(t *testing.T) {
 		t.Fatalf("cold read: got %d SIA calls, want 1", got)
 	}
 
-	if _, err := svc.Campuses(ctx); err != nil {
+	if _, err := svc.Campuses(ctx, ""); err != nil {
 		t.Fatal(err)
 	}
 	if got := sia.campusCalls.Load(); got != 1 {
@@ -706,5 +726,132 @@ func TestSlugify(t *testing.T) {
 		if got := slugify(label); got != want {
 			t.Errorf("slugify(%q) = %q, want %q", label, got, want)
 		}
+	}
+}
+
+// TestReference_NonBogotaCampusResolves is the anti-regression for the
+// Bogotá pin: nothing in the code may special-case one sede. Medellín must
+// walk the exact same path, with its own soc9 index read from the campus
+// cache and never from a constant.
+func TestReference_NonBogotaCampusResolves(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+
+	faculties, err := svc.Faculties(ctx, "1102", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(faculties) != 1 || faculties[0].Code != "3059" {
+		t.Fatalf("got %+v, want Medellín's FACULTAD DE MINAS", faculties)
+	}
+
+	p, err := svc.ResolveProgram(ctx, ProgramRef{Campus: "1102", Code: "3534"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.CampusCode != "1102" || p.CampusIdx != 6 {
+		t.Fatalf("got campus %q idx %d, want 1102/6 off the campus cache", p.CampusCode, p.CampusIdx)
+	}
+	// The nav coordinate handed to the SIA must carry Medellín's index, not
+	// a compiled-in 2.
+	if k := p.key(); k.Campus != 6 || k.CampusCode != "1102" {
+		t.Fatalf("got key %+v, want Campus=6 CampusCode=1102", k)
+	}
+}
+
+// TestResolveProgram_CollisionAcrossCampusesIs300: 2A74 exists in Bogotá and
+// in Medellín (PEAMA). Unqualified, that must be an AmbiguousError with both
+// candidates — never a silent pick of one sede.
+func TestResolveProgram_CollisionAcrossCampusesIs300(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+
+	// Warm both directories.
+	if _, err := svc.Faculties(ctx, "1101", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Faculties(ctx, "1102", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := svc.ResolveProgram(ctx, ProgramRef{Code: "2A74"})
+	var aerr *AmbiguousError
+	if !errors.As(err, &aerr) {
+		t.Fatalf("got %v, want AmbiguousError", err)
+	}
+	if len(aerr.Candidates) != 2 {
+		t.Fatalf("got %d candidates, want 2", len(aerr.Candidates))
+	}
+	seen := map[string]bool{}
+	for _, c := range aerr.Candidates {
+		seen[c.CampusCode] = true
+	}
+	if !seen["1101"] || !seen["1102"] {
+		t.Fatalf("candidates %+v, want one per sede", aerr.Candidates)
+	}
+
+	// Qualified, it resolves cleanly to the sede asked for.
+	p, err := svc.ResolveProgram(ctx, ProgramRef{Campus: "1102", Code: "2A74"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.CampusCode != "1102" {
+		t.Fatalf("got %q, want 1102", p.CampusCode)
+	}
+}
+
+// TestResolveProgram_UnqualifiedNeverFetches: with no campus there is no
+// cascade to run — the lookup is cache-only. Otherwise an unqualified 404
+// would mean "crawl every sede", the DoS-by-GET docs/API.md rules out.
+func TestResolveProgram_UnqualifiedNeverFetches(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+
+	if _, err := svc.ResolveProgram(context.Background(), ProgramRef{Code: "2A74"}); err != ErrNotFound {
+		t.Fatalf("got %v, want ErrNotFound", err)
+	}
+	if got := sia.directoryCalls.Load(); got != 0 {
+		t.Fatalf("got %d cascades, want 0", got)
+	}
+}
+
+// TestCampuses_UnknownIsNotFound: an unknown sede must be a 404, never a
+// quiet fallback to a default campus.
+func TestCampuses_UnknownIsNotFound(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+
+	if _, err := svc.Faculties(context.Background(), "9999", ""); err != ErrNotFound {
+		t.Fatalf("got %v, want ErrNotFound", err)
+	}
+}
+
+// TestReference_DefaultLevelSharesOneScope: an omitted ?level= and an
+// explicit ?level=pregrado are the same directory. Building the cache scope
+// from the raw parameter split them in two, so the "default" caller paid the
+// ~15-POST cascade a second time.
+func TestReference_DefaultLevelSharesOneScope(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+
+	if _, err := svc.Faculties(ctx, "1101", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Faculties(ctx, "1101", DefaultLevelSlug); err != nil {
+		t.Fatal(err)
+	}
+	if got := sia.directoryCalls.Load(); got != 1 {
+		t.Fatalf("got %d cascades, want 1 — the two spellings of the default level must share a scope", got)
+	}
+	if _, ok := store.reference["programs:1101:"+DefaultLevelSlug]; !ok {
+		t.Fatalf("scopes are %v, want one keyed by the resolved slug", store.reference)
 	}
 }

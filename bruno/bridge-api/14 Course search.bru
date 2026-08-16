@@ -5,9 +5,13 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/courses?q={{q}}
+  url: {{baseUrl}}/campuses/{{campus}}/courses?q={{q}}
   body: none
   auth: none
+}
+
+params:path {
+  campus: {{campus}}
 }
 
 params:query {
@@ -19,7 +23,14 @@ assert {
 }
 
 docs {
-  Store-only, NUNCA dispara al SIA. Respuesta trae coverage (cuántos
-  programas están cacheados) para que el cliente sepa qué tan completo es
-  el resultado.
+  Store-only, NUNCA dispara al SIA: un miss aquí obligaría a recorrer todos
+  los planes sin cachear, que es un DoS por GET.
+
+  Por eso la respuesta trae coverage con DOS números distintos:
+
+    programs_known         planes que el directorio ya descubrió
+    programs_with_catalog  de esos, los que tienen sus asignaturas bajadas
+
+  Ninguno es el censo de la UNAL (1380 entradas). Si programs_with_catalog
+  es bajo, un resultado vacío NO significa que la asignatura no exista.
 }

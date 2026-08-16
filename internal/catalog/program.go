@@ -28,15 +28,38 @@ type Program struct {
 	ProgramIdx int `db:"program_idx" json:"-"`
 }
 
-// PublicID is what appears in URLs: "2A74". NOT unique across campuses — 136
-// of 852 codes repeat (PEAMA). Unqualified only while the scope is a single
-// campus (fase 1: Bogotá). See GOTCHAS.md §26.
+// PublicID is what appears in URLs: "2A74". NOT unique on its own — 136 of
+// 852 codes repeat across sedes (PEAMA) and 46 repeat within a sede across
+// faculties. See GOTCHAS.md §26 and ProgramRef.
 func (p Program) PublicID() string { return p.Code }
+
+// ProgramRef is how a caller names a program: the institutional identity
+// (campus, faculty, code) that program's UNIQUE constraint mirrors, plus the
+// level whose directory to consult.
+//
+// Campus and Faculty may be empty. That is not an invalid request — it is an
+// under-specified one, and the answer is either a single match or a 300 with
+// the candidates. Never a silent narrowing to some default sede.
+type ProgramRef struct {
+	Campus  string // '1101'; empty = search every cached campus, fetch none
+	Faculty string // '2055'; empty = any faculty
+	Code    string // '2A74'
+	Level   string // slug; empty = DefaultLevelSlug
+}
 
 // ProgramKey is the navigation coordinate inside SIA: "0-2-8-3". Positional
 // dropdown indices — volatile, derived from a Program at use time, never
 // stored as its identity.
-type ProgramKey struct{ Level, Campus, Faculty, Program int }
+//
+// CampusCode rides along even though it is not a coordinate: everything a
+// fetch produces gets stamped with it, and the alternative was an
+// index→code table compiled into the sia adapter. That table is data the SIA
+// owns and can reorder (GOTCHAS §26), so it belongs in the campus cache, not
+// in a var block.
+type ProgramKey struct {
+	Level, Campus, Faculty, Program int
+	CampusCode                      string
+}
 
 func (k ProgramKey) String() string {
 	return fmt.Sprintf("%d-%d-%d-%d", k.Level, k.Campus, k.Faculty, k.Program)
@@ -62,9 +85,11 @@ type Level struct {
 // the sede list is data the SIA owns (SEDE DE LA PAZ is recent), so a rename
 // or an addition must not need a redeploy.
 type Campus struct {
-	Level int    `db:"level" json:"-"`
-	Code  string `db:"code"  json:"code"` // '1101'
-	Name  string `db:"name"  json:"name"` // 'SEDE BOGOTÁ'
+	// LevelSlug, not the soc1 index: this is half the primary key, so it is
+	// identity, and identity is never positional.
+	LevelSlug string `db:"level_slug" json:"-"`
+	Code      string `db:"code"       json:"code"` // '1101'
+	Name      string `db:"name"       json:"name"` // 'SEDE BOGOTÁ'
 
 	// soc9 position. VOLATILE — navigation coordinate, never an identity
 	// and never in a URL. Same rule as Program's *Idx fields.

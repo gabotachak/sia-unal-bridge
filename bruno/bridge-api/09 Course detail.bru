@@ -5,9 +5,15 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/programs/{{program}}/courses/{{code}}
+  url: {{baseUrl}}/campuses/{{campus}}/programs/{{program}}/courses/{{code}}
   body: none
   auth: none
+}
+
+params:path {
+  campus: {{campus}}
+  program: {{program}}
+  code: {{code}}
 }
 
 assert {

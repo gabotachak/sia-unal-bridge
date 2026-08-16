@@ -11,11 +11,14 @@ var (
 	ErrBusy           = errors.New("sia connection pool busy")
 )
 
-// AmbiguousError carries the candidates for ErrAmbiguous: the programs that
-// offer the requested course, so the client can pick
-// /v1/programs/{program}/courses/{code}.
+// AmbiguousError carries the candidates for ErrAmbiguous. Two different
+// ambiguities produce it, hence Code/Hint: a course code offered by several
+// programs, and a program code exposed by several (campus, faculty) pairs —
+// program.code identifies nothing on its own (GOTCHAS §26).
 type AmbiguousError struct {
 	Candidates []Program
+	Code       string // 'ambiguous_program' | 'ambiguous_course'
+	Hint       string // what the caller should add to disambiguate
 }
 
 func (e *AmbiguousError) Error() string { return ErrAmbiguous.Error() }

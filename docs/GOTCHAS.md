@@ -694,10 +694,10 @@ independientes que puedan reutilizar la misma conexión para el mismo nivel+sede
 veces.
 
 > **Corrección, 2026-08-16:** lo de arriba no basta. El §30 se manifestó en producción
-> vía Bruno contra `/v1/faculties` — no por una segunda llamada *dentro* de
+> vía Bruno contra `/v1/campuses/{campus}/faculties` — no por una segunda llamada *dentro* de
 > `FetchProgramDirectory`, sino porque el **pool** reutiliza conexiones entre
-> operaciones sin relación: una petición a `/v1/programs/2A74/courses` deja la conexión
-> con `soc1=0, soc9=2`; la siguiente petición a `/v1/faculties`, si le toca esa misma
+> operaciones sin relación: una petición a `/v1/campuses/1101/programs/2A74/courses` deja la conexión
+> con `soc1=0, soc9=2`; la siguiente petición a `/v1/campuses/{campus}/faculties`, si le toca esa misma
 > conexión, reenvía `soc1=0, soc9=2` sin saberlo → mismo no-op del §30. Ver detalle
 > completo en §31.
 
@@ -705,7 +705,7 @@ veces.
 
 ## 31. El §30 es un problema del *pool*, no solo de un bucle mal escrito
 
-Reproducido primero a mano vía Bruno (`GET /v1/faculties?campus=1101` → `502 sia_noop`)
+Reproducido primero a mano vía Bruno (`GET /v1/campuses/1101/faculties` → `502 sia_noop`)
 contra el `api` en Docker, con el pool ya calentado por peticiones anteriores.
 
 El §30 documentaba el síntoma dentro de un único método (`FetchProgramDirectory`
@@ -745,3 +745,40 @@ Verificado con dos pruebas en vivo que reproducen exactamente el bug original:
 pide el directorio en la misma conexión) y `TestLive_FetchElectives_TwiceOnSameConn`
 (dos programas distintos, misma sede, misma conexión). Las dos fallaban antes del
 arreglo y pasan después, sin tocar nada más.
+
+---
+
+## 32. El comodín "toda la sede" de `soc6` está en una posición distinta en cada sede
+
+`soc6=12` es el comodín `2000 SEDE BOGOTÁ` del buscador de electivas ([PROTOCOL §5](PROTOCOL.md)):
+devuelve la libre elección de **toda la sede** de una. Eso es cierto **solo en Bogotá**.
+
+El `12` no es el comodín: es su **posición** en la lista `soc6` de Bogotá, que tiene 13
+opciones. Cada sede rinde su propia lista y el comodín cae donde caiga:
+
+| Sede | Opciones en `soc6` | Índice del comodín | Etiqueta |
+|---|---|---|---|
+| Bogotá | 13 | `12` | `2000 SEDE BOGOTÁ` |
+| Medellín | 11 | `10` | `3 SEDE MEDELLÍN` |
+
+Medido 2026-08-15. Postear `12` en Medellín es un índice fuera de rango, y el SIA
+responde a eso **con un no-op silencioso**: ~900 B, HTTP 200, sin `<update>`. O sea que
+el síntoma es el del §30 y el del §7 (sesión caducada) aunque la causa sea otra. Con la
+API por delante se ve como `502 sia_noop` en el catálogo de cualquier sede que no sea
+Bogotá, y solo en la mitad de electivas: `FetchCatalog` funciona perfecto, así que
+parece un problema de electivas y no de sede.
+
+**Cómo se resuelve:** la respuesta del `valueChange` de `soc10` (sede del buscador) trae
+el `<update id="pt1:r1:0:soc6">` con la lista de ESA sede. El comodín se reconoce por la
+etiqueta —las facultades reales se llaman `FACULTAD DE …`, el comodín `SEDE …`— y su
+índice se lee de ahí, en cada petición. Nunca se constantiza.
+
+Mismo patrón que el §26 y que los `*_idx`: **una posición de dropdown no es identidad**.
+El comodín también aparece en `soc2` (cascada regular), donde no estorba pero tampoco es
+una facultad — y en Medellín cuelgan de él 2 planes que no aparecen bajo ninguna
+facultad real, así que filtrarlo perdería datos.
+
+`sia/cascade.go`: `electivesWildcard`. Verificado con
+`TestLive_ElectivesWildcardIsPerCampus`, que corre Bogotá y Medellín en la misma prueba:
+240 y 640 filas de libre elección respectivamente. Antes del arreglo, Medellín daba
+no-op.

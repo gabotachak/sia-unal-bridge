@@ -1,0 +1,744 @@
+openapi: 3.1.0
+
+info:
+  title: sia-unal-bridge
+  version: "1.0.0"
+  summary: API JSON sobre el catálogo público del SIA (Universidad Nacional de Colombia)
+  description: |
+    Traduce el catálogo público del SIA —una app Oracle ADF con estado de sesión en
+    servidor y navegación por POSTs de formulario encadenados— a JSON.
+
+    ## Frescura
+
+    Todo es read-through: se sirve de Postgres si está fresco, y solo se consulta al
+    SIA si falta o caducó. `?max_age=<segundos>` sobreescribe el default por recurso;
+    `?max_age=0` fuerza la consulta al SIA.
+
+    | Recurso | Default | Gobernado por |
+    |---|---|---|
+    | referencia (niveles, sedes, facultades, planes) | 30 d | `reference_fetch.fetched_at` |
+    | catálogo | 7 d | `program.catalog_fetched_at` |
+    | detalle: grupos, horario, profesor | 24 h | `course_program.detail_fetched_at` |
+    | cupos | 5 min | `seat_snapshot.measured_at` |
+
+    Un miss puede tardar segundos: detrás hay entre 1 y 15 POSTs contra el SIA.
+
+    ## La sede va en la ruta
+
+    `program.code` no identifica por sí solo: 136 de 852 códigos se repiten entre sedes
+    porque PEAMA reexpone el mismo plan. Por eso todo lo que cuelga de una sede vive
+    bajo `/v1/campuses/{campus}/…`, sin default y sin forma de omitirlo.
+
+    Dentro de una misma sede un código todavía puede repetirse entre facultades; eso se
+    desempata con `?faculty=` y, si no se pasa, la respuesta es `300` con los candidatos.
+  license:
+    name: Ver el repositorio
+  contact:
+    name: Repositorio
+    url: https://github.com/gabotachak/sia-unal-bridge
+
+servers:
+  - url: http://localhost:8080/v1
+    description: Local (docker compose)
+
+tags:
+  - name: Operación
+    description: Salud y cobertura de la cache.
+  - name: Referencia
+    description: Los dropdowns del SIA, cacheados 30 d. Nada de esto está hardcodeado.
+  - name: Catálogo
+    description: Asignaturas de un plan. Granularidad programa.
+  - name: Detalle
+    description: Grupos, horarios, profesor y cupos. Granularidad asignatura.
+  - name: Atajos
+    description: Solo Store. Nunca disparan una consulta al SIA.
+
+paths:
+  /healthz:
+    get:
+      tags: [Operación]
+      summary: Liveness
+      operationId: healthz
+      responses:
+        "200":
+          description: Vivo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, examples: [ok] }
+
+  /status:
+    get:
+      tags: [Operación]
+      summary: Cobertura de la cache, global a todas las sedes
+      operationId: status
+      responses:
+        "200":
+          description: Cuántos planes tienen catálogo completo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  programs_known:
+                    type: integer
+                    description: Planes que el directorio ya descubrió. NO es el censo de la UNAL (1380).
+                    examples: [287]
+                  programs_with_catalog:
+                    type: integer
+                    description: De esos, cuántos tienen su lista de asignaturas cacheada.
+                    examples: [2]
+
+  /levels:
+    get:
+      tags: [Referencia]
+      summary: Niveles de estudio (soc1)
+      description: |
+        El slug es el ID público y es estable: se asigna una vez y no se reescribe
+        aunque el SIA reordene el dropdown. Un nivel nuevo aparece solo.
+      operationId: listLevels
+      responses:
+        "200":
+          description: Lista de niveles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  levels:
+                    type: array
+                    items: { $ref: "#/components/schemas/Level" }
+        "502": { $ref: "#/components/responses/SIAError" }
+
+  /campuses:
+    get:
+      tags: [Referencia]
+      summary: Sedes (soc9)
+      description: El punto de entrada — todo lo demás cuelga de una de estas.
+      operationId: listCampuses
+      parameters:
+        - $ref: "#/components/parameters/Level"
+      responses:
+        "200":
+          description: Lista de sedes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  campuses:
+                    type: array
+                    items: { $ref: "#/components/schemas/Campus" }
+              examples:
+                nueve:
+                  value:
+                    campuses:
+                      - { code: "1125", name: "SEDE AMAZONIA" }
+                      - { code: "1101", name: "SEDE BOGOTÁ" }
+                      - { code: "1102", name: "SEDE MEDELLÍN" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/SIAError" }
+
+  /campuses/{campus}/faculties:
+    get:
+      tags: [Referencia]
+      summary: Facultades de una sede (soc2)
+      description: |
+        Un miss recorre la cascada completa (~15 POSTs, varios segundos) y llena el
+        directorio entero de la sede, no solo esta lista. La siguiente llamada sale de
+        Postgres en milisegundos.
+      operationId: listFaculties
+      parameters:
+        - $ref: "#/components/parameters/Campus"
+        - $ref: "#/components/parameters/Level"
+      responses:
+        "200":
+          description: Facultades de la sede
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  faculties:
+                    type: array
+                    items: { $ref: "#/components/schemas/Faculty" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/SIAError" }
+
+  /campuses/{campus}/programs:
+    get:
+      tags: [Referencia]
+      summary: Planes de estudio de una sede
+      operationId: listPrograms
+      parameters:
+        - $ref: "#/components/parameters/Campus"
+        - name: faculty
+          in: query
+          required: false
+          description: Filtro opcional por código de facultad. Sin él salen todos los planes de la sede.
+          schema: { type: string, examples: ["2055"] }
+        - $ref: "#/components/parameters/Level"
+      responses:
+        "200":
+          description: Planes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  programs:
+                    type: array
+                    items: { $ref: "#/components/schemas/Program" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/SIAError" }
+
+  /campuses/{campus}/programs/{program}:
+    get:
+      tags: [Referencia]
+      summary: Un plan de estudios
+      operationId: getProgram
+      parameters:
+        - $ref: "#/components/parameters/Campus"
+        - $ref: "#/components/parameters/Program"
+        - $ref: "#/components/parameters/Faculty"
+        - $ref: "#/components/parameters/Level"
+      responses:
+        "200":
+          description: El plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Program" }
+        "300": { $ref: "#/components/responses/Ambiguous" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/SIAError" }
+
+  /campuses/{campus}/programs/{program}/courses:
+    get:
+      tags: [Catálogo]
+      summary: Asignaturas de un plan
+      description: |
+        Un miss son **dos** consultas al SIA, no una: el listado regular (`soc4=0`, que
+        significa literalmente *todas menos libre elección*) y el buscador de electivas.
+        `catalog_fetched_at` solo se sella cuando están las dos, porque un catálogo a
+        medias marcado como fresco es el fallo silencioso que este proyecto evita.
+
+        Los filtros se aplican en memoria sobre el catálogo ya cacheado.
+      operationId: listProgramCourses
+      parameters:
+        - $ref: "#/components/parameters/Campus"
+        - $ref: "#/components/parameters/Program"
+        - $ref: "#/components/parameters/Faculty"
+        - $ref: "#/components/parameters/Level"
+        - $ref: "#/components/parameters/MaxAge"
+        - name: q
+          in: query
+          description: Substring del nombre, insensible a mayúsculas.
+          schema: { type: string }
+        - name: credits
+          in: query
+          schema: { type: integer }
+        - name: typology
+          in: query
+          description: Literal del SIA, tal cual.
+          schema: { type: string, examples: ["LIBRE ELECCIÓN (L)"] }
+      responses:
+        "200":
+          description: Asignaturas del plan
+          headers:
+            Age: { $ref: "#/components/headers/Age" }
+            Cache-Control: { $ref: "#/components/headers/CacheControl" }
+            X-Cache: { $ref: "#/components/headers/XCache" }
+            X-SIA-Fetch-Ms: { $ref: "#/components/headers/XSIAFetchMs" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  courses:
+                    type: array
+                    items: { $ref: "#/components/schemas/CourseSummary" }
+        "300": { $ref: "#/components/responses/Ambiguous" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/SIAError" }
+        "503": { $ref: "#/components/responses/Busy" }
+
+  /campuses/{campus}/programs/{program}/courses/{code}:
+    get:
+      tags: [Detalle]
+      summary: Una asignatura con sus grupos
+      description: |
+        Los grupos visibles **dependen del plan** desde el que se consulta, así que un
+        plan que nunca preguntó por esta asignatura paga el POST aunque otro ya la haya
+        cacheado. Los cupos, en cambio, son globales: la medición sirve para todos.
+      operationId: getCourseDetail
+      parameters:
+        - $ref: "#/components/parameters/Campus"
+        - $ref: "#/components/parameters/Program"
+        - $ref: "#/components/parameters/Code"
+        - $ref: "#/components/parameters/Faculty"
+        - $ref: "#/components/parameters/Level"
+        - $ref: "#/components/parameters/MaxAge"
+      responses:
+        "200":
+          description: La asignatura con sus grupos
+          headers:
+            Age: { $ref: "#/components/headers/Age" }
+            Cache-Control: { $ref: "#/components/headers/CacheControl" }
+            X-Cache: { $ref: "#/components/headers/XCache" }
+            X-SIA-Fetch-Ms: { $ref: "#/components/headers/XSIAFetchMs" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseDetail" }
+        "300": { $ref: "#/components/responses/Ambiguous" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/SIAError" }
+        "503": { $ref: "#/components/responses/Busy" }
+
+  /campuses/{campus}/programs/{program}/courses/{code}/sections:
+    get:
+      tags: [Detalle]
+      summary: Grupos de una asignatura
+      description: |
+        Mismo fetch que el detalle: los grupos nunca son más baratos por separado,
+        porque el POST del detalle siempre trae la lista completa.
+
+        Una asignatura sin oferta este semestre devuelve `200` con `sections: []`. Eso
+        NO es un `404`: la asignatura existe.
+      operationId: listCourseSections
+      parameters:
+        - $ref: "#/components/parameters/Campus"
+        - $ref: "#/components/parameters/Program"
+        - $ref: "#/components/parameters/Code"
+        - $ref: "#/components/parameters/Faculty"
+        - $ref: "#/components/parameters/Level"
+        - $ref: "#/components/parameters/MaxAge"
+      responses:
+        "200":
+          description: Grupos visibles desde este plan
+          headers:
+            Age: { $ref: "#/components/headers/Age" }
+            Cache-Control: { $ref: "#/components/headers/CacheControl" }
+            X-Cache: { $ref: "#/components/headers/XCache" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sections:
+                    type: array
+                    items: { $ref: "#/components/schemas/Section" }
+        "300": { $ref: "#/components/responses/Ambiguous" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/SIAError" }
+
+  /campuses/{campus}/programs/{program}/courses/{code}/sections/{key}:
+    get:
+      tags: [Detalle]
+      summary: Un grupo
+      operationId: getCourseSection
+      parameters:
+        - $ref: "#/components/parameters/Campus"
+        - $ref: "#/components/parameters/Program"
+        - $ref: "#/components/parameters/Code"
+        - $ref: "#/components/parameters/SectionKey"
+        - $ref: "#/components/parameters/Faculty"
+        - $ref: "#/components/parameters/Level"
+        - $ref: "#/components/parameters/MaxAge"
+      responses:
+        "200":
+          description: El grupo
+          headers:
+            Age: { $ref: "#/components/headers/Age" }
+            Cache-Control: { $ref: "#/components/headers/CacheControl" }
+            X-Cache: { $ref: "#/components/headers/XCache" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Section" }
+        "300": { $ref: "#/components/responses/Ambiguous" }
+        "404":
+          description: No existe ese `key` en la asignatura
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502": { $ref: "#/components/responses/SIAError" }
+
+  /campuses/{campus}/programs/{program}/courses/{code}/sections/{key}/seats:
+    get:
+      tags: [Detalle]
+      summary: Cupos de un grupo
+      description: |
+        El único recurso volátil de la API, y el único con TTL de 5 minutos.
+
+        Forzar los cupos cuesta lo mismo que traer el detalle completo, porque llegan
+        juntos en el mismo POST: el refresco guarda el grupo entero —horario, profesor,
+        aula— y devuelve solo los cupos. `seat_snapshot` es append-only, así que queda
+        el histórico.
+
+        `age_seconds` viaja siempre en el body: nunca se sirve un cupo sin decir de
+        cuándo es.
+      operationId: getSectionSeats
+      parameters:
+        - $ref: "#/components/parameters/Campus"
+        - $ref: "#/components/parameters/Program"
+        - $ref: "#/components/parameters/Code"
+        - $ref: "#/components/parameters/SectionKey"
+        - $ref: "#/components/parameters/Faculty"
+        - $ref: "#/components/parameters/Level"
+        - $ref: "#/components/parameters/MaxAge"
+      responses:
+        "200":
+          description: Cupos, con su edad
+          headers:
+            Age: { $ref: "#/components/headers/Age" }
+            Cache-Control: { $ref: "#/components/headers/CacheControl" }
+            X-Cache: { $ref: "#/components/headers/XCache" }
+            X-SIA-Fetch-Ms: { $ref: "#/components/headers/XSIAFetchMs" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Seats" }
+              examples:
+                hit:
+                  value:
+                    key: "1"
+                    number: 1
+                    available: 40
+                    measured_at: "2026-08-16T02:57:57.753939Z"
+                    age_seconds: 5
+        "300": { $ref: "#/components/responses/Ambiguous" }
+        "404":
+          description: No existe ese `key`, o el grupo no reporta cupos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502": { $ref: "#/components/responses/SIAError" }
+
+  /campuses/{campus}/courses/{code}:
+    get:
+      tags: [Atajos]
+      summary: Una asignatura sin saber su plan
+      description: |
+        Resuelve qué plan(es) ofrecen el código usando **solo** lo que ya está en
+        Postgres. Si es exactamente uno, delega en la ruta canónica (que sí puede ir al
+        SIA si ese plan está viejo). Si son varios, `300` con los candidatos.
+      operationId: courseShortcut
+      parameters:
+        - $ref: "#/components/parameters/Campus"
+        - $ref: "#/components/parameters/Code"
+        - $ref: "#/components/parameters/MaxAge"
+      responses:
+        "200":
+          description: La asignatura
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseDetail" }
+        "300": { $ref: "#/components/responses/Ambiguous" }
+        "404":
+          description: No está cacheada bajo ningún plan conocido de esta sede
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /campuses/{campus}/courses:
+    get:
+      tags: [Atajos]
+      summary: Búsqueda por nombre
+      description: |
+        **Nunca** dispara una consulta al SIA. Un miss aquí significaría recorrer todos
+        los planes sin cachear, que es un DoS por GET. `coverage` dice sobre qué
+        porción del catálogo de la sede se está buscando realmente.
+      operationId: searchCourses
+      parameters:
+        - $ref: "#/components/parameters/Campus"
+        - name: q
+          in: query
+          description: Substring del nombre.
+          schema: { type: string, examples: ["algoritmos"] }
+      responses:
+        "200":
+          description: Resultados y cobertura
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: "#/components/schemas/CourseSummary" }
+                  coverage:
+                    type: object
+                    description: |
+                      Sobre qué porción del catálogo de la sede se buscó de verdad. Dos
+                      caches distintas, no una barra de progreso: `programs_known` son
+                      los planes descubiertos y `programs_with_catalog` los que además
+                      tienen su lista de asignaturas bajada. Con pocos de estos, un
+                      resultado vacío no significa que la asignatura no exista.
+                    properties:
+                      programs_known: { type: integer, examples: [287] }
+                      programs_with_catalog: { type: integer, examples: [2] }
+
+components:
+  parameters:
+    Campus:
+      name: campus
+      in: path
+      required: true
+      description: Código institucional de la sede. Ver `GET /v1/campuses`.
+      schema: { type: string, examples: ["1101"] }
+    Program:
+      name: program
+      in: path
+      required: true
+      description: Código institucional del plan.
+      schema: { type: string, examples: ["2A74"] }
+    Code:
+      name: code
+      in: path
+      required: true
+      description: Código de la asignatura.
+      schema: { type: string, examples: ["1000003-B"] }
+    SectionKey:
+      name: key
+      in: path
+      required: true
+      description: |
+        El token entre paréntesis de la cabecera del grupo, verbatim. NO el número:
+        `Grupo 1` se repite entre los grupos regulares y los PEAMA.
+      schema: { type: string, examples: ["1", "AMAZ-07", "TUMA-01"] }
+    Faculty:
+      name: faculty
+      in: query
+      required: false
+      description: |
+        Desempata cuando un mismo código de plan aparece bajo dos facultades de la
+        misma sede. Sin él, ese caso devuelve `300`.
+      schema: { type: string, examples: ["2055"] }
+    Level:
+      name: level
+      in: query
+      required: false
+      description: Slug del nivel. Por defecto `pregrado`.
+      schema:
+        type: string
+        default: pregrado
+        examples: ["pregrado", "doctorado", "posgrado"]
+    MaxAge:
+      name: max_age
+      in: query
+      required: false
+      description: |
+        Segundos. Sobreescribe el default del recurso. `0` fuerza la consulta al SIA.
+        Un valor negativo o no numérico es `400`.
+      schema: { type: integer, minimum: 0, examples: [0, 300] }
+
+  headers:
+    Age:
+      description: Segundos desde que se midió el dato **más viejo** de la respuesta.
+      schema: { type: integer }
+    CacheControl:
+      description: "`max-age` efectivo del recurso."
+      schema: { type: string, examples: ["max-age=300"] }
+    XCache:
+      description: Si la respuesta salió de Postgres o costó una consulta al SIA.
+      schema: { type: string, enum: [hit, miss] }
+    XSIAFetchMs:
+      description: Solo en `miss`. Latencia de la consulta al SIA.
+      schema: { type: integer }
+
+  responses:
+    BadRequest:
+      description: Parámetro inválido
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: No existe
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Ambiguous:
+      description: |
+        El identificador no basta. Devuelve los candidatos con su identidad completa
+        y un `hint` con el parámetro que lo resolvería.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/AmbiguousError" }
+          examples:
+            dosFacultades:
+              value:
+                error: ambiguous_program
+                message: "ambiguous shortcut: multiple candidates"
+                hint: "add ?faculty= to disambiguate"
+                candidates:
+                  - { program: "2515", name: "FARMACIA", campus_code: "1102", campus_name: "SEDE MEDELLÍN", faculty_code: "3050", faculty_name: "FACULTAD DE CIENCIAS (Admisión PAET)" }
+                  - { program: "2515", name: "FARMACIA", campus_code: "1102", campus_name: "SEDE MEDELLÍN", faculty_code: "3", faculty_name: "SEDE MEDELLÍN" }
+    SIAError:
+      description: |
+        El SIA no respondió lo esperado. `sia_noop` es una respuesta vacía de ~900 B:
+        no es un error HTTP del SIA, es un no-op que se trata como error explícito en
+        vez de devolver datos incompletos.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Busy:
+      description: Pool de conexiones ADF ocupado. Reintentar.
+      headers:
+        Retry-After:
+          schema: { type: integer, examples: [2] }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Level:
+      type: object
+      properties:
+        slug: { type: string, examples: ["pregrado"] }
+        name: { type: string, examples: ["Pregrado"] }
+
+    Campus:
+      type: object
+      properties:
+        code: { type: string, examples: ["1101"] }
+        name: { type: string, examples: ["SEDE BOGOTÁ"] }
+
+    Faculty:
+      type: object
+      properties:
+        code: { type: string, examples: ["2055"] }
+        name: { type: string, examples: ["FACULTAD DE INGENIERÍA"] }
+
+    Program:
+      type: object
+      properties:
+        campus_code: { type: string, examples: ["1101"] }
+        faculty_code: { type: string, examples: ["2055"] }
+        code: { type: string, examples: ["2A74"] }
+        name: { type: string, examples: ["INGENIERÍA DE SISTEMAS Y COMPUTACIÓN"] }
+        campus_name: { type: string, examples: ["SEDE BOGOTÁ"] }
+        faculty_name: { type: string, examples: ["FACULTAD DE INGENIERÍA"] }
+        catalog_fetched_at:
+          type: [string, "null"]
+          format: date-time
+          description: Cuándo se completó el catálogo de este plan. Ausente si nunca.
+
+    CourseSummary:
+      type: object
+      properties:
+        campus_code: { type: string }
+        code: { type: string, examples: ["1000003-B"] }
+        name: { type: string, examples: ["ÁLGEBRA LINEAL"] }
+        credits: { type: integer, examples: [4] }
+        typology:
+          type: string
+          description: Depende del plan — 8 códigos divergen entre planes de Bogotá.
+          examples: ["FUND. OBLIGATORIA (B)"]
+        description: { type: string }
+        fetched_at: { type: string, format: date-time }
+
+    CourseDetail:
+      type: object
+      properties:
+        campus_code: { type: string }
+        code: { type: string }
+        name: { type: string }
+        credits: { type: integer }
+        typology: { type: string }
+        description: { type: string }
+        fetched_at: { type: string, format: date-time }
+        sections:
+          type: array
+          items: { $ref: "#/components/schemas/Section" }
+
+    Section:
+      type: object
+      properties:
+        term: { type: string, examples: ["2026-2"] }
+        key:
+          type: string
+          description: Identidad del grupo dentro de la asignatura.
+          examples: ["1", "AMAZ-07"]
+        number: { type: integer, examples: [1] }
+        label: { type: string, examples: ["Grupo 1"] }
+        instructor: { type: string }
+        shift: { type: string, examples: ["DIURNO"] }
+        duration: { type: string, examples: ["Semestral"] }
+        site: { type: string, examples: ["AMAZ"] }
+        site_campus: { type: string }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date }
+        fetched_at: { type: string, format: date-time }
+        schedule:
+          type: array
+          items: { $ref: "#/components/schemas/ClassSession" }
+        seats: { $ref: "#/components/schemas/SeatsEmbedded" }
+
+    ClassSession:
+      type: object
+      properties:
+        weekday:
+          type: integer
+          minimum: 1
+          maximum: 7
+          description: 1 = lunes … 7 = domingo.
+        start_time: { type: string, examples: ["09:00"] }
+        end_time: { type: string, examples: ["11:00"] }
+        room: { type: string, examples: ["SALA DE INFORMATICA 453-203"] }
+        building: { type: string, examples: ["453 - Guillermina Uribe Bone"] }
+
+    SeatsEmbedded:
+      type: object
+      properties:
+        available: { type: integer, examples: [40] }
+        measured_at: { type: string, format: date-time }
+        age_seconds: { type: integer, examples: [5] }
+
+    Seats:
+      type: object
+      properties:
+        key: { type: string, examples: ["1"] }
+        number: { type: integer, examples: [1] }
+        available: { type: integer, examples: [40] }
+        measured_at: { type: string, format: date-time }
+        age_seconds: { type: integer, examples: [5] }
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          enum:
+            - bad_request
+            - unknown_campus
+            - unknown_level
+            - unknown_program
+            - unknown_course
+            - unknown_section
+            - busy
+            - sia_noop
+            - sia_session_lost
+            - internal
+        message: { type: string }
+        hint: { type: string }
+
+    AmbiguousError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [ambiguous_program, ambiguous_course]
+        message: { type: string }
+        hint: { type: string }
+        candidates:
+          type: array
+          items:
+            type: object
+            properties:
+              program: { type: string }
+              name: { type: string }
+              campus_code: { type: string }
+              campus_name: { type: string }
+              faculty_code: { type: string }
+              faculty_name: { type: string }

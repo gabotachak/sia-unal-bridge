@@ -92,15 +92,16 @@ func (s *Store) Course(ctx context.Context, campusCode, code string) (catalog.Co
 	return c, true, nil
 }
 
-// SearchCourses serves /v1/courses?q= from the Store only — it never
-// triggers a SIA fetch (docs/API.md "Por qué la búsqueda global no dispara
-// al SIA").
-func (s *Store) SearchCourses(ctx context.Context, q string) ([]catalog.Course, error) {
+// SearchCourses serves /v1/campuses/{campus}/courses?q= from the Store only
+// — it never triggers a SIA fetch (docs/API.md "Por qué la búsqueda global
+// no dispara al SIA"). An empty campusCode searches every cached campus.
+func (s *Store) SearchCourses(ctx context.Context, campusCode, q string) ([]catalog.Course, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT campus_code, code, name, credits, description, fetched_at
-		FROM course WHERE name ILIKE '%' || $1 || '%'
+		FROM course
+		WHERE name ILIKE '%' || $2 || '%' AND ($1 = '' OR campus_code = $1)
 		ORDER BY name LIMIT 100`,
-		q,
+		campusCode, q,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("store: SearchCourses: %w", err)
@@ -118,16 +119,25 @@ func (s *Store) SearchCourses(ctx context.Context, q string) ([]catalog.Course, 
 	return out, rows.Err()
 }
 
-// CachedProgramCount reports how many programs have a completed catalog
-// fetch out of how many are known — the "coverage" API.md's /courses?q=
-// declares alongside its results.
-func (s *Store) CachedProgramCount(ctx context.Context) (cached, total int, err error) {
+// ProgramCoverage reports two DIFFERENT caches, not a progress bar over the
+// whole university:
+//
+//   - known:       programs the directory cascade has discovered at all
+//   - withCatalog: of those, the ones whose course list is actually cached
+//
+// Neither is the UNAL's census (1380 program entries): `known` only grows as
+// campuses get warmed. That is why the field is not called "total" — a
+// caller reading 2/287 must not conclude that 287 is everything there is.
+//
+// An empty campusCode counts every campus, which is what /v1/status reports.
+func (s *Store) ProgramCoverage(ctx context.Context, campusCode string) (known, withCatalog int, err error) {
 	err = s.pool.QueryRow(ctx, `
-		SELECT count(*) FILTER (WHERE catalog_fetched_at IS NOT NULL), count(*)
-		FROM program`,
-	).Scan(&cached, &total)
+		SELECT count(*), count(*) FILTER (WHERE catalog_fetched_at IS NOT NULL)
+		FROM program WHERE ($1 = '' OR campus_code = $1)`,
+		campusCode,
+	).Scan(&known, &withCatalog)
 	if err != nil {
-		return 0, 0, fmt.Errorf("store: CachedProgramCount: %w", err)
+		return 0, 0, fmt.Errorf("store: ProgramCoverage: %w", err)
 	}
-	return cached, total, nil
+	return known, withCatalog, nil
 }

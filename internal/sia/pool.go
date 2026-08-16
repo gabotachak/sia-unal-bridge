@@ -10,7 +10,7 @@ import (
 
 // DefaultPoolSize is fase 1's chosen size: the SIA takes 8 concurrent
 // sessions without throttling; 4 is a courtesy limit, not a server
-// constraint. See ARCH.md "Concurrencia".
+// constraint. See docs/ARCH.md "Concurrencia".
 const DefaultPoolSize = 4
 
 // keepaliveInterval must stay ≤3min: the real idle timeout measured is
@@ -30,7 +30,7 @@ type Pool struct {
 
 // NewPool bootstraps size connections SEQUENTIALLY — never fan them out in
 // parallel. The bootstrap alone can hit 4.5MB; size of them at once is the
-// mistake ARCH.md calls out ("Bootstraps en fan-out").
+// mistake docs/ARCH.md calls out ("Bootstraps en fan-out").
 func NewPool(ctx context.Context, baseURL string, size int) (*Pool, error) {
 	if size <= 0 {
 		size = DefaultPoolSize

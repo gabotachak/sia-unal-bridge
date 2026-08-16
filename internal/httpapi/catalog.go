@@ -11,13 +11,13 @@ import (
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
 
-// programCourses serves GET /v1/programs/{program}/courses. Filters
-// (?q=, ?credits=, ?typology=) are applied in-memory over the full
+// programCourses serves GET /v1/campuses/{campus}/programs/{program}/courses.
+// Filters (?q=, ?credits=, ?typology=) are applied in-memory over the full
 // (cache-aware) catalog fetch — a simplification over docs/API.md's
 // described it11 server-side filter, which would need its own
 // non-catalog-completing SIA fetch path. Correctness is preserved; the
 // optimization of a smaller SIA payload on a cold filtered miss is not
-// implemented in fase 1.
+// implemented.
 func (a *api) programCourses(c *gin.Context) {
 	program, err := a.resolveProgram(c)
 	if err != nil {

@@ -15,13 +15,15 @@ func (a *api) healthz(c *gin.Context) {
 // sia.Pool to expose an introspection method, left for when Refresher
 // lands and actually needs it (docs/API.md "Operación").
 func (a *api) status(c *gin.Context) {
-	cached, total, err := a.svc.CachedProgramCount(c.Request.Context())
+	// "" = every campus: /v1/status is the operator's global view, unlike
+	// the per-campus coverage reported by the course search.
+	known, withCatalog, err := a.svc.ProgramCoverage(c.Request.Context(), "")
 	if err != nil {
 		writeError(c, err, "unknown_program")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"programs_cached": cached,
-		"programs_total":  total,
+		"programs_known":        known,
+		"programs_with_catalog": withCatalog,
 	})
 }

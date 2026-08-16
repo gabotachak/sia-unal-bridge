@@ -24,13 +24,13 @@ func (a *api) levels(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"levels": out})
 }
 
-// campuses serves the soc9 list (FIELDS.md) from the reference cache. Fase 1
-// only resolves programs for Bogotá, but the sede list itself is real data
-// the SIA owns — cached at the reference TTL, not hardcoded here.
+// campuses serves the soc9 list (FIELDS.md) from the reference cache. It is
+// the entry point of the whole API now that every other route hangs off a
+// sede: real data the SIA owns, cached at the reference TTL, not hardcoded.
 func (a *api) campuses(c *gin.Context) {
-	campuses, err := a.svc.Campuses(c.Request.Context())
+	campuses, err := a.svc.Campuses(c.Request.Context(), c.Query("level"))
 	if err != nil {
-		writeError(c, err, "unknown_campus")
+		writeError(c, err, "unknown_level")
 		return
 	}
 	out := make([]gin.H, len(campuses))
@@ -40,17 +40,12 @@ func (a *api) campuses(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"campuses": out})
 }
 
-// faculties lists Bogotá's faculties — the only campus fase 1 resolves
-// (docs/ARCH.md "Alcance"). ?campus= is accepted but only 1101 works.
+// faculties lists one campus's faculties. The sede comes from the path: it
+// is not optional, so it is not a query parameter.
 func (a *api) faculties(c *gin.Context) {
-	campus := c.Query("campus")
-	if campus != "" && campus != catalog.BogotaCampusCode {
-		c.JSON(http.StatusOK, gin.H{"faculties": []gin.H{}})
-		return
-	}
-	faculties, err := a.svc.Faculties(c.Request.Context())
+	faculties, err := a.svc.Faculties(c.Request.Context(), c.Param("campus"), c.Query("level"))
 	if err != nil {
-		writeError(c, err, "unknown_program")
+		writeError(c, err, "unknown_campus")
 		return
 	}
 	out := make([]gin.H, len(faculties))
@@ -60,19 +55,13 @@ func (a *api) faculties(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"faculties": out})
 }
 
-// listPrograms serves /v1/programs?campus=&faculty=. faculty is required in
-// fase 1 (no full-campus program directory endpoint — that's the 65-program
-// census, not "barata y acotada").
+// listPrograms serves /v1/campuses/{campus}/programs?faculty=. ?faculty=
+// stays a filter, and is now genuinely free: a directory miss fills every
+// faculty of the campus in the same cascade.
 func (a *api) listPrograms(c *gin.Context) {
-	campus := c.Query("campus")
-	faculty := c.Query("faculty")
-	if campus != catalog.BogotaCampusCode || faculty == "" {
-		badRequest(c, "campus must be 1101 and faculty is required in fase 1")
-		return
-	}
-	programs, err := a.svc.ProgramsInFaculty(c.Request.Context(), faculty)
+	programs, err := a.svc.ProgramsInFaculty(c.Request.Context(), c.Param("campus"), c.Query("faculty"), c.Query("level"))
 	if err != nil {
-		writeError(c, err, "unknown_program")
+		writeError(c, err, "unknown_campus")
 		return
 	}
 	out := make([]gin.H, len(programs))
@@ -105,12 +94,21 @@ func programJSON(p catalog.Program) gin.H {
 	return h
 }
 
-// resolveProgram is the shared :program path-param resolver. On error it
-// writes the HTTP response itself and returns a non-nil error so the caller
-// just needs to `return`.
+// resolveProgram is the shared :program path-param resolver. The sede comes
+// from the path and settles the cross-campus collision (136 of 852 codes,
+// GOTCHAS §26). ?faculty= is still accepted for the rarer within-campus one
+// — 2515 is listed twice in Medellín — and that case still answers 300 with
+// the candidates.
+//
+// On error it writes the HTTP response itself and returns a non-nil error so
+// the caller just needs to `return`.
 func (a *api) resolveProgram(c *gin.Context) (catalog.Program, error) {
-	code := c.Param("program")
-	program, err := a.svc.ResolveProgram(c.Request.Context(), code)
+	program, err := a.svc.ResolveProgram(c.Request.Context(), catalog.ProgramRef{
+		Campus:  c.Param("campus"),
+		Faculty: c.Query("faculty"),
+		Code:    c.Param("program"),
+		Level:   c.Query("level"),
+	})
 	if err != nil {
 		writeError(c, err, "unknown_program")
 		return catalog.Program{}, err

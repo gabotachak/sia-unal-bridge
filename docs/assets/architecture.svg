@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 300" width="860" height="300" role="img" aria-label="Arquitectura hexagonal: HTTP entra por el puerto driving, el servicio lee de Postgres y solo va al SIA si falta o está viejo">
+  <rect x="0" y="0" width="860" height="300" rx="10" fill="#14161c"/>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+    <!-- cliente -->
+    <rect x="20" y="110" width="120" height="72" rx="8" fill="#1d2029" stroke="#3a4152"/>
+    <text x="80" y="140" text-anchor="middle" font-size="13" fill="#d7dbe6">cliente</text>
+    <text x="80" y="160" text-anchor="middle" font-size="11" fill="#7d8598">JSON</text>
+
+    <!-- driving port -->
+    <path d="M175 146 L205 146" stroke="#59d18b" stroke-width="2"/>
+    <path d="M205 146 l-7 -4 v8 z" fill="#59d18b"/>
+    <text x="190" y="136" text-anchor="middle" font-size="10" fill="#59d18b">GET</text>
+
+    <!-- hexagon core -->
+    <polygon points="330,40 470,40 530,146 470,252 330,252 270,146" fill="#1a2430" stroke="#3f6b8f" stroke-width="1.5"/>
+    <text x="400" y="120" text-anchor="middle" font-size="14" fill="#8fd0ff">catalog</text>
+    <text x="400" y="142" text-anchor="middle" font-size="11" fill="#9fb0c8">dominio + puertos</text>
+    <text x="400" y="168" text-anchor="middle" font-size="11" fill="#7d8598">read-through</text>
+
+    <text x="243" y="86" text-anchor="middle" font-size="10" fill="#7d8598">httpapi</text>
+    <text x="243" y="100" text-anchor="middle" font-size="10" fill="#7d8598">(driving)</text>
+
+    <!-- store -->
+    <rect x="600" y="34" width="230" height="94" rx="8" fill="#1d2029" stroke="#3a4152"/>
+    <text x="715" y="62" text-anchor="middle" font-size="13" fill="#d7dbe6">Store · Postgres</text>
+    <text x="715" y="82" text-anchor="middle" font-size="11" fill="#59d18b">se sirve si está fresco</text>
+    <text x="715" y="104" text-anchor="middle" font-size="10" fill="#7d8598">referencia 30 d · catálogo 7 d</text>
+    <text x="715" y="118" text-anchor="middle" font-size="10" fill="#7d8598">detalle 24 h · cupos 5 min</text>
+
+    <!-- sia -->
+    <rect x="600" y="166" width="230" height="100" rx="8" fill="#1d2029" stroke="#3a4152"/>
+    <text x="715" y="194" text-anchor="middle" font-size="13" fill="#d7dbe6">SIASource · Oracle ADF</text>
+    <text x="715" y="214" text-anchor="middle" font-size="11" fill="#febc2e">solo si falta o está viejo</text>
+    <text x="715" y="236" text-anchor="middle" font-size="10" fill="#7d8598">pool de 4 sesiones con estado</text>
+    <text x="715" y="250" text-anchor="middle" font-size="10" fill="#7d8598">secuenciales · mueren a ~4.2 min</text>
+
+    <!-- arrows to driven ports -->
+    <path d="M530 110 L595 82" stroke="#59d18b" stroke-width="2" fill="none"/>
+    <path d="M595 82 l-8 0 l4 7 z" fill="#59d18b"/>
+    <path d="M530 182 L595 210" stroke="#febc2e" stroke-width="2" fill="none"/>
+    <path d="M595 210 l-8 0 l4 -7 z" fill="#febc2e"/>
+
+    <!-- write back -->
+    <path d="M700 166 L700 132" stroke="#3f6b8f" stroke-width="1.5" stroke-dasharray="4 3" fill="none"/>
+    <path d="M700 132 l-4 7 h8 z" fill="#3f6b8f"/>
+    <text x="760" y="152" text-anchor="middle" font-size="10" fill="#5f7f9f">persiste lo que trae</text>
+  </g>
+</svg>

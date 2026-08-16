@@ -56,9 +56,17 @@ dentro de la misma asignatura (`(1) Grupo 1` y `(TUMA-01) … Grupo 1`,
 [DATA-MODEL, decisión 8](DATA-MODEL.md)).
 
 Por eso el `section` se direcciona con `key` —el token entre paréntesis, verbatim— y no
-con `number`. Y `program` va pelado solo mientras el alcance sea Bogotá; al abrir a
-otras sedes hay que calificarlo (`/v1/campuses/1101/programs/2A41`) o devolver `300`
-como ya hace el atajo de `course`.
+con `number`. **La sede va en la ruta, no en un query param.** `/v1/campuses/{campus}/…` para todo lo
+que cuelgue de una sede. Es un dato obligatorio y el contrato lo trata como tal: no hay
+default, no hay forma de omitirlo, y no existe una URL que signifique "cualquier sede".
+
+Eso resuelve la colisión entre sedes. Queda la de dentro de una sede —**46 códigos se
+repiten entre facultades**— que se desempata con `?faculty=`; si no se pasa y hay varios
+candidatos se devuelve `300` con la lista, como el atajo de `course`.
+
+Medido: `2515` (FARMACIA) sale en Bogotá, Medellín y Amazonia; y **dentro de Medellín**
+sale dos veces, bajo `3050` y bajo el comodín de sede. Por eso fijar la sede en la ruta
+no siempre basta, y el `hint` de la respuesta pide `?faculty=`.
 
 `class_session` y `seat_snapshot` no son direccionables: viajan siempre dentro de su
 `section`.
@@ -71,7 +79,7 @@ Nunca en una URL: `program_idx`, `campus_idx`, `faculty_idx`, `program.id`,
 ## La ruta canónica cuelga del programa
 
 ```
-/v1/programs/{program}/courses/{code}
+/v1/campuses/{campus}/programs/{program}/courses/{code}
 ```
 
 No es decoración. Los grupos visibles son un **subconjunto estricto por programa**
@@ -95,9 +103,9 @@ parte de la PK de `course`.
 |---|---|---|
 | `GET` | `/v1/levels` | los niveles de `soc1`; cacheados, no fijos en código |
 | `GET` | `/v1/campuses` | las sedes de `soc9`; cacheadas, no fijas en código |
-| `GET` | `/v1/faculties?campus=1101` | |
-| `GET` | `/v1/programs?campus=1101&faculty=2055` | `faculty` opcional |
-| `GET` | `/v1/programs/{program}` | incluye `catalog_fetched_at` |
+| `GET` | `/v1/campuses/{campus}/faculties` | |
+| `GET` | `/v1/campuses/{campus}/programs?faculty=2055` | `faculty` es filtro opcional |
+| `GET` | `/v1/campuses/{campus}/programs/{program}` | incluye `catalog_fetched_at`. `?faculty=` desempata la colisión intra-sede |
 
 Se sirven del Store. Un miss aquí **sí** dispara la cascada: es barata (parte del
 bootstrap que hay que hacer igual) y acotada.
@@ -106,7 +114,7 @@ bootstrap que hay que hacer igual) y acotada.
 
 | Método | Ruta |
 |---|---|
-| `GET` | `/v1/programs/{program}/courses` |
+| `GET` | `/v1/campuses/{campus}/programs/{program}/courses` |
 
 Filtros: `?q=` (nombre), `?credits=`, `?typology=`.
 
@@ -134,10 +142,10 @@ mitades; si no, la respuesta es plausible y le falta el trozo que más se consul
 
 | Método | Ruta |
 |---|---|
-| `GET` | `/v1/programs/{program}/courses/{code}` |
-| `GET` | `/v1/programs/{program}/courses/{code}/sections` |
-| `GET` | `/v1/programs/{program}/courses/{code}/sections/{key}` |
-| `GET` | `/v1/programs/{program}/courses/{code}/sections/{key}/seats` |
+| `GET` | `/v1/campuses/{campus}/programs/{program}/courses/{code}` |
+| `GET` | `/v1/campuses/{campus}/programs/{program}/courses/{code}/sections` |
+| `GET` | `/v1/campuses/{campus}/programs/{program}/courses/{code}/sections/{key}` |
+| `GET` | `/v1/campuses/{campus}/programs/{program}/courses/{code}/sections/{key}/seats` |
 
 `?term=` opcional; default el periodo vigente. Hoy el SIA solo expone el vigente — el
 parámetro está en el contrato para no romperlo cuando haya histórico.
@@ -150,10 +158,10 @@ no está verificado como único entre sedes.
 
 | Método | Ruta | Miss → SIA |
 |---|---|---|
-| `GET` | `/v1/courses/{code}` | no |
-| `GET` | `/v1/courses?q=&program=&credits=&typology=&has_seats=` | **no** |
+| `GET` | `/v1/campuses/{campus}/courses/{code}` | no |
+| `GET` | `/v1/campuses/{campus}/courses?q=&credits=&typology=` | **no** |
 
-`/v1/courses/{code}` resuelve el programa vía `course_program`:
+`/v1/campuses/{campus}/courses/{code}` resuelve el programa vía `course_program`:
 
 | Coincidencias | Respuesta |
 |---|---|
@@ -181,13 +189,13 @@ persiste. En ese orden.
 | Endpoint | Miss → SIA | Qué trae el miss |
 |---|---|---|
 | `/levels`, `/campuses` | solo si falta o pasó de 30 d | 1 POST → el dropdown entero |
-| `/programs`, `/faculties` | solo si falta o pasó de 30 d | ~15 POSTs → **todas** las facultades y sus programas |
-| `/programs/{p}/courses` | sí | 1 POST → ~98 asignaturas |
-| `/programs/{p}/courses/{code}` | sí | 1 POST → esa asignatura con sus grupos |
-| `/programs/{p}/courses/{code}/sections[/{n}]` | sí | igual |
+| `/campuses/{c}/programs`, `/campuses/{c}/faculties` | solo si falta o pasó de 30 d | ~15 POSTs → **todas** las facultades y sus programas |
+| `/campuses/{c}/programs/{p}/courses` | sí | 1 POST → ~98 asignaturas |
+| `/campuses/{c}/programs/{p}/courses/{code}` | sí | 1 POST → esa asignatura con sus grupos |
+| `…/courses/{code}/sections[/{n}]` | sí | igual |
 | `.../sections/{n}/seats` | solo si el snapshot pasó de 5 min | igual: refresca y guarda el grupo entero, responde solo los cupos |
-| `/courses/{code}` | **no** | — |
-| `/courses?q=` | **no** | — |
+| `/campuses/{c}/courses/{code}` | **no** | — |
+| `/campuses/{c}/courses?q=` | **no** | — |
 
 ### Por qué la búsqueda global no dispara al SIA
 
@@ -196,7 +204,7 @@ Parece que contradice el read-through. No.
 Los endpoints de identidad tienen un **miss acotado**: se sabe exactamente qué POST
 hacer y cuánto cuesta. `/courses?q=algoritmos` no. Un miss ahí significa *"no lo tengo
 en los 3 programas cacheados"*, y resolverlo es recorrer los 62 restantes — el crawl
-inicial de [ARCH.md](../ARCH.md), horas de POSTs, disparado por un query string. Eso no
+inicial de [ARCH.md](ARCH.md), horas de POSTs, disparado por un query string. Eso no
 es read-through, es un DoS con `GET`.
 
 Ese endpoint sirve solo del Store y **declara su cobertura**:
@@ -204,7 +212,7 @@ Ese endpoint sirve solo del Store y **declara su cobertura**:
 ```json
 {
   "results": [ ... ],
-  "coverage": { "programs_cached": 3, "programs_total": 65 }
+  "coverage": { "programs_known": 287, "programs_with_catalog": 3 }
 }
 ```
 
@@ -238,7 +246,7 @@ cuando abran las inscripciones el 27/08 ([OPEN-QUESTIONS §2](OPEN-QUESTIONS.md)
 ese número el que debe fijar este TTL.
 
 Esto reemplaza al `GET /courses/{code}/seats` "en vivo" que proponía
-[ARCH.md](../ARCH.md). Mismo comportamiento con `?max_age=0`, pero un `GET` que escribe
+[ARCH.md](ARCH.md). Mismo comportamiento con `?max_age=0`, pero un `GET` que escribe
 y tarda 10 s deja de ser indistinguible por fuera de uno cacheado.
 
 ### Un hit de detalle es por `(code, program)`
@@ -277,7 +285,7 @@ de cuándo es:
 
 ## Respuestas
 
-`GET /v1/programs/2A74/courses/2016696`
+`GET /v1/campuses/1101/programs/2A74/courses/2016696`
 
 ```json
 {
@@ -394,7 +402,7 @@ real, no antes.
 **El pool lleva el estado.** Cada conexión está parqueada en un programa y está en la
 región del buscador o en la del detalle. La API no lo expone (salvo en `/status`), pero
 la latencia de cada endpoint depende de dónde esté la conexión
-([ARCH.md](../ARCH.md)).
+([ARCH.md](ARCH.md)).
 
 ---
 

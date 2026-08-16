@@ -67,7 +67,7 @@ uso. Cuando se implemente, el adaptador de `SIASource` ya estará probado.
 ## Flujo principal: read-through
 
 ```
-GET /v1/programs/2A74/courses/2016696
+GET /v1/campuses/1101/programs/2A74/courses/2016696
         │
         ├── ¿está en Store y fresco?  ──sí──> responde
         │
@@ -93,7 +93,7 @@ miss de detalle   →  click           →  se guarda 1 asignatura            ~1
 Gobernado por `program.catalog_fetched_at` y `section.fetched_at`.
 
 **El catálogo de un plan son dos consultas, no una.** `soc4=0` significa "todas menos
-libre elección" ([GOTCHAS.md §21](docs/GOTCHAS.md)), así que las libres del plan no
+libre elección" ([GOTCHAS.md §21](GOTCHAS.md)), así que las libres del plan no
 están en esas ~98 filas: salen del buscador de electivas, que es por sede y no por plan.
 Si `catalog_fetched_at` solo cubre la primera, la cache queda plausible e incompleta.
 
@@ -102,7 +102,7 @@ Si `catalog_fetched_at` solo cubre la primera, la cache queda plausible e incomp
 ## Cupos
 
 Un solo concepto de frescura, `?max_age=<segundos>`, con default por tipo de recurso.
-`?max_age=0` fuerza la consulta al SIA. Contrato completo en [docs/API.md](docs/API.md).
+`?max_age=0` fuerza la consulta al SIA. Contrato completo en [docs/API.md](API.md).
 
 ```json
 { "key": "1", "number": 1, "available": 32, "measured_at": "2026-08-15T16:22:03Z", "age_seconds": 47 }
@@ -125,7 +125,7 @@ No es un cliente HTTP sin estado. Es un **pool de sesiones ADF vivas**, y cada u
 
 - muere a los **~4.2 min** de inactividad — renovable con tráfico; keepalive ≤3 min
 - es **estrictamente secuencial**: una petición en vuelo a la vez — y el servidor no lo
-  impone, así que el mutex es tuyo ([GOTCHAS §28](docs/GOTCHAS.md))
+  impone, así que el mutex es tuyo ([GOTCHAS §28](GOTCHAS.md))
 - está *parqueada* en un `(level, campus, faculty, program)`; moverla cuesta 2 POSTs
 - está en la región del buscador **o** en una región de detalle **numerada**; salir
   cuesta 1 POST *al id correcto*
@@ -160,7 +160,7 @@ allá de 4-8 es decisión de cortesía, no restricción del servidor. Ver *Concu
 
 "Estrictamente secuencial" dejó de ser una suposición heredada. Medido: el SIA **no
 rechaza** dos peticiones simultáneas sobre la misma sesión — devuelve `200 OK` y le da a
-un hilo la respuesta del otro ([GOTCHAS §28](docs/GOTCHAS.md)).
+un hilo la respuesta del otro ([GOTCHAS §28](GOTCHAS.md)).
 
 ```
 2 búsquedas idénticas, misma conexión → las dos correctas
@@ -185,7 +185,7 @@ Con eso, las goroutines se ganan su sitio en cuatro puntos y solo en cuatro:
 
 | Uso | Justificación medida |
 |---|---|
-| Pool como `chan *SIAConn` | canal con buffer = pool acotado; `select` con `ctx.Done()` da el `503 busy` de [API.md](docs/API.md) |
+| Pool como `chan *SIAConn` | canal con buffer = pool acotado; `select` con `ctx.Done()` da el `503 busy` de [API.md](API.md) |
 | Keepalive | una goroutine con ticker para todo el pool: ping ≤3 min mantiene la sesión 30 min; 5 min de silencio la mata |
 | `singleflight` | con pool chico es lo que evita que 3 clientes en frío hagan 3 × 10 s en cola |
 | `Refresher` (fase 2) | 30-40 h en serie; `errgroup` acotado + checkpoint por programa |
@@ -218,11 +218,22 @@ Usar el filtro `it11` (nombre) baja el payload de 241 KB a 15–27 KB.
 
 ## Alcance
 
-**Fase 1** — Bogotá (`campus=2`), pregrado (`level=0`).
+**Todas las sedes y todos los niveles.** No hay sede ni nivel privilegiado en el
+código: las dos listas salen de sus dropdowns (`soc1`, `soc9`), se cachean como
+cualquier otra referencia, y la conversión de código público a índice de dropdown se
+hace en un solo sitio (`catalog.Service.coordinates`) leyendo esa cache. Un `campus=`
+desconocido es `404`, nunca un silencioso "te doy Bogotá".
+
+Lo único con default es el nivel (`pregrado`), y es un default de producto —qué vista
+sirve la API si el cliente no dice nada—, no un supuesto estructural. Para sede no hay
+default ni forma de omitirla: es un segmento obligatorio de la ruta,
+`/v1/campuses/{campus}/…`.
 
 - read-through de catálogo y detalle
 - endpoint de cupos en vivo
 - pool de 4 conexiones (ver *Concurrencia*)
+
+Verificado en vivo contra Bogotá, Medellín y Amazonia.
 
 **Después**
 
@@ -238,7 +249,7 @@ Usar el filtro `it11` (nombre) baja el payload de 241 KB a 15–27 KB.
 
 ## Restricciones heredadas del SIA
 
-Salen de [docs/GOTCHAS.md](docs/GOTCHAS.md). Estas condicionan el diseño, no son
+Salen de [docs/GOTCHAS.md](GOTCHAS.md). Estas condicionan el diseño, no son
 detalles de implementación:
 
 | Restricción | Impacto |
@@ -259,7 +270,7 @@ detalles de implementación:
 
 ## Modelo de datos
 
-En [docs/DATA-MODEL.md](docs/DATA-MODEL.md): esquema SQL, structs de Go, palabras
+En [docs/DATA-MODEL.md](DATA-MODEL.md): esquema SQL, structs de Go, palabras
 reservadas evitadas y los casos borde que hay que soportar.
 
 Resumen:

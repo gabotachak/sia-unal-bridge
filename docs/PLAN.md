@@ -8,21 +8,24 @@ justificación de cada decisión vive en los otros documentos; aquí solo está 
 
 | Documento | Para qué lo abres |
 |---|---|
-| [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **antes de escribir la primera línea.** 28 trampas |
-| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | cuerpos de petición reales |
-| [`docs/FIELDS.md`](docs/FIELDS.md) | ids de componente, opciones, formatos del detalle |
-| [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | esquema y las 8 decisiones no obvias |
-| [`docs/API.md`](docs/API.md) | contrato HTTP |
+| [`GOTCHAS.md`](GOTCHAS.md) | **antes de escribir la primera línea.** 32 trampas |
+| [`PROTOCOL.md`](PROTOCOL.md) | cuerpos de petición reales |
+| [`FIELDS.md`](FIELDS.md) | ids de componente, opciones, formatos del detalle |
+| [`DATA-MODEL.md`](DATA-MODEL.md) | esquema y las nueve decisiones no obvias |
+| [`API.md`](API.md) | contrato HTTP |
 | [`ARCH.md`](ARCH.md) | pool, read-through, concurrencia |
-| [`docs/LAYOUT.md`](docs/LAYOUT.md) | árbol de paquetes y librerías |
-| [`bruno/sia-catalogo/`](bruno/sia-catalogo/) | el canario: si esto falla, cambió el SIA |
+| [`LAYOUT.md`](LAYOUT.md) | árbol de paquetes y librerías |
+| [`bruno/sia-catalogo/`](../bruno/sia-catalogo/) | el canario: si esto falla, cambió el SIA |
 
 ---
 
 ## Punto de partida
 
-- Ingeniería inversa **completa y verificada**. Sin código todavía.
-- Alcance de fase 1: **Bogotá (`campus=2`), pregrado (`level=0`)**.
+- Ingeniería inversa **completa y verificada**.
+- Alcance: **todas las sedes y todos los niveles**. Ambas listas se descubren de sus
+  dropdowns (`soc1`, `soc9`) y se cachean; no hay sede ni nivel privilegiado en el
+  código. La sede es un segmento obligatorio de la ruta: `/v1/campuses/{campus}/…`.
+  El nivel tiene un default de producto (`pregrado`) y se cambia con `?level=`.
 - Go 1.26.6, Postgres 18.6 (últimas estables verificadas, 2026-08-15).
 
 ---
@@ -35,21 +38,21 @@ No se vuelven a discutir salvo que aparezca una medición nueva.
 |---|---|---|
 | Hexagonal: dominio + `Store` + `SIASource` | el dominio no importa gin/pgx/goquery | [ARCH](ARCH.md) |
 | Read-through síncrono; `Refresher` a fase 2 | la cache se llena con el uso | [ARCH](ARCH.md) |
-| REST, no GraphQL | el detalle es unitario: no hay dataloader posible | [API §Por qué REST](docs/API.md) |
-| Identidad de programa `(campus, faculty, code)` | `code` colisiona 136 veces de 852 | [G §26](docs/GOTCHAS.md) |
-| Identidad de grupo = token entre paréntesis | `Grupo N` pierde 10 de 88 grupos | [DM §8](docs/DATA-MODEL.md) |
-| `typology` en `course_program` | probado: 8 códigos divergen entre planes | [G §17](docs/GOTCHAS.md) |
-| `section` global + `section_program` visibilidad | los cupos son globales, los grupos visibles no | [G §16](docs/GOTCHAS.md) |
-| `seat_snapshot` append-only | habilita alertas sin rediseñar | [DM §4](docs/DATA-MODEL.md) |
-| Pool de **4**, mutex por **operación lógica** | 8 en paralelo van bien; dentro de una conexión, no | [G §28](docs/GOTCHAS.md) |
-| Keepalive ≤3 min | muere a ~4.2 min, no a los 5 | [G §7](docs/GOTCHAS.md) |
-| `pt1:r1:<N>:cb4` con `N` leído de la respuesta | con `1` fijo se rompe en la 2.ª asignatura | [G §20](docs/GOTCHAS.md) |
+| REST, no GraphQL | el detalle es unitario: no hay dataloader posible | [API §Por qué REST](API.md) |
+| Identidad de programa `(campus, faculty, code)` | `code` colisiona 136 veces de 852 | [G §26](GOTCHAS.md) |
+| Identidad de grupo = token entre paréntesis | `Grupo N` pierde 10 de 88 grupos | [DM §8](DATA-MODEL.md) |
+| `typology` en `course_program` | probado: 8 códigos divergen entre planes | [G §17](GOTCHAS.md) |
+| `section` global + `section_program` visibilidad | los cupos son globales, los grupos visibles no | [G §16](GOTCHAS.md) |
+| `seat_snapshot` append-only | habilita alertas sin rediseñar | [DM §4](DATA-MODEL.md) |
+| Pool de **4**, mutex por **operación lógica** | 8 en paralelo van bien; dentro de una conexión, no | [G §28](GOTCHAS.md) |
+| Keepalive ≤3 min | muere a ~4.2 min, no a los 5 | [G §7](GOTCHAS.md) |
+| `pt1:r1:<N>:cb4` con `N` leído de la respuesta | con `1` fijo se rompe en la 2.ª asignatura | [G §20](GOTCHAS.md) |
 
 ---
 
 ## Fase 0 — andamiaje (medio día)
 
-1. `go mod init`, árbol de [`docs/LAYOUT.md`](docs/LAYOUT.md) con paquetes vacíos.
+1. `go mod init`, árbol de [`LAYOUT.md`](LAYOUT.md) con paquetes vacíos.
 2. `docker-compose.yml` con Postgres 18. `Makefile`: `run`, `test`, `migrate`, `lint`.
 3. `internal/config`: ~6 variables de entorno (`DATABASE_URL`, `PORT`, `SIA_POOL_SIZE`,
    `LOG_LEVEL`, `TEST_DATABASE_URL`).
@@ -74,7 +77,7 @@ pueden hacer sin red**, que es justo lo que los hace baratos.
 | listado regular, 98 filas | el caso normal |
 | listado de electivas, 240 filas | duplicados y comodín de sede |
 | detalle con muchos grupos (`1000004-B`, 32) | parser de grupos |
-| **detalle con grupos PEAMA** (`1000004-B`, `2015555`) | 5 grupos se llaman "Grupo 1" → [G §27](docs/GOTCHAS.md) |
+| **detalle con grupos PEAMA** (`1000004-B`, `2015555`) | 5 grupos se llaman "Grupo 1" → [G §27](GOTCHAS.md) |
 | **detalle con prerrequisitos** | bloque `Tipo M ¿Todas? [N]` |
 | detalle con 0 grupos (`2027641`) | asignatura sin oferta |
 | grupo sin horario (`Horarios/Aula: No informado`) | `section` sin `class_session` |
@@ -89,7 +92,7 @@ pueden hacer sin red**, que es justo lo que los hace baratos.
 
 ### Paso 1 · Esquema y migraciones · *sin red*
 
-`migrations/00001_init.sql` tal cual [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md), con los
+`migrations/00001_init.sql` tal cual [`DATA-MODEL.md`](DATA-MODEL.md), con los
 dos cambios que costaron sangre: `UNIQUE (campus_code, faculty_code, code)` en `program`
 y `UNIQUE (campus_code, code, term, key)` en `section`.
 
@@ -104,9 +107,9 @@ insertar 5 grupos con key '1','AMAZ-01','AMAZ-07','TUMA-01','CARI-01', todos num
 
 `sia/envelope.go` (XML → CDATA por id) y `sia/parse_list.go`.
 
-Trampas: [§4](docs/GOTCHAS.md) `_afrRK` re-leído siempre y **no empieza en 0** ·
-[§5](docs/GOTCHAS.md) contar `<tr>`, ignorar `_rowCount` · [§13](docs/GOTCHAS.md) dedupe
-por código · [§23](docs/GOTCHAS.md) en la página completa cada `<tr>` sale 5 veces, así
+Trampas: [§4](GOTCHAS.md) `_afrRK` re-leído siempre y **no empieza en 0** ·
+[§5](GOTCHAS.md) contar `<tr>`, ignorar `_rowCount` · [§13](GOTCHAS.md) dedupe
+por código · [§23](GOTCHAS.md) en la página completa cada `<tr>` sale 5 veces, así
 que solo se parsea CDATA de respuestas parciales · goquery, nunca regex.
 
 **Hecho cuando:** contra los fixtures da 98 y 240 filas, 215 códigos únicos en el de
@@ -116,10 +119,10 @@ electivas, y el bootstrap con tabla ajena devuelve **0 filas** en vez de 78.
 
 `sia/parse_detail.go` y `sia/parse_schedule.go`. Texto plano y marcadores, no DOM.
 
-Trampas: [§24](docs/GOTCHAS.md) cabeceras PEAMA — el regex es
-`\([^)\n]{1,20}\)[^\n]{0,60}?Grupo\s*\S+`, no `^\(\d+\)` · [§27](docs/GOTCHAS.md) `key`
-es el token entre paréntesis · [§17](docs/GOTCHAS.md) `ELEGIBLES` ↔ `LIBRE ELECCIÓN (L)`
-· [§18](docs/GOTCHAS.md) 0 grupos es válido.
+Trampas: [§24](GOTCHAS.md) cabeceras PEAMA — el regex es
+`\([^)\n]{1,20}\)[^\n]{0,60}?Grupo\s*\S+`, no `^\(\d+\)` · [§27](GOTCHAS.md) `key`
+es el token entre paréntesis · [§17](GOTCHAS.md) `ELEGIBLES` ↔ `LIBRE ELECCIÓN (L)`
+· [§18](GOTCHAS.md) 0 grupos es válido.
 
 **Hecho cuando:** `1000004-B` da **32 grupos** (no 26), los 5 "Grupo 1" salen con `key`
 distinto, `2027641` da 0 grupos sin error, y los prerrequisitos se extraen aunque
@@ -129,10 +132,10 @@ todavía no se guarden.
 
 `sia/conn.go`, `sia/cascade.go`, `sia/form.go`, `sia/noop.go`.
 
-- UA que no parezca navegador ([§1](docs/GOTCHAS.md)); `winnoloop` constante; cookiejar.
+- UA que no parezca navegador ([§1](GOTCHAS.md)); `winnoloop` constante; cookiejar.
 - Las **dos** cascadas: regular (5 pasos) y electivas (9, con `soc10` antes de `soc6`).
-- `soc4=0` = *todas menos libre elección* ([§21](docs/GOTCHAS.md)).
-- `detailRegion int`, leído de `id="pt1:r1:(\d+):cb4"` ([§20](docs/GOTCHAS.md)).
+- `soc4=0` = *todas menos libre elección* ([§21](GOTCHAS.md)).
+- `detailRegion int`, leído de `id="pt1:r1:(\d+):cb4"` ([§20](GOTCHAS.md)).
 - `noop.go`: ~900 B, ~1.2 KB y 419 B. Los tres son error explícito, nunca "sin
   resultados".
 
@@ -148,7 +151,7 @@ atascos (referencia medida: 201 POSTs, ~99 s, 31 MB).
 
 - Pool de 4 como `chan *SIAConn`; `select` con `ctx.Done()` → `503 busy` + `Retry-After`.
 - **Mutex por conexión envolviendo la operación lógica** (cascada+`cb1`,
-  detalle+`Volver`). Partirlo por POST reproduce [§28](docs/GOTCHAS.md).
+  detalle+`Volver`). Partirlo por POST reproduce [§28](GOTCHAS.md).
 - Una goroutine de keepalive con ticker ≤3 min para todo el pool; recicla las muertas.
 - Llenado en frío **escalonado**: el bootstrap llega a 4.5 MB, no 4 a la vez.
 - Reusar la conexión ya parqueada: 2 POSTs en vez de 6.
@@ -167,22 +170,22 @@ una conexión sin mutex devuelven el mismo listado con `200 OK`).
 - Write-behind con **`context.WithoutCancel`**: con el contexto de la request, gin lo
   cancela al volver el handler y la escritura se pierde en silencio.
 - `detail_fetched_at` en `course_program`: un plan nuevo paga el POST otra vez aunque la
-  asignatura ya esté ([DM §6](docs/DATA-MODEL.md)).
+  asignatura ya esté ([DM §6](DATA-MODEL.md)).
 
 **Hecho cuando:** dos peticiones simultáneas de la misma asignatura en frío hacen **1**
 POST al SIA, y pedir la misma asignatura desde otro plan **sí** dispara otro.
 
 ### Paso 7 · API HTTP · *con red*
 
-`httpapi/*` según [`docs/API.md`](docs/API.md).
+`httpapi/*` según [`API.md`](API.md).
 
 - `gin.New()` (no `Default()`), `ShouldBindQuery` (no `BindQuery`), `gin.Context` nunca
   cruza a `internal/catalog`.
 - `?max_age=`, cabeceras `Age` / `Cache-Control` / `X-Cache` / `X-SIA-Fetch-Ms`.
 - `404` y `200 {"sections": []}` son casos **distintos** y no se colapsan.
-- `/v1/courses/{code}` ambiguo → `300` con candidatos.
+- `/v1/campuses/{campus}/courses/{code}` ambiguo → `300` con candidatos.
 
-**Hecho cuando:** `curl /v1/programs/2A74/courses/2016696` devuelve el JSON del ejemplo
+**Hecho cuando:** `curl /v1/campuses/1101/programs/2A74/courses/2016696` devuelve el JSON del ejemplo
 de `API.md`, con `X-Cache: miss` la primera vez y `hit` la segunda.
 
 ---
@@ -204,14 +207,14 @@ de `API.md`, con `X-Cache: miss` la primera vez y `hit` la segunda.
 
 **Desviaciones conocidas del plan original**, documentadas en línea donde aplican:
 
-- `?q=`/`?credits=`/`?typology=` en `/courses` de un programa se filtran **en memoria**
+- `?q=`/`?credits=`/`?typology=` en el `/courses` de un programa se filtran **en memoria**
   sobre el catálogo ya cacheado, no con `it11`/`it10` server-side. Correcto, pero no
   optimiza el payload de un miss filtrado en frío como describía `API.md`.
 - Room/building del horario es *best-effort*: el SIA repite el código de sala sin
   delimitador estable. Ver el comentario de `buildingRe` en `sia/parse_schedule.go`.
 - `noop_session_expired_mute_*` sigue siendo un fixture sintético — la firma muda
   (~1.2 KB) no se reprodujo; la explícita (419 B) sí, real. Ver
-  [`docs/OPEN-QUESTIONS.md §3`](docs/OPEN-QUESTIONS.md).
+  [`OPEN-QUESTIONS.md §3`](OPEN-QUESTIONS.md).
 - Prerrequisitos se extraen (`ParseDetail`) pero no se persisten, como ya preveía este
   documento. "Contenido de la asignatura" (componentes) no se parsea.
 
@@ -246,7 +249,7 @@ cambios en 347 grupos en 35 min de pre-inscripción), así que el TTL de 5 min d
 
 **Cuando abran las inscripciones:** muestrear el mismo plan cada 15 min durante las
 primeras horas. Ese número fija el TTL de cupos y decide si el polling de fase 2 tiene
-sentido. El arnés ya está probado; ver [`docs/OPEN-QUESTIONS.md §2`](docs/OPEN-QUESTIONS.md).
+sentido. El arnés ya está probado; ver [`OPEN-QUESTIONS.md §2`](OPEN-QUESTIONS.md).
 
 ---
 

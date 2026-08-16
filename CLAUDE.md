@@ -9,8 +9,14 @@ Nacional de Colombia). El SIA solo expone el catálogo mediante una app Oracle A
 estado de sesión en servidor y navegación por POSTs de formulario encadenados. Este
 proyecto traduce eso a JSON.
 
-**Estado: sin código todavía.** Solo documentación. La ingeniería inversa del protocolo
-está completa y verificada contra producción (2026-08-15).
+**Estado: API en pie.** Read-through de referencia, catálogo, detalle y cupos, sobre
+Postgres. La ingeniería inversa del protocolo está completa y verificada contra
+producción (2026-08-15), igual que el funcionamiento multi-sede (Bogotá, Medellín,
+Amazonia).
+
+**La sede es un segmento obligatorio de la ruta**: `/v1/campuses/{campus}/…`. No hay
+sede ni nivel privilegiado en el código; las dos listas salen de sus dropdowns y se
+cachean como cualquier otra referencia.
 
 ## Convención de idioma
 
@@ -21,7 +27,7 @@ está completa y verificada contra producción (2026-08-15).
 
 ## Antes de escribir código
 
-Lee **`docs/GOTCHAS.md`** completo. No es opcional. Son 28 trampas verificadas contra
+Lee **`docs/GOTCHAS.md`** completo. No es opcional. Son 32 trampas verificadas contra
 el servidor real, varias de las cuales fallan **en silencio** (devuelven datos
 plausibles pero equivocados). El proyecto anterior murió por asumir mal cuatro de ellas.
 
@@ -44,17 +50,18 @@ Las cuatro que más código han roto:
 
 | Ruta | Qué hay |
 |---|---|
-| `PLAN.md` | **Plan de implementación: pasos, criterios de aceptación, fixtures** |
-| `ARCH.md` | Arquitectura: puertos, read-through, pool de sesiones, concurrencia |
+| `docs/PLAN.md` | **Plan de implementación: pasos, criterios de aceptación, fixtures** |
+| `docs/ARCH.md` | Arquitectura: puertos, read-through, pool de sesiones, concurrencia |
 | `docs/API.md` | Contrato HTTP: endpoints, IDs públicos, frescura, errores |
 | `docs/LAYOUT.md` | Árbol de paquetes Go y librerías — propuesta, sin implementar |
 | `docs/PROTOCOL.md` | Handshake ADF completo con cuerpos de petición reales |
 | `docs/FIELDS.md` | Componentes ADF, opciones de cada dropdown, mapeo a columnas |
-| `docs/GOTCHAS.md` | Las 28 trampas |
+| `docs/GOTCHAS.md` | Las 32 trampas |
 | `docs/DATA-MODEL.md` | Esquema Postgres + structs de Go |
 | `docs/OPEN-QUESTIONS.md` | Qué está verificado y qué no. Léelo antes de asumir |
 | `docs/DEVELOPMENT.md` | Entorno: Docker, Postgres, cómo replicar el flujo |
-| `bruno/sia-catalogo/` | Colección Bruno: 14 peticiones para ejecutar el flujo a mano |
+| `bruno/sia-catalogo/` | Colección Bruno: el flujo ADF crudo, a mano contra el SIA |
+| `bruno/bridge-api/` | Colección Bruno: los 14 endpoints de esta API |
 
 ## Arquitectura acordada
 

@@ -3,7 +3,7 @@
 Propuesta de árbol de archivos y librerías. Todavía no hay código: esto es para revisar
 antes de escribirlo.
 
-Traduce a paquetes de Go la arquitectura de [ARCH.md](../ARCH.md) y el contrato de
+Traduce a paquetes de Go la arquitectura de [ARCH.md](ARCH.md) y el contrato de
 [API.md](API.md). Los identificadores van en inglés; esta documentación en español.
 
 ---
@@ -50,10 +50,10 @@ sia-unal-bridge/
 │   │
 │   ├── httpapi/                    # ── ADAPTADOR driving ──
 │   │   ├── router.go               # gin.New(), grupo /v1, middleware
-│   │   ├── reference.go            # /levels /campuses /faculties /programs
-│   │   ├── catalog.go              # /programs/{program}/courses
-│   │   ├── detail.go               # …/courses/{code}[/sections[/{n}[/seats]]]
-│   │   ├── shortcuts.go            # /courses/{code}, /courses?q=
+│   │   ├── reference.go            # /levels /campuses, …/faculties …/programs
+│   │   ├── catalog.go              # …/programs/{program}/courses
+│   │   ├── detail.go               # …/courses/{code}[/sections[/{key}[/seats]]]
+│   │   ├── shortcuts.go            # …/courses/{code}, …/courses?q=
 │   │   ├── freshness.go            # ?max_age=, Age, Cache-Control, X-Cache
 │   │   ├── errors.go               # error de dominio → status + body JSON
 │   │   ├── middleware.go           # slog, recover, request id
@@ -87,7 +87,7 @@ sia-unal-bridge/
 | `internal/httpapi` | driving | traduce HTTP a casos de uso y errores de dominio a status |
 | `internal/config` | — | variables de entorno a un struct |
 
-`Refresher` no tiene paquete todavía: está aplazado a fase 2 ([ARCH.md](../ARCH.md)).
+`Refresher` no tiene paquete todavía: está aplazado a fase 2 ([ARCH.md](ARCH.md)).
 Cuando llegue, es `internal/refresher` + `cmd/refresher`, y consume los mismos puertos
 sin tocar nada de lo anterior.
 
@@ -113,7 +113,7 @@ devuelven, y está bien: dependen del dominio, que apunta hacia adentro.)
 
 ## Por qué `internal/sia` está partido así
 
-Es el paquete gordo y debe serlo: ahí viven las 28 trampas de
+Es el paquete gordo y debe serlo: ahí viven las 32 trampas de
 [GOTCHAS.md](GOTCHAS.md). Está dividido por **fase del protocolo**, no por capa
 técnica, para que cada trampa tenga un archivo obvio donde vivir y donde buscarla.
 
@@ -169,7 +169,7 @@ Dependencias de verdad: **gin, pgx, goose, goquery**. Más tres paquetes
 ### Avisos de uso
 
 **Gin: cuatro reglas.** El router es el cuello de botella de nadie — los 1.3–10 s los
-pone el pool ADF ([ARCH.md](../ARCH.md)) — así que gin se elige por ergonomía. Para que
+pone el pool ADF ([ARCH.md](ARCH.md)) — así que gin se elige por ergonomía. Para que
 esa comodidad no se cobre en otro lado:
 
 1. **`gin.Context` nunca cruza a `internal/catalog`.** Se pasa `c.Request.Context()`.

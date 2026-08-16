@@ -420,15 +420,16 @@ y ya está en producción, un `2016696` de Medellín hace UPSERT sobre el de Bog
 corrupción silenciosa, y la migración toca `course`, `course_program` y `section`.
 Mismo razonamiento asimétrico que la decisión 1.
 
-En la URL el código va pelado igual, porque la ruta canónica cuelga del programa y el
-programa fija la sede:
+En la URL el código va pelado igual, porque la sede ya es un segmento explícito de la
+ruta y fija el `campus_code` de la clave:
 
 ```
-/v1/programs/2A74/courses/2016696     ← sede implícita en 2A74
-/v1/courses/2016696                   ← atajo; ambiguo por diseño, 300 si hay varios
+/v1/campuses/1101/programs/2A74/courses/2016696     ← sede explícita
+/v1/campuses/1101/courses/2016696                   ← atajo; 300 si varios planes lo ofrecen
 ```
 
-`campus_code` es entonces un calificador del almacenamiento, no un segmento de ruta.
+`campus_code` es a la vez calificador de la clave y primer segmento de la ruta: lo que
+identifica en la base es lo que identifica en la API.
 
 **Nunca en una URL:** `program_idx`, `campus_idx`, `faculty_idx`, `program.id`,
 `section.id`, `_afrRK`.
@@ -489,7 +490,7 @@ Ver [GOTCHAS.md §24](GOTCHAS.md).
 
 Nivel y sede eran listas fijas en el código, y el directorio de programas no tenía
 marcador de frescura: cada lectura de referencia recorría la cascada en vivo. Medido,
-`GET /v1/faculties` tardaba ~8 s **siempre**. Ahora las tres listas salen del SIA una
+`GET /v1/campuses/{campus}/faculties` tardaba ~8 s **siempre**. Ahora las tres listas salen del SIA una
 vez cada 30 d ([API.md "Frescura"](API.md)) y se sirven de Postgres.
 
 Un marcador único, `reference_fetch`, en vez de una tabla por lista: es una sola regla.

@@ -10,13 +10,13 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-// Fase 1 scope pin: Bogotá, pregrado. See docs/ARCH.md "Alcance".
-const (
-	BogotaCampusIdx  = 2
-	BogotaCampusCode = "1101"
-	BogotaCampusName = "SEDE BOGOTÁ"
-	UndergradLevel   = 0
-)
+// DefaultLevelSlug is what an unqualified request means. It is a product
+// default — which view the API shows when the caller says nothing — not a
+// structural assumption: every level in the `level` table works, and nothing
+// downstream is written against this value. There is deliberately no
+// equivalent for campus: a campus-less request is answered from whatever is
+// cached, or 300, never silently narrowed to one sede.
+const DefaultLevelSlug = "pregrado"
 
 // Service is the read-through orchestrator: Store first, SIASource on a
 // stale/missing cache, respond, persist. docs/ARCH.md "Flujo principal".
@@ -27,25 +27,38 @@ type Service struct {
 
 	sfCatalog   singleflight.Group // key: program.ID
 	sfDetail    singleflight.Group // key: "programID:code" — docs/API.md "Singleflight por clave de fetch"
-	sfDirectory singleflight.Group // key: "campusCode:level" — the cascade is 15 POSTs; never run two at once
+	sfDirectory singleflight.Group // key: reference scope — the cascade is 15 POSTs; never run two at once
 }
 
 func NewService(store Store, sia SIASource, term string) *Service {
 	return &Service{store: store, sia: sia, term: term}
 }
 
-// ensureDirectory guarantees Store holds a program directory for Bogotá no
-// older than maxAge, walking the live cascade only when it doesn't. This is
-// the reference cache docs/API.md "Frescura" specifies at 30 d — before it
-// existed, every faculty/program read went to the SIA unconditionally.
+// ensureDirectory guarantees Store holds a program directory for one
+// (campus, level) no older than maxAge, walking the live cascade only when
+// it doesn't. This is the reference cache docs/API.md "Frescura" specifies
+// at 30 d — before it existed, every faculty/program read went to the SIA
+// unconditionally.
 //
-// A miss fills the WHOLE directory, all ~13 faculties. The cascade already
-// pays for every faculty's program list to produce any one of them, so
-// persisting a single faculty and discarding the other twelve would throw
-// away data already bought — same reasoning as "un miss de catálogo llena el
-// programa entero" in ARCH.md.
-func (s *Service) ensureDirectory(ctx context.Context, maxAge time.Duration) error {
-	scope := directoryScope(BogotaCampusCode, UndergradLevel)
+// A miss fills the WHOLE directory for that campus, all ~13 faculties. The
+// cascade already pays for every faculty's program list to produce any one
+// of them, so persisting a single faculty and discarding the rest would
+// throw away data already bought — same reasoning as "un miss de catálogo
+// llena el programa entero" in docs/ARCH.md.
+//
+// Both coordinates come from the caches (level slug → soc1 index, campus
+// code → soc9 index), never from a constant: which sede is index 2 is the
+// SIA's business and it can renumber (GOTCHAS §26).
+func (s *Service) ensureDirectory(ctx context.Context, campusCode, levelSlug string, maxAge time.Duration) error {
+	campus, level, err := s.coordinates(ctx, campusCode, levelSlug)
+	if err != nil {
+		return err
+	}
+
+	// level.Slug, not levelSlug: the raw parameter may be empty, and
+	// "programs:1101:" and "programs:1101:pregrado" would be two cache
+	// entries for the same directory.
+	scope := directoryScope(campusCode, level.Slug)
 	fetchedAt, err := s.store.ReferenceFetchedAt(ctx, scope)
 	if err != nil {
 		return err
@@ -55,7 +68,7 @@ func (s *Service) ensureDirectory(ctx context.Context, maxAge time.Duration) err
 	}
 
 	_, err, _ = s.sfDirectory.Do(scope, func() (any, error) {
-		faculties, programsByFaculty, err := s.sia.FetchProgramDirectory(ctx, UndergradLevel, BogotaCampusIdx)
+		faculties, programsByFaculty, err := s.sia.FetchProgramDirectory(ctx, level.Index, campus.Index)
 		if err != nil {
 			return nil, err
 		}
@@ -63,15 +76,58 @@ func (s *Service) ensureDirectory(ctx context.Context, maxAge time.Duration) err
 		for _, fac := range faculties {
 			for _, po := range programsByFaculty[fac.Index] {
 				programs = append(programs, Program{
-					CampusCode: BogotaCampusCode, FacultyCode: fac.Code, Code: po.Code,
-					Level: UndergradLevel, Name: po.Name, CampusName: BogotaCampusName, FacultyName: fac.Name,
-					CampusIdx: BogotaCampusIdx, FacultyIdx: fac.Index, ProgramIdx: po.Index,
+					CampusCode: campus.Code, FacultyCode: fac.Code, Code: po.Code,
+					Level: level.Index, Name: po.Name, CampusName: campus.Name, FacultyName: fac.Name,
+					CampusIdx: campus.Index, FacultyIdx: fac.Index, ProgramIdx: po.Index,
 				})
 			}
 		}
 		return nil, s.store.UpsertPrograms(ctx, scope, programs)
 	})
 	return err
+}
+
+// coordinates turns the public identifiers of a request — a campus code and
+// a level slug — into the volatile dropdown positions the SIA navigates by,
+// reading both off the reference caches and refreshing them if cold.
+//
+// This is the single place where a public ID becomes an index. Everything
+// upstream of it speaks codes and slugs; everything downstream speaks
+// positions. An unknown campus is ErrNotFound, not a silent fallback to some
+// default sede.
+func (s *Service) coordinates(ctx context.Context, campusCode, levelSlug string) (Campus, Level, error) {
+	level, err := s.resolveLevel(ctx, levelSlug)
+	if err != nil {
+		return Campus{}, Level{}, err
+	}
+	campuses, err := s.Campuses(ctx, level.Slug)
+	if err != nil {
+		return Campus{}, Level{}, err
+	}
+	for _, c := range campuses {
+		if c.Code == campusCode {
+			return c, level, nil
+		}
+	}
+	return Campus{}, Level{}, ErrNotFound
+}
+
+// resolveLevel maps a level slug to its cached row. An empty slug means the
+// caller did not care and gets DefaultLevelSlug.
+func (s *Service) resolveLevel(ctx context.Context, slug string) (Level, error) {
+	if slug == "" {
+		slug = DefaultLevelSlug
+	}
+	levels, err := s.Levels(ctx)
+	if err != nil {
+		return Level{}, err
+	}
+	for _, l := range levels {
+		if l.Slug == slug {
+			return l, nil
+		}
+	}
+	return Level{}, ErrNotFound
 }
 
 // Levels lists the niveles de estudio off the reference cache. The three
@@ -138,71 +194,127 @@ var accentFolds = map[rune]rune{
 // hardcoded slice in the HTTP layer; they are a SIA dropdown (soc9) like any
 // other, so they follow the same rule as everything else — read from Store,
 // go to the SIA only when missing or stale.
-func (s *Service) Campuses(ctx context.Context) ([]Campus, error) {
-	scope := campusScope(UndergradLevel)
+func (s *Service) Campuses(ctx context.Context, levelSlug string) ([]Campus, error) {
+	if levelSlug == "" {
+		levelSlug = DefaultLevelSlug
+	}
+	scope := campusScope(levelSlug)
 	fetchedAt, err := s.store.ReferenceFetchedAt(ctx, scope)
 	if err != nil {
 		return nil, err
 	}
 	if !Fresh(fetchedAt, FreshnessReference, time.Now()) {
+		// The soc9 fetch needs soc1's position, and resolveLevel reads the
+		// level cache — which Levels() keeps fresh on its own scope.
+		level, err := s.resolveLevel(ctx, levelSlug)
+		if err != nil {
+			return nil, err
+		}
 		if _, err, _ := s.sfDirectory.Do(scope, func() (any, error) {
-			opts, err := s.sia.FetchCampuses(ctx, UndergradLevel)
+			opts, err := s.sia.FetchCampuses(ctx, level.Index)
 			if err != nil {
 				return nil, err
 			}
 			campuses := make([]Campus, len(opts))
 			for i, o := range opts {
-				campuses[i] = Campus{Level: UndergradLevel, Code: o.Code, Name: o.Name, Index: o.Index}
+				campuses[i] = Campus{LevelSlug: level.Slug, Code: o.Code, Name: o.Name, Index: o.Index}
 			}
 			return nil, s.store.UpsertCampuses(ctx, scope, campuses)
 		}); err != nil {
 			return nil, err
 		}
 	}
-	return s.store.Campuses(ctx, UndergradLevel)
+	return s.store.Campuses(ctx, levelSlug)
 }
 
 // Scope keys for the reference cache's TTL marker. One namespace per list,
 // because they are refreshed independently and at different costs: the
-// campus list is one POST, the program directory is ~15.
-func campusScope(level int) string { return fmt.Sprintf("campuses:%d", level) }
-func directoryScope(campusCode string, level int) string {
-	return fmt.Sprintf("programs:%s:%d", campusCode, level)
+// campus list is one POST, a campus's program directory is ~15. Keyed by
+// public IDs, never by dropdown positions.
+func campusScope(levelSlug string) string { return "campuses:" + levelSlug }
+func directoryScope(campusCode, levelSlug string) string {
+	return fmt.Sprintf("programs:%s:%s", campusCode, levelSlug)
 }
 
-// ResolveProgram looks up a program by its institutional code within Bogotá,
-// served from the reference cache. An unknown code costs no SIA traffic once
-// the directory is fresh: the cascade is authoritative about which programs
-// exist, so absence from a fresh directory IS the 404.
-func (s *Service) ResolveProgram(ctx context.Context, code string) (Program, error) {
-	if err := s.ensureDirectory(ctx, FreshnessReference); err != nil {
-		return Program{}, err
+// ResolveProgram looks up a program by its institutional code.
+//
+// program.code does NOT identify on its own: 136 of 852 codes repeat across
+// sedes because PEAMA reexposes the same plan (GOTCHAS §26). So the campus
+// is optional but meaningful:
+//
+//   - campusCode given: that sede's directory is made fresh (fetched if
+//     cold) and the lookup is exact.
+//   - campusCode empty: the lookup runs over everything already cached and
+//     triggers NO fetch — there is no campus to cascade. One match is
+//     served, several are an AmbiguousError (300, docs/API.md
+//     "Identificadores"), none is a 404 that tells the caller to qualify.
+//
+// An unknown code costs no SIA traffic once the directory is fresh: the
+// cascade is authoritative about which programs exist, so absence from a
+// fresh directory IS the 404.
+func (s *Service) ResolveProgram(ctx context.Context, ref ProgramRef) (Program, error) {
+	if ref.Campus != "" {
+		if err := s.ensureDirectory(ctx, ref.Campus, ref.Level, FreshnessReference); err != nil {
+			return Program{}, err
+		}
 	}
-	programs, err := s.store.Programs(ctx, BogotaCampusCode, "")
+	programs, err := s.store.Programs(ctx, ref.Campus, ref.Faculty)
 	if err != nil {
 		return Program{}, err
 	}
+	var matches []Program
 	for _, p := range programs {
-		if p.Code == code {
-			return p, nil
+		if p.Code == ref.Code {
+			matches = append(matches, p)
 		}
 	}
-	return Program{}, ErrNotFound
+	switch len(matches) {
+	case 0:
+		return Program{}, ErrNotFound
+	case 1:
+		return matches[0], nil
+	default:
+		return Program{}, &AmbiguousError{
+			Candidates: matches,
+			Code:       "ambiguous_program",
+			Hint:       ambiguityHint(matches, ref),
+		}
+	}
+}
+
+// ambiguityHint names the coordinate that would actually settle it. Over
+// HTTP the campus is always known (it is a path segment), so the answer is
+// almost always ?faculty= — codes repeat across faculties within a sede too,
+// not just across sedes. The campus branch is for callers that reach the
+// service directly with only a code.
+func ambiguityHint(matches []Program, ref ProgramRef) string {
+	if ref.Campus != "" {
+		return "add ?faculty= to disambiguate"
+	}
+	for _, p := range matches[1:] {
+		if p.CampusCode != matches[0].CampusCode {
+			return "qualify the campus: /v1/campuses/{campus}/programs/" + ref.Code
+		}
+	}
+	return "add ?faculty= to disambiguate"
 }
 
 func (p Program) key() ProgramKey {
-	return ProgramKey{Level: p.Level, Campus: p.CampusIdx, Faculty: p.FacultyIdx, Program: p.ProgramIdx}
+	return ProgramKey{
+		Level: p.Level, Campus: p.CampusIdx, Faculty: p.FacultyIdx, Program: p.ProgramIdx,
+		CampusCode: p.CampusCode,
+	}
 }
 
-// Faculties lists Bogotá's faculties off the reference cache. There is no
-// faculty table — program rows carry faculty_code/faculty_name as a
+// Faculties lists one campus's faculties off the reference cache. There is
+// no faculty table — program rows carry faculty_code/faculty_name as a
 // convenience column (DATA-MODEL.md) — so the list is the distinct set over
 // a directory that ensureDirectory has already made fresh.
-func (s *Service) Faculties(ctx context.Context) ([]DropdownOption, error) {
-	if err := s.ensureDirectory(ctx, FreshnessReference); err != nil {
+func (s *Service) Faculties(ctx context.Context, campusCode, levelSlug string) ([]DropdownOption, error) {
+	if err := s.ensureDirectory(ctx, campusCode, levelSlug, FreshnessReference); err != nil {
 		return nil, err
 	}
-	programs, err := s.store.Programs(ctx, BogotaCampusCode, "")
+	programs, err := s.store.Programs(ctx, campusCode, "")
 	if err != nil {
 		return nil, err
 	}
@@ -219,26 +331,29 @@ func (s *Service) Faculties(ctx context.Context) ([]DropdownOption, error) {
 	return out, nil
 }
 
-// ProgramsInFaculty lists the programs under a faculty from the reference
-// cache. An empty result for a real faculty is a genuine empty: the
-// directory is authoritative once fresh, so it must not retrigger a fetch.
-func (s *Service) ProgramsInFaculty(ctx context.Context, facultyCode string) ([]Program, error) {
-	if err := s.ensureDirectory(ctx, FreshnessReference); err != nil {
+// ProgramsInFaculty lists the programs of one campus from the reference
+// cache, optionally narrowed to a faculty (facultyCode == "" means the whole
+// campus — free, since a directory miss fills every faculty anyway).
+//
+// An empty result for a real faculty is a genuine empty: the directory is
+// authoritative once fresh, so it must not retrigger a fetch.
+func (s *Service) ProgramsInFaculty(ctx context.Context, campusCode, facultyCode, levelSlug string) ([]Program, error) {
+	if err := s.ensureDirectory(ctx, campusCode, levelSlug, FreshnessReference); err != nil {
 		return nil, err
 	}
-	return s.store.Programs(ctx, BogotaCampusCode, facultyCode)
+	return s.store.Programs(ctx, campusCode, facultyCode)
 }
 
-func (s *Service) ProgramsOfferingCourse(ctx context.Context, code string) ([]Program, error) {
-	return s.store.ProgramsOfferingCourse(ctx, code)
+func (s *Service) ProgramsOfferingCourse(ctx context.Context, campusCode, code string) ([]Program, error) {
+	return s.store.ProgramsOfferingCourse(ctx, campusCode, code)
 }
 
-func (s *Service) SearchCourses(ctx context.Context, q string) ([]Course, error) {
-	return s.store.SearchCourses(ctx, q)
+func (s *Service) SearchCourses(ctx context.Context, campusCode, q string) ([]Course, error) {
+	return s.store.SearchCourses(ctx, campusCode, q)
 }
 
-func (s *Service) CachedProgramCount(ctx context.Context) (cached, total int, err error) {
-	return s.store.CachedProgramCount(ctx)
+func (s *Service) ProgramCoverage(ctx context.Context, campusCode string) (known, withCatalog int, err error) {
+	return s.store.ProgramCoverage(ctx, campusCode)
 }
 
 // CacheStatus tells the caller (httpapi's X-Cache header, docs/API.md)
@@ -321,7 +436,7 @@ func (s *Service) CourseDetail(ctx context.Context, program Program, code string
 }
 
 // SectionSeats is the seats-granularity read-through. Seats are the one
-// volatile datum (ARCH.md "Lo único volátil son los cupos"), so they get
+// volatile datum (docs/ARCH.md "Lo único volátil son los cupos"), so they get
 // their own TTL — FreshnessSeats, governed by seat_snapshot.measured_at
 // (docs/API.md "Frescura") — instead of riding on detail_fetched_at's 24 h,
 // which would serve day-old seats under a 5 min Cache-Control.
@@ -329,7 +444,7 @@ func (s *Service) CourseDetail(ctx context.Context, program Program, code string
 // A miss costs exactly one detail POST, the same as fetching the whole
 // course, because the seats never arrive alone. So it refreshes and persists
 // everything — sections, schedule, visibility, snapshot — and returns only
-// the section asked for. ARCH.md "Cupos": sale gratis y mantiene la cache
+// the section asked for. docs/ARCH.md "Cupos": sale gratis y mantiene la cache
 // caliente.
 func (s *Service) SectionSeats(ctx context.Context, program Program, code, key string, maxAge time.Duration) (Section, FetchResult, error) {
 	if maxAge < 0 {

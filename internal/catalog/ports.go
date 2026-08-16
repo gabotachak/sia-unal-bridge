@@ -72,7 +72,7 @@ type Store interface {
 	UpsertProgram(ctx context.Context, p Program) (Program, error)
 	Program(ctx context.Context, campusCode, facultyCode, code string) (Program, bool, error)
 	Programs(ctx context.Context, campusCode, facultyCode string) ([]Program, error)
-	Campuses(ctx context.Context, level int) ([]Campus, error)
+	Campuses(ctx context.Context, levelSlug string) ([]Campus, error)
 	Levels(ctx context.Context) ([]Level, error)
 	ReferenceFetchedAt(ctx context.Context, scope string) (*time.Time, error)
 	UpsertPrograms(ctx context.Context, scope string, programs []Program) error
@@ -99,7 +99,7 @@ type Store interface {
 
 	// Shortcuts — served from Store only, never trigger a SIA fetch
 	// (docs/API.md "Por qué la búsqueda global no dispara al SIA").
-	ProgramsOfferingCourse(ctx context.Context, code string) ([]Program, error)
-	SearchCourses(ctx context.Context, q string) ([]Course, error)
-	CachedProgramCount(ctx context.Context) (cached, total int, err error)
+	ProgramsOfferingCourse(ctx context.Context, campusCode, code string) ([]Program, error)
+	SearchCourses(ctx context.Context, campusCode, q string) ([]Course, error)
+	ProgramCoverage(ctx context.Context, campusCode string) (known, withCatalog int, err error)
 }

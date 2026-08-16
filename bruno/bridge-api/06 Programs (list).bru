@@ -5,13 +5,16 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/programs?campus={{campus}}&faculty={{faculty}}
+  url: {{baseUrl}}/campuses/{{campus}}/programs?faculty={{faculty}}
   body: none
   auth: none
 }
 
-params:query {
+params:path {
   campus: {{campus}}
+}
+
+params:query {
   faculty: {{faculty}}
 }
 
@@ -20,6 +23,7 @@ assert {
 }
 
 docs {
-  campus debe ser 1101 y faculty es obligatorio en fase 1 (no hay directorio
-  completo de sede, solo por facultad).
+  faculty es un filtro OPCIONAL: quítalo y salen todos los planes de la sede.
+  Sale gratis porque un miss de directorio llena todas las facultades en la
+  misma cascada.
 }

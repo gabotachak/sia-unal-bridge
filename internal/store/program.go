@@ -54,15 +54,17 @@ func (s *Store) Program(ctx context.Context, campusCode, facultyCode, code strin
 	return p, true, nil
 }
 
-// Programs lists cached programs under a campus, optionally narrowed to one
-// faculty. facultyCode == "" means all faculties in the campus.
+// Programs lists cached programs, optionally narrowed to one campus and one
+// faculty. An empty campusCode means every cached campus: the HTTP layer
+// always passes one (it is a path segment), but the service still supports
+// a campus-less lookup for callers that have only a code.
 func (s *Store) Programs(ctx context.Context, campusCode, facultyCode string) ([]catalog.Program, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, campus_code, faculty_code, code, level, name, campus_name, faculty_name,
 		       campus_idx, faculty_idx, program_idx, catalog_fetched_at
 		FROM program
-		WHERE campus_code = $1 AND ($2 = '' OR faculty_code = $2)
-		ORDER BY name`,
+		WHERE ($1 = '' OR campus_code = $1) AND ($2 = '' OR faculty_code = $2)
+		ORDER BY campus_code, name`,
 		campusCode, facultyCode,
 	)
 	if err != nil {
@@ -82,17 +84,18 @@ func (s *Store) Programs(ctx context.Context, campusCode, facultyCode string) ([
 	return out, rows.Err()
 }
 
-// ProgramsOfferingCourse resolves which programs list code in their
-// course_program, for the ambiguous /courses/{code} shortcut (docs/API.md).
-func (s *Store) ProgramsOfferingCourse(ctx context.Context, code string) ([]catalog.Program, error) {
+// ProgramsOfferingCourse resolves which programs of a campus list code in
+// their course_program, for the /campuses/{campus}/courses/{code} shortcut
+// (docs/API.md). An empty campusCode spans every cached campus.
+func (s *Store) ProgramsOfferingCourse(ctx context.Context, campusCode, code string) ([]catalog.Program, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT p.id, p.campus_code, p.faculty_code, p.code, p.level, p.name, p.campus_name, p.faculty_name,
 		       p.campus_idx, p.faculty_idx, p.program_idx, p.catalog_fetched_at
 		FROM program p
 		JOIN course_program cp ON cp.program_id = p.id
-		WHERE cp.code = $1
+		WHERE cp.code = $2 AND ($1 = '' OR p.campus_code = $1)
 		ORDER BY p.name`,
-		code,
+		campusCode, code,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("store: ProgramsOfferingCourse: %w", err)

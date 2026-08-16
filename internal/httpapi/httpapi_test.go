@@ -27,7 +27,7 @@ type fakeStore struct {
 	}
 	sections  map[string][]catalog.Section
 	reference map[string]time.Time
-	campuses  map[int][]catalog.Campus
+	campuses  map[string][]catalog.Campus
 	levels    []catalog.Level
 }
 
@@ -41,7 +41,7 @@ func newFakeStore() *fakeStore {
 		}{},
 		sections:  map[string][]catalog.Section{},
 		reference: map[string]time.Time{},
-		campuses:  map[int][]catalog.Campus{},
+		campuses:  map[string][]catalog.Campus{},
 	}
 }
 
@@ -71,16 +71,16 @@ func (f *fakeStore) UpsertCampuses(_ context.Context, scope string, campuses []c
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, c := range campuses {
-		f.campuses[c.Level] = append(f.campuses[c.Level], c)
+		f.campuses[c.LevelSlug] = append(f.campuses[c.LevelSlug], c)
 	}
 	f.reference[scope] = time.Now()
 	return nil
 }
 
-func (f *fakeStore) Campuses(_ context.Context, level int) ([]catalog.Campus, error) {
+func (f *fakeStore) Campuses(_ context.Context, levelSlug string) ([]catalog.Campus, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.campuses[level], nil
+	return f.campuses[levelSlug], nil
 }
 
 func (f *fakeStore) UpsertLevels(_ context.Context, scope string, levels []catalog.Level) error {
@@ -145,7 +145,7 @@ func (f *fakeStore) Programs(_ context.Context, campusCode, facultyCode string) 
 	defer f.mu.Unlock()
 	var out []catalog.Program
 	for _, p := range f.programs {
-		if p.CampusCode == campusCode && (facultyCode == "" || p.FacultyCode == facultyCode) {
+		if (campusCode == "" || p.CampusCode == campusCode) && (facultyCode == "" || p.FacultyCode == facultyCode) {
 			out = append(out, p)
 		}
 	}
@@ -228,7 +228,7 @@ func (f *fakeStore) Sections(_ context.Context, campusCode, code string, program
 func (f *fakeStore) CurrentSeats(context.Context, int64) (catalog.SeatSnapshot, bool, error) {
 	return catalog.SeatSnapshot{}, false, nil
 }
-func (f *fakeStore) ProgramsOfferingCourse(_ context.Context, code string) ([]catalog.Program, error) {
+func (f *fakeStore) ProgramsOfferingCourse(_ context.Context, campusCode, code string) ([]catalog.Program, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []catalog.Program
@@ -239,8 +239,12 @@ func (f *fakeStore) ProgramsOfferingCourse(_ context.Context, code string) ([]ca
 	}
 	return out, nil
 }
-func (f *fakeStore) SearchCourses(context.Context, string) ([]catalog.Course, error) { return nil, nil }
-func (f *fakeStore) CachedProgramCount(context.Context) (int, int, error)            { return 0, 0, nil }
+func (f *fakeStore) SearchCourses(context.Context, string, string) ([]catalog.Course, error) {
+	return nil, nil
+}
+func (f *fakeStore) ProgramCoverage(context.Context, string) (int, int, error) {
+	return 0, 0, nil
+}
 
 type fakeSIA struct {
 	detailCalls int
@@ -290,7 +294,7 @@ func (f *fakeSIA) FetchDetail(_ context.Context, _ catalog.ProgramKey, code, ter
 }
 
 // TestCourseDetail_MissThenHit is paso 7's acceptance bar (docs/PLAN.md):
-// curl /v1/programs/{program}/courses/{code} returns API.md's example
+// curl /v1/campuses/{campus}/programs/{program}/courses/{code} returns API.md's example
 // shape, with X-Cache: miss the first time and hit the second.
 func TestCourseDetail_MissThenHit(t *testing.T) {
 	store := newFakeStore()
@@ -305,7 +309,7 @@ func TestCourseDetail_MissThenHit(t *testing.T) {
 	}
 
 	router := NewRouter(svc)
-	url := "/v1/programs/2A74/courses/2016696"
+	url := "/v1/campuses/1101/programs/2A74/courses/2016696"
 
 	// ── miss ──
 	w := httptest.NewRecorder()
@@ -382,7 +386,7 @@ func TestCourseDetail_UnknownCourseIs404(t *testing.T) {
 	router := NewRouter(svc)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/programs/ZZZZ/courses/2016696", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/campuses/1101/programs/ZZZZ/courses/2016696", nil)
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("got status %d, want 404 for unknown program", w.Code)
@@ -419,7 +423,7 @@ func TestMaxAge_InvalidIsBadRequest(t *testing.T) {
 	router := NewRouter(svc)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/programs/2A74/courses/2016696?max_age=-5", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/campuses/1101/programs/2A74/courses/2016696?max_age=-5", nil)
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("got status %d, want 400 for negative max_age", w.Code)

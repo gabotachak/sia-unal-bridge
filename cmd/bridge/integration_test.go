@@ -43,7 +43,7 @@ func TestIntegration_ResolveCatalogDetail(t *testing.T) {
 
 	svc := catalog.NewService(st, src, "2026-2")
 
-	program, err := svc.ResolveProgram(ctx, "2A74") // Ingeniería de Sistemas y Computación
+	program, err := svc.ResolveProgram(ctx, catalog.ProgramRef{Campus: "1101", Code: "2A74"}) // Ingeniería de Sistemas y Computación
 	if err != nil {
 		t.Fatalf("ResolveProgram: %v", err)
 	}

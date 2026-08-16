@@ -34,20 +34,52 @@ func NewRouter(svc *catalog.Service) *gin.Engine {
 		v1.GET("/healthz", a.healthz)
 		v1.GET("/status", a.status)
 
+		// The contract, embedded in the binary, plus a Swagger UI over it.
+		v1.GET("/openapi.yaml", a.openapi)
+		v1.GET("/docs", a.swaggerUI)
+
+		// Not campus-scoped: these two ARE the list of campuses and the
+		// list of levels.
 		v1.GET("/levels", a.levels)
 		v1.GET("/campuses", a.campuses)
-		v1.GET("/faculties", a.faculties)
-		v1.GET("/programs", a.listPrograms)
-		v1.GET("/programs/:program", a.getProgram)
 
-		v1.GET("/programs/:program/courses", a.programCourses)
-		v1.GET("/programs/:program/courses/:code", a.courseDetail)
-		v1.GET("/programs/:program/courses/:code/sections", a.courseSections)
-		v1.GET("/programs/:program/courses/:code/sections/:key", a.courseSection)
-		v1.GET("/programs/:program/courses/:code/sections/:key/seats", a.sectionSeats)
+		// Everything else hangs off a sede, because everything else IS
+		// scoped to one. program.code repeats across sedes (136 of 852,
+		// GOTCHAS §26) and course.code is keyed by (campus_code, code) in
+		// the schema, so a campus-less URL names nothing exactly. It used
+		// to be an optional ?campus= that defaulted to Bogotá; a required
+		// path segment is the honest shape of a required datum.
+		campus := v1.Group("/campuses/:campus")
+		{
+			campus.GET("/faculties", a.faculties)
 
-		v1.GET("/courses/:code", a.courseShortcut)
-		v1.GET("/courses", a.courseSearch)
+			programs := campus.Group("/programs")
+			{
+				programs.GET("", a.listPrograms)
+				programs.GET("/:program", a.getProgram)
+
+				courses := programs.Group("/:program/courses")
+				{
+					courses.GET("", a.programCourses)
+					courses.GET("/:code", a.courseDetail)
+
+					sections := courses.Group("/:code/sections")
+					{
+						sections.GET("", a.courseSections)
+						sections.GET("/:key", a.courseSection)
+						sections.GET("/:key/seats", a.sectionSeats)
+					}
+				}
+			}
+
+			// The shortcut: a course code without knowing its program. Same
+			// campus scoping, because course is keyed by (campus_code, code).
+			shortcuts := campus.Group("/courses")
+			{
+				shortcuts.GET("", a.courseSearch)
+				shortcuts.GET("/:code", a.courseShortcut)
+			}
+		}
 	}
 	return r
 }

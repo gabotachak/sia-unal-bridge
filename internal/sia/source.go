@@ -132,7 +132,7 @@ func (s *Source) FetchDetail(ctx context.Context, key catalog.ProgramKey, code, 
 	// unreturned conn is stuck for every future caller (GOTCHAS §10/§20).
 	defer func() { _, _ = conn.Volver(ctx) }()
 
-	campusCode := CampusCode(key.Campus)
+	campusCode := key.CampusCode
 	d, err := ParseDetail(body, campusCode, code, term)
 	if err != nil {
 		return catalog.CourseOffering{}, err
@@ -181,7 +181,7 @@ func findRow(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code st
 }
 
 func offeringsFromRows(rows []Row, key catalog.ProgramKey) []catalog.CourseOffering {
-	campusCode := CampusCode(key.Campus)
+	campusCode := key.CampusCode
 	now := time.Now()
 	out := make([]catalog.CourseOffering, len(rows))
 	for i, r := range rows {

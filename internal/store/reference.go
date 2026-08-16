@@ -65,12 +65,12 @@ func (s *Store) UpsertCampuses(ctx context.Context, scope string, campuses []cat
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		for _, c := range campuses {
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO campus (level, code, name, campus_idx)
+				INSERT INTO campus (level_slug, code, name, campus_idx)
 				VALUES ($1, $2, $3, $4)
-				ON CONFLICT (level, code) DO UPDATE SET
+				ON CONFLICT (level_slug, code) DO UPDATE SET
 					name = EXCLUDED.name,
 					campus_idx = EXCLUDED.campus_idx`,
-				c.Level, c.Code, c.Name, c.Index,
+				c.LevelSlug, c.Code, c.Name, c.Index,
 			); err != nil {
 				return fmt.Errorf("store: UpsertCampuses: campus %s: %w", c.Code, err)
 			}
@@ -133,9 +133,9 @@ func stampReference(ctx context.Context, tx pgx.Tx, scope string) error {
 
 // Campuses lists the cached sedes of a level, ordered by name so the API's
 // output doesn't depend on soc9's volatile positions.
-func (s *Store) Campuses(ctx context.Context, level int) ([]catalog.Campus, error) {
+func (s *Store) Campuses(ctx context.Context, levelSlug string) ([]catalog.Campus, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT level, code, name, campus_idx FROM campus WHERE level = $1 ORDER BY name`, level)
+		SELECT level_slug, code, name, campus_idx FROM campus WHERE level_slug = $1 ORDER BY name`, levelSlug)
 	if err != nil {
 		return nil, fmt.Errorf("store: Campuses: %w", err)
 	}
@@ -144,7 +144,7 @@ func (s *Store) Campuses(ctx context.Context, level int) ([]catalog.Campus, erro
 	var out []catalog.Campus
 	for rows.Next() {
 		var c catalog.Campus
-		if err := rows.Scan(&c.Level, &c.Code, &c.Name, &c.Index); err != nil {
+		if err := rows.Scan(&c.LevelSlug, &c.Code, &c.Name, &c.Index); err != nil {
 			return nil, fmt.Errorf("store: Campuses: scan: %w", err)
 		}
 		out = append(out, c)

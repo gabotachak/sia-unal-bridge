@@ -50,9 +50,9 @@ func TestLive_FetchProgramDirectory_AfterGotoProgram(t *testing.T) {
 }
 
 // TestLive_FetchElectives_TwiceOnSameConn reproduces the electives-specific
-// case: fase 1's single-campus scope means soc4/soc5/soc10/soc6 post the
-// SAME four values every time. A second FetchElectives on the same
-// connection used to noop without the bounce guard.
+// case: two consecutive requests for the SAME sede repost soc4/soc5/soc10/
+// soc6 unchanged. A second FetchElectives on the same connection used to
+// noop without the bounce guard.
 func TestLive_FetchElectives_TwiceOnSameConn(t *testing.T) {
 	if os.Getenv("SIA_LIVE") != "1" {
 		t.Skip("set SIA_LIVE=1 to run against the real SIA server")
@@ -143,4 +143,49 @@ func TestLive_FetchCampuses(t *testing.T) {
 		t.Fatalf("got %d campuses on reuse, want %d", len(second), len(first))
 	}
 	t.Logf("%d campuses, stable across reuse", len(second))
+}
+
+// TestLive_ElectivesWildcardIsPerCampus pins the bug that survived the
+// Bogotá-only phase: soc6's "whole sede" wildcard sits at index 12 in
+// Bogotá's 13-option list and at 10 in Medellín's 11-option list. The
+// hardcoded 12 made every non-Bogotá electives fetch a silent no-op — and a
+// no-op looks like an expired session, not like a wrong index (GOTCHAS §30).
+// Skipped unless SIA_LIVE=1.
+func TestLive_ElectivesWildcardIsPerCampus(t *testing.T) {
+	if os.Getenv("SIA_LIVE") != "1" {
+		t.Skip("set SIA_LIVE=1 to run against the real SIA server")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	cases := []struct {
+		name string
+		key  catalog.ProgramKey
+	}{
+		{"bogota", catalog.ProgramKey{Level: 0, Campus: 2, Faculty: 8, Program: 3, CampusCode: "1101"}},
+		{"medellin", catalog.ProgramKey{Level: 0, Campus: 6, Faculty: 9, Program: 0, CampusCode: "1102"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, err := NewConn("https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := c.Bootstrap(ctx); err != nil {
+				t.Fatalf("Bootstrap: %v", err)
+			}
+			body, err := c.FetchElectives(ctx, tc.key)
+			if err != nil {
+				t.Fatalf("FetchElectives: %v", err)
+			}
+			rows, err := ParseList(body)
+			if err != nil {
+				t.Fatalf("ParseList: %v", err)
+			}
+			if len(rows) == 0 {
+				t.Fatal("got 0 electives, want the whole sede's libre elección")
+			}
+			t.Logf("%s: %d electives rows", tc.name, len(rows))
+		})
+	}
 }

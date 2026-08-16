@@ -19,11 +19,26 @@ func writeError(c *gin.Context, err error, notFoundCode string) {
 	case errors.Is(err, catalog.ErrNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": notFoundCode, "message": err.Error()})
 	case errors.As(err, &aerr):
+		// The full identity goes in every candidate: the same program code is
+		// reexposed across sedes by PEAMA and across faculties within a sede
+		// (GOTCHAS §26), so a list without campus AND faculty is unusable.
 		candidates := make([]gin.H, len(aerr.Candidates))
 		for i, cand := range aerr.Candidates {
-			candidates[i] = gin.H{"program": cand.Code, "name": cand.Name}
+			candidates[i] = gin.H{
+				"program": cand.Code, "name": cand.Name,
+				"campus_code": cand.CampusCode, "campus_name": cand.CampusName,
+				"faculty_code": cand.FacultyCode, "faculty_name": cand.FacultyName,
+			}
 		}
-		c.JSON(http.StatusMultipleChoices, gin.H{"error": "ambiguous_course", "message": err.Error(), "candidates": candidates})
+		code := aerr.Code
+		if code == "" {
+			code = "ambiguous_course"
+		}
+		body := gin.H{"error": code, "message": err.Error(), "candidates": candidates}
+		if aerr.Hint != "" {
+			body["hint"] = aerr.Hint
+		}
+		c.JSON(http.StatusMultipleChoices, body)
 	case errors.Is(err, catalog.ErrBusy):
 		c.Header("Retry-After", "2")
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "busy", "message": "sia connection pool busy"})

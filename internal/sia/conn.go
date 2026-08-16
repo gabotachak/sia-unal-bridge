@@ -47,11 +47,11 @@ type SIAConn struct {
 	navLevel, navCampus, navFaculty int
 
 	// navTipologia/navModo/navSedeElect/navFacElect are the electives
-	// cascade's equivalent tracking (soc4, soc5, soc10, soc6). Fase 1 only
-	// ever targets ONE campus (Bogotá), so every FetchElectives call posts
-	// the exact same four values — the SECOND time any pooled connection
-	// is reused for electives, all four would repost unchanged and noop
-	// without this guard. "" = unset (matches formState's zero value).
+	// cascade's equivalent tracking (soc4, soc5, soc10, soc6). soc4 and soc5
+	// are constant across every call, and soc10/soc6 repeat whenever two
+	// consecutive requests hit the same sede — so the SECOND time a pooled
+	// connection is reused, those would repost unchanged and noop without
+	// this guard. "" = unset (matches formState's zero value).
 	navTipologia, navModo, navSedeElect, navFacElect string
 
 	// DetailRegion: 0 = in the search region; >0 = an open detail region.

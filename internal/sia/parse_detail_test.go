@@ -40,14 +40,14 @@ func TestParseDetail_32GruposConPeama(t *testing.T) {
 
 func TestParseDetail_2027641ZeroGroups(t *testing.T) {
 	d, err := ParseDetail(fixture(t, "detalle_2027641_0grupos_2026-08-15.xml"), "1101", "2027641", "2026-2")
+	// A course with no offering this term is VALID, not an error: the whole
+	// point of the fixture (GOTCHAS §18). Reporting it as a failure is how a
+	// parser ends up hiding "sin oferta" behind a 500.
 	if err != nil {
-		t.Fatalf("ParseDetail: %v", err)
+		t.Fatalf("0-group course must parse without error, got %v", err)
 	}
 	if len(d.Sections) != 0 {
 		t.Fatalf("got %d sections, want 0 (GOTCHAS §18)", len(d.Sections))
-	}
-	if err != nil {
-		t.Fatalf("0-group course must parse without error, got %v", err)
 	}
 }
 

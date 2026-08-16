@@ -187,6 +187,7 @@ Con eso, las goroutines se ganan su sitio en cuatro puntos y solo en cuatro:
 |---|---|
 | Pool como `chan *SIAConn` | canal con buffer = pool acotado; `select` con `ctx.Done()` da el `503 busy` de [API.md](API.md) |
 | Keepalive | una goroutine con ticker para todo el pool: ping ≤3 min mantiene la sesión 30 min; 5 min de silencio la mata |
+| Auto-reparación | `Pool.Do` re-bootstrapea y reintenta una vez ante un no-op: una sesión ADF muerta no revive sola |
 | `singleflight` | con pool chico es lo que evita que 3 clientes en frío hagan 3 × 10 s en cola |
 | `Refresher` (fase 2) | 30-40 h en serie; `errgroup` acotado + checkpoint por programa |
 
@@ -197,6 +198,14 @@ Dos trampas propias de este proyecto:
   volver el handler y la escritura se pierde en silencio. Usa `context.WithoutCancel`.
 - **Bootstraps en fan-out.** Es la operación cara y variable (hasta 4.5 MB): arrancar 8
   a la vez son ~35 MB de golpe. Escalona el llenado del pool en frío.
+- **Un ticker de 3 min no basta para un umbral de 4.2 min.** Una conexión liberada un
+  segundo después de un tick tiene 2 min 59 s en el siguiente, no llega al mínimo y
+  muere antes del tick posterior. El ticker corre cada 45 s y pinga todo lo que lleve
+  ≥2 min parado. Y el ping tiene que *mirar* la respuesta: un no-op de ~900 B no es un
+  ping exitoso, es la sesión muerta. Sin eso el pool se queda con cuatro conexiones
+  zombis devolviendo `sia_noop` a todo hasta reiniciar el proceso.
+- **Toda conexión necesita ping, esté parqueada o no.** El timeout es de la sesión, no
+  de la cascada: una conexión que solo sirvió dropdowns muere igual.
 
 **Tamaño del pool en fase 1: 4.** Con 1-2 devuelves `503` en cuanto hay dos pestañas
 abiertas, y el servidor da para 8 sin despeinarse. Por encima de eso el límite es la

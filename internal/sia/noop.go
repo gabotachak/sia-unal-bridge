@@ -2,9 +2,16 @@ package sia
 
 import (
 	"bytes"
+	"errors"
 
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
+
+// errStaleDetailRegion marks "this connection is parked inside a numbered
+// detail region and the caller asked for a region-0 action" (GOTCHAS
+// §10/§20). It is a connection-state bug, not a server one, so Pool.Do
+// treats it as recoverable: a bootstrap resets DetailRegion to 0.
+var errStaleDetailRegion = errors.New("sia: connection stuck in a detail region")
 
 // noopThreshold separates a real re-render from ADF's silent no-op. Measured
 // signatures: ~895B (missing cascade step / wrong detail region), ~1.2KB

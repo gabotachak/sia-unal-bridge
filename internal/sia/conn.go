@@ -8,6 +8,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -180,22 +181,46 @@ func (c *SIAConn) DebugRawCB1(ctx context.Context) ([]byte, error) {
 	return body, err
 }
 
-// Ping keeps the session alive with the cheapest possible request: a Volver
-// bounce is stateful, so instead we re-post the current search (cb1) if
-// parked and not in detail, or re-run soc1 valueChange otherwise. Kept in
-// pool.go's keepalive loop; ≤3 min interval (real timeout ~4.2 min, not the
-// 5 min the JS timer advertises). GOTCHAS §7.
+// Ping keeps the session alive with the cheapest request that still forces a
+// real re-render, and reports a noop as an error so a dead session is never
+// mistaken for a live one — the bug that let a whole pool sit dead, answering
+// sia_noop to every request until the process restarted.
+//
+// An un-parked connection is pinged too: the ~4.2min idle timeout is the
+// session's, not the cascade's, so a connection that only ever served
+// dropdown reads dies just the same. GOTCHAS §7.
 func (c *SIAConn) Ping(ctx context.Context) error {
-	if !c.parked {
-		return nil // nothing cascaded yet, nothing to keep alive
-	}
-	if c.DetailRegion != 0 {
-		_, _, err := c.postAction(ctx, fmt.Sprintf("pt1:r1:%d:cb4", c.DetailRegion), "")
-		if err == nil {
-			c.DetailRegion = 0
-		}
+	switch {
+	case c.DetailRegion != 0:
+		_, err := c.Volver(ctx)
 		return err
+	case c.parked:
+		body, _, err := c.postAction(ctx, "pt1:r1:0:cb1", "")
+		if err != nil {
+			return err
+		}
+		if isNoop(body) {
+			return newNoopError(body)
+		}
+		return nil
+	default:
+		// Nothing cascaded: bounce soc1 to a level it isn't on. Reposting
+		// the value it already holds would not re-render (GOTCHAS §30) and
+		// would be indistinguishable from a dead session.
+		target := 0
+		if c.navLevel == target {
+			target = 1
+		}
+		c.form.Nivel = strconv.Itoa(target)
+		body, _, err := c.postValueChange(ctx, "pt1:r1:0:soc1")
+		if err != nil {
+			return err
+		}
+		if isNoop(body) {
+			return newNoopError(body)
+		}
+		c.navLevel = target
+		c.navCampus, c.navFaculty = -1, -1
+		return nil
 	}
-	_, _, err := c.postAction(ctx, "pt1:r1:0:cb1", "")
-	return err
 }

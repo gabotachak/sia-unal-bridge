@@ -167,6 +167,56 @@ select {
   }
 }
 
+/* ── Chip ──────────────────────────────────────────────────────────
+   Un botón que es también un estado: se ve encendido o apagado. Vive acá
+   y no en una vista porque lo usan dos —elegir plan y filtrar catálogo— y
+   tienen que verse igual: si el mismo gesto se dibuja distinto en dos
+   pantallas, deja de leerse como el mismo gesto. */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-xs);
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: var(--t-small);
+  transition:
+    color var(--fast) var(--ease-out),
+    border-color var(--fast) var(--ease-out),
+    background-color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+}
+.chip:active {
+  transform: scale(0.97);
+}
+
+.chip.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.chip__code {
+  font-size: var(--t-micro);
+  opacity: 0.55;
+}
+
+
 /* ── Aparición ──────────────────────────────────────────────────── */
 
 @keyframes rise {

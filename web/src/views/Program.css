@@ -50,38 +50,43 @@
   margin-bottom: 0;
 }
 
-.toolbar__filters {
+/* ── Las facetas ────────────────────────────────────────────────────
+   Dos filas de chips en vez de dos desplegables. La diferencia no es de
+   estilo: un <select> obliga a abrir para saber qué hay dentro y solo
+   deja elegir uno, y las dos preguntas reales son de varios ("3 o 4
+   créditos", "obligatorias y optativas"). Acá los valores están todos a
+   la vista, con cuántas asignaturas hay en cada uno, y se acumulan. */
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap);
+}
+
+.filters__row {
   display: flex;
   align-items: center;
   gap: var(--gap-sm);
-  flex: none;
 }
 
-.toolbar__icon {
+/* Ancho fijo: las dos filas de chips arrancan en la misma vertical, que es
+   lo que las deja leerse como una tabla de opciones y no como dos rachas
+   de botones sueltos. */
+.filters__label {
+  flex: none;
+  width: 5rem;
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
   color: var(--text-faint);
-  flex: none;
 }
 
-.pick select {
-  height: 2.5rem;
-  padding: 0 0.5rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text-dim);
+/* El chip de filtro es más chico que el de elegir plan: allá es la acción
+   de la pantalla, acá son veinte y no pueden pesar como veinte botones. */
+.chip--sm {
+  padding: 0.2rem 0.6rem;
   font-size: var(--t-small);
-  cursor: pointer;
-  max-width: 12rem;
-  transition:
-    border-color var(--fast) var(--ease-out),
-    color var(--fast) var(--ease-out);
-}
-.pick select:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.pick--narrow select {
-  max-width: 5.5rem;
 }
 
 .toolbar__clear {

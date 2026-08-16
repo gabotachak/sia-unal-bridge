@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
-import { ArrowLeftRight, CornerUpLeft, HelpCircle, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowLeftRight, Check, CornerUpLeft, HelpCircle, Search, Ticket, X } from 'lucide-react';
 import { routes } from '../api/client';
 import type { CoursesResponse, CourseSummary, ProgramsResponse } from '../api/types';
 import { useApi } from '../hooks/useApi';
@@ -29,32 +29,57 @@ export function Program() {
   const { data, error, loading, elapsed, attempt, reload } =
     useApi<CoursesResponse>(path);
 
+  /**
+   * Los filtros.
+   *
+   * Tipología y créditos son conjuntos, no un valor: "3 o 4 créditos" y
+   * "obligatorias y optativas" son preguntas normales, y con un desplegable de
+   * una sola opción había que elegir dos veces y comparar de memoria. Los
+   * valores son pocos y fijos —siete tipologías, una decena de créditos— así
+   * que caben todos a la vista, con cuántas asignaturas hay en cada uno.
+   */
   const [q, setQ] = useState('');
-  const [typology, setTypology] = useState('');
-  const [credits, setCredits] = useState('');
+  const [typols, setTypols] = useState<ReadonlySet<string>>(new Set());
+  const [creds, setCreds] = useState<ReadonlySet<number>>(new Set());
+  const [onlyOpen, setOnlyOpen] = useState(false);
 
-  const typologies = useMemo(() => {
-    const set = new Set((data?.courses ?? []).map((c) => c.typology).filter(Boolean));
-    return [...set].sort((a, b) => a.localeCompare(b, 'es'));
-  }, [data]);
-
-  const creditValues = useMemo(() => {
-    const set = new Set((data?.courses ?? []).map((c) => c.credits));
-    return [...set].sort((a, b) => a - b);
+  // Los valores que EXISTEN en este plan, con su cuenta. Nada de listas fijas:
+  // Medellín llega a 12 créditos y Bogotá no pasa de 6.
+  const facets = useMemo(() => {
+    const byTypology = new Map<string, number>();
+    const byCredits = new Map<number, number>();
+    for (const c of data?.courses ?? []) {
+      if (c.typology) byTypology.set(c.typology, (byTypology.get(c.typology) ?? 0) + 1);
+      byCredits.set(c.credits, (byCredits.get(c.credits) ?? 0) + 1);
+    }
+    return {
+      typologies: [...byTypology.keys()].sort((a, b) => a.localeCompare(b, 'es')),
+      credits: [...byCredits.keys()].sort((a, b) => a - b),
+      byTypology,
+      byCredits,
+    };
   }, [data]);
 
   const shown = useMemo(() => {
     const needle = fold(q);
     return (data?.courses ?? []).filter((c) => {
       if (needle && !fold(c.name).includes(needle) && !fold(c.code).includes(needle)) return false;
-      if (typology && c.typology !== typology) return false;
-      if (credits && String(c.credits) !== credits) return false;
+      if (typols.size && !typols.has(c.typology)) return false;
+      if (creds.size && !creds.has(c.credits)) return false;
+      if (onlyOpen && !hasRoom(c)) return false;
       return true;
     });
-  }, [data, q, typology, credits]);
+  }, [data, q, typols, creds, onlyOpen]);
 
   const total = data?.courses.length ?? 0;
-  const filtering = !!(q || typology || credits);
+  const filtering = !!q || typols.size > 0 || creds.size > 0 || onlyOpen;
+
+  function clearAll() {
+    setQ('');
+    setTypols(new Set());
+    setCreds(new Set());
+    setOnlyOpen(false);
+  }
 
   /**
    * El plan de la URL contra el plan elegido.
@@ -194,52 +219,69 @@ export function Program() {
               />
             </label>
 
-            <div className="toolbar__filters">
-              <SlidersHorizontal
-                className="toolbar__icon"
-                size={16}
-                strokeWidth={1.75}
-                aria-hidden="true"
-              />
-
-              <label className="pick">
-                <span className="sr-only">Tipología</span>
-                <select value={typology} onChange={(e) => setTypology(e.target.value)}>
-                  <option value="">tipología</option>
-                  {typologies.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="pick pick--narrow">
-                <span className="sr-only">Créditos</span>
-                <select value={credits} onChange={(e) => setCredits(e.target.value)}>
-                  <option value="">cr</option>
-                  {creditValues.map((c) => (
-                    <option key={c} value={String(c)}>
-                      {c} cr
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {filtering && (
-                <button
-                  className="toolbar__clear"
-                  onClick={() => {
-                    setQ('');
-                    setTypology('');
-                    setCredits('');
-                  }}
-                  aria-label="Quitar los filtros"
-                  title="Quitar los filtros"
-                >
-                  <X size={15} strokeWidth={2} aria-hidden="true" />
-                </button>
+            {/* El filtro que más se usa va arriba y solo: es una pregunta de
+                sí o no —"¿puedo meterme hoy?"— y no compite con las otras. */}
+            <button
+              className={`chip ${onlyOpen ? 'is-on' : ''}`}
+              onClick={() => setOnlyOpen((v) => !v)}
+              aria-pressed={onlyOpen}
+              title="Deja solo las que tienen cupo. Las que nunca se han consultado también se quedan: es mejor que sobre una a que se pierda una con cupos."
+            >
+              {onlyOpen ? (
+                <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+              ) : (
+                <Ticket size={14} strokeWidth={1.75} aria-hidden="true" />
               )}
+              con cupos
+            </button>
+
+            {filtering && (
+              <button
+                className="toolbar__clear"
+                onClick={clearAll}
+                aria-label="Quitar los filtros"
+                title="Quitar los filtros"
+              >
+                <X size={15} strokeWidth={2} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+
+          <div className="filters">
+            <div className="filters__row">
+              <span className="filters__label">tipología</span>
+              <div className="chips">
+                {facets.typologies.map((t) => (
+                  <button
+                    key={t}
+                    className={`chip chip--sm ${typols.has(t) ? 'is-on' : ''}`}
+                    onClick={() => setTypols((s) => toggle(s, t))}
+                    aria-pressed={typols.has(t)}
+                    title={t}
+                  >
+                    {sentence(t.replace(/\s*\([^)]*\)\s*$/, ''))}
+                    <span className="chip__code tnum">{facets.byTypology.get(t)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="filters__row">
+              <span className="filters__label">créditos</span>
+              <div className="chips">
+                {facets.credits.map((n) => (
+                  <button
+                    key={n}
+                    className={`chip chip--sm ${creds.has(n) ? 'is-on' : ''}`}
+                    onClick={() => setCreds((s) => toggle(s, n))}
+                    aria-pressed={creds.has(n)}
+                    title={`${n} ${n === 1 ? 'crédito' : 'créditos'}`}
+                  >
+                    <span className="tnum">{n}</span>
+                    <span className="chip__code tnum">{facets.byCredits.get(n)}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -373,6 +415,29 @@ function SeatsCell({
       <small className="tnum">{formatAge(seats.age_seconds)}</small>
     </span>
   );
+}
+
+/** Añade o quita, sin mutar: React solo repinta si el objeto es otro. */
+function toggle<T>(set: ReadonlySet<T>, v: T): ReadonlySet<T> {
+  const next = new Set(set);
+  if (!next.delete(v)) next.add(v);
+  return next;
+}
+
+/**
+ * ¿Se puede entrar hoy?
+ *
+ * Las nunca consultadas cuentan como que SÍ, y es a propósito: de esas no se
+ * sabe nada, y esconderlas por no saber sería tomar la decisión por quien
+ * busca. Que sobre una asignatura con un `?` es barato; que se pierda una con
+ * cupos porque nadie la había abierto todavía, no.
+ *
+ * Las que sí se consultaron y no tienen grupos, o los tienen llenos, se van:
+ * de esas la respuesta ya se sabe.
+ */
+function hasRoom(c: CourseSummary): boolean {
+  if (c.seats) return c.seats.available > 0;
+  return !c.detail_fetched_at;
 }
 
 /** 'FUND. OBLIGATORIA (B)' → 'B'. La letra entre paréntesis es lo que informa. */

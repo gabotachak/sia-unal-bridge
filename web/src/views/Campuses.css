@@ -19,6 +19,27 @@
   max-width: 36rem;
 }
 
+/* Recordatorio del plan ya elegido, con la salida de vuelta. */
+.intro__mine {
+  margin-top: var(--gap);
+  padding: var(--gap-sm) var(--gap);
+  border-left: 2px solid var(--amber-deep);
+  background: var(--ink-raised);
+  color: var(--paper-dim);
+  font-size: var(--t-small);
+  line-height: 1.8;
+  max-width: 36rem;
+}
+.intro__mine b {
+  color: var(--paper);
+  font-weight: 500;
+}
+.intro__mine a {
+  color: var(--amber);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
 /* El tablero. Filas de filete fino, código monoespaciado a la izquierda y el
    nombre en serif grande — como el panel de destinos de una estación. */
 .board {

@@ -5,7 +5,7 @@ import type { CourseDetail } from '../api/types';
 import { usePlan } from '../hooks/usePlan';
 import { formatAge } from '../lib/format';
 import { pooled } from '../lib/pooled';
-import { itemId, type PlanItem } from '../lib/storage';
+import { itemId, selectionPath, type PlanItem } from '../lib/storage';
 import { Layout } from '../components/Layout';
 import { Empty } from '../components/States';
 import './Semester.css';
@@ -127,7 +127,7 @@ export function Semester() {
   const totals = summarize(rows);
 
   return (
-    <Layout crumbs={[{ label: 'sedes', to: '/' }, { label: 'mi semestre' }]}>
+    <Layout crumbs={[{ label: 'tablero', to: '/' }, { label: 'mi semestre' }]}>
       <header className="head sem__head">
         <div>
           <p className="eyebrow">planificador</p>
@@ -161,10 +161,19 @@ export function Semester() {
       </header>
 
       {plan.items.length === 0 ? (
-        <Empty
-          title="Todavía no agregaste materias"
-          note="Entrá a un plan de estudios y tocá el + en las asignaturas que estés considerando. Acá vas a poder ver los cupos de todos sus grupos con un solo botón."
-        />
+        <>
+          <Empty
+            title="Todavía no agregaste materias"
+            note="Tocá el + en las asignaturas que estés considerando. Acá vas a poder ver los cupos de todos sus grupos con un solo botón."
+          />
+          {plan.selection && (
+            <p className="sem__back">
+              <Link className="btn" to={selectionPath(plan.selection)}>
+                ir al catálogo de {plan.selection.programName}
+              </Link>
+            </p>
+          )}
+        </>
       ) : (
         <>
           {running && (

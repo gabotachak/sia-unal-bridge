@@ -253,3 +253,10 @@
     justify-items: start;
   }
 }
+
+/* Salida del semestre vacío: el catálogo del plan ya elegido, sin volver a
+   pasar por nivel y sede. */
+.sem__back {
+  margin-top: var(--gap-lg);
+  text-align: center;
+}

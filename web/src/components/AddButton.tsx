@@ -1,5 +1,5 @@
 import { usePlan } from '../hooks/usePlan';
-import { itemId, type PlanItem } from '../lib/storage';
+import { itemId, selectionId, type PlanItem } from '../lib/storage';
 import './AddButton.css';
 
 type Props = {
@@ -13,9 +13,22 @@ export function AddButton({ item, variant = 'plus' }: Props) {
   const plan = usePlan();
   const id = itemId(item);
   const added = plan.has(id);
-  const blocked = !added && plan.full;
 
-  const label = added ? 'Quitar del semestre' : blocked ? 'El semestre está lleno' : 'Agregar al semestre';
+  // El semestre es de UN plan. Una asignatura de otro plan traería grupos y
+  // tipología que no son los que este plan ve, así que el botón se apaga en
+  // vez de dejar mezclar. Quitar sigue permitido: sacar nunca hace daño.
+  const foreign =
+    !!plan.selection && selectionId(plan.selection) !== selectionId(item);
+
+  const blocked = !added && (plan.full || foreign);
+
+  const label = added
+    ? 'Quitar del semestre'
+    : foreign
+      ? 'Esta asignatura es de otro plan'
+      : plan.full
+        ? 'El semestre está lleno'
+        : 'Agregar al semestre';
 
   function toggle(e: React.MouseEvent) {
     // Estas filas son enlaces: sin esto, agregar navegaría a la materia.

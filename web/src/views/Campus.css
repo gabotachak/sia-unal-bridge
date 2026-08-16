@@ -118,6 +118,23 @@
   line-height: 1.4;
 }
 
+/* El plan que ya está elegido. Marcarlo evita el susto de "¿cuál era el mío?"
+   cuando se entra acá desde el botón de cambiar. */
+.plans a.is-mine {
+  color: var(--amber);
+  border-bottom-color: var(--amber-deep);
+}
+.plans a.is-mine .plans__code {
+  color: var(--amber-deep);
+}
+.plans a.is-mine .plans__name::after {
+  content: ' — tu plan';
+  font-size: var(--t-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--amber-deep);
+}
+
 /* Punto discreto: este plan ya tiene su catálogo en Postgres. */
 .plans__cached {
   color: var(--amber);

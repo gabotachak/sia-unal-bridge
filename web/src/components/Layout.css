@@ -64,6 +64,54 @@
   z-index: 10;
 }
 
+/* El extremo del mástil: el plan elegido y la frescura del dato. */
+.masthead__end {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+/* El plan elegido, siempre a la vista. Es lo que explica por qué el tablero
+   abre donde abre, y el único camino a cambiarlo. */
+.planchip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--gap-sm);
+  max-width: 22rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  background: transparent;
+  color: var(--paper-dim);
+  font: inherit;
+  font-size: var(--t-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.planchip:hover,
+.planchip:focus-visible {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.planchip__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planchip__swap {
+  color: var(--paper-faint);
+  letter-spacing: 0.18em;
+  flex: none;
+}
+.planchip:hover .planchip__swap,
+.planchip:focus-visible .planchip__swap {
+  color: var(--amber-deep);
+}
+
 .crumbs {
   display: flex;
   align-items: center;

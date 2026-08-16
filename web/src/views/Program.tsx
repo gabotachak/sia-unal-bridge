@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { routes } from '../api/client';
 import type { CoursesResponse, CourseSummary } from '../api/types';
 import { useApi } from '../hooks/useApi';
+import { usePlan } from '../hooks/usePlan';
 import { Layout } from '../components/Layout';
 import { AddButton } from '../components/AddButton';
 import { Empty, Fault, Loading } from '../components/States';
 import { fold, formatAge } from '../lib/format';
+import { selectionId, selectionPath } from '../lib/storage';
 import './Program.css';
 
 /**
@@ -45,15 +47,79 @@ export function Program() {
 
   const total = data?.courses.length ?? 0;
 
+  /**
+   * El plan de la URL contra el plan elegido.
+   *
+   * Se puede llegar acá sin haber pasado por la pantalla de elegir: una URL
+   * pegada en un chat, un marcador viejo, el botón de atrás. Dos casos, dos
+   * respuestas distintas:
+   *
+   *  - sin plan elegido → este vale como la elección. No hay nada que perder,
+   *    así que no hay nada que preguntar.
+   *  - con otro plan elegido → NO se toca nada por las malas. Se avisa y se
+   *    deja decidir: el cambio borra el semestre y eso no puede pasar por
+   *    haber tocado "atrás".
+   */
+  const plan = usePlan();
+  const { selection, select } = plan;
+  const here = { level, campus, program };
+  const foreign = selection && selectionId(selection) !== selectionId(here);
+
+  useEffect(() => {
+    if (selection) return;
+    select({
+      ...here,
+      // Entrando por URL directa no hay lista de planes a mano de dónde sacar
+      // los nombres. El código alcanza como rótulo hasta que se elija desde la
+      // sede, que es donde vienen con nombre.
+      campusName: campus,
+      faculty,
+      facultyName: '',
+      programName: program,
+    });
+    // Solo importa el plan de la URL: los nombres son decoración.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection, select, level, campus, faculty, program]);
+
+  function adoptThis() {
+    if (!selection) return;
+    const n = plan.items.length;
+    if (n > 0) {
+      const ok = window.confirm(
+        `Cambiar al plan ${program} reinicia el tablero.\n\n` +
+          `Se van a borrar las ${n} ${n === 1 ? 'materia guardada' : 'materias guardadas'} en Mi semestre, ` +
+          `porque son del plan ${selection.programName}.`,
+      );
+      if (!ok) return;
+    }
+    select({ ...here, campusName: campus, faculty, facultyName: '', programName: program });
+  }
+
   return (
     <Layout
-      crumbs={[
-        { label: level, to: `/nivel/${level}` },
-        { label: campus, to: `/nivel/${level}/sede/${campus}` },
-        { label: program },
-      ]}
+      // Las migas ya no suben a nivel y sede: con un plan elegido, ese camino
+      // solo lleva a rebotar de vuelta acá. El tablero es este catálogo.
+      crumbs={[{ label: 'tablero', to: '/' }, { label: `plan ${program}` }]}
       freshness={freshness}
     >
+      {foreign && selection && (
+        <div className="stray" role="status">
+          <p className="stray__text">
+            Estás mirando el plan <b>{program}</b>, y el tuyo es{' '}
+            <b>{selection.programName}</b>. Podés mirar todo lo que quieras, pero para
+            agregar materias al semestre tenés que estar en tu plan.
+          </p>
+          <div className="stray__actions">
+            <Link className="btn" to={selectionPath(selection)}>
+              volver a mi plan
+            </Link>
+            <button className="btn btn--ghost" onClick={adoptThis}>
+              cambiar a este plan
+            </button>
+          </div>
+        </div>
+      )}
+
       <header className="head">
         <p className="eyebrow">plan {program}</p>
         <h1 className="head__title">Catálogo</h1>

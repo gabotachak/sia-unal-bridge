@@ -2,6 +2,52 @@
   min-width: 7rem !important;
 }
 
+/* Aviso de plan ajeno. No bloquea la lectura: el catálogo de abajo se ve
+   igual. Lo que corta es agregar, y eso lo dice el botón de cada fila. */
+.stray {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  margin-bottom: var(--gap-lg);
+  padding: var(--gap);
+  border: 1px solid var(--rule-strong);
+  border-left: 3px solid var(--rust);
+  background: var(--ink-raised);
+}
+
+.stray__text {
+  margin: 0;
+  max-width: 44rem;
+  font-size: var(--t-small);
+  line-height: 1.7;
+  color: var(--paper-dim);
+}
+.stray__text b {
+  color: var(--paper);
+  font-weight: 500;
+}
+
+.stray__actions {
+  display: flex;
+  gap: var(--gap-sm);
+  align-items: center;
+  flex: none;
+}
+
+/* El destructivo se pinta apagado: cambiar de plan borra el semestre, así que
+   no debería ser el botón que la vista invita a apretar. */
+.btn--ghost {
+  border-color: var(--rule);
+  color: var(--paper-faint);
+}
+.btn--ghost:hover:not(:disabled) {
+  color: var(--paper);
+  background: transparent;
+  border-color: var(--rust);
+}
+
 /* Tabla editorial: filete fino, sin bordes verticales, sin rayado cebra.
    La densidad se controla con espacio, no con líneas. */
 .courses {

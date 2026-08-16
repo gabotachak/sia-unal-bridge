@@ -15,7 +15,7 @@ import './LevelPicker.css';
  * reescribe aunque el SIA reordene su dropdown. Por eso se puede poner en la
  * URL sin miedo.
  */
-export function LevelPicker({ current }: { current: string }) {
+export function LevelPicker({ current, qs = '' }: { current: string; qs?: string }) {
   const { data } = useApi<LevelsResponse>(routes.levels());
   const levels = data?.levels ?? [];
 
@@ -24,7 +24,9 @@ export function LevelPicker({ current }: { current: string }) {
       {levels.map((l) => (
         <NavLink
           key={l.slug}
-          to={`/nivel/${l.slug}`}
+          // `qs` arrastra el modo cambiar. Sin él, saltar de nivel en mitad de
+          // elegir plan te devolvería al plan que estabas por dejar.
+          to={`/nivel/${l.slug}${qs}`}
           className={l.slug === current ? 'levels__item is-on' : 'levels__item'}
         >
           {l.name}

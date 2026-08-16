@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { itemId, loadPlan, savePlan, type PlanItem } from '../lib/storage';
+import {
+  itemId,
+  loadPlan,
+  loadSelection,
+  savePlan,
+  saveSelection,
+  selectionId,
+  type PlanItem,
+  type Selection,
+} from '../lib/storage';
 import { MAX_ITEMS, PlanContext, type PlanApi } from './planContext';
 
 /**
@@ -46,12 +55,57 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
 
   const clear = useCallback(() => setItems([]), []);
 
+  // El plan elegido vive acá y no en cada pantalla porque cambiarlo tiene un
+  // efecto sobre la lista: son un solo estado con dos caras.
+  const [selection, setSelection] = useState<Selection | null>(() => loadSelection());
+
+  useEffect(() => {
+    saveSelection(selection);
+  }, [selection]);
+
+  const select = useCallback(
+    (next: Selection) => {
+      // Elegir el MISMO plan otra vez no borra nada: pasa cada vez que se
+      // vuelve al tablero, y perder el semestre por eso sería absurdo.
+      if (selection && selectionId(selection) === selectionId(next)) {
+        // Es el MISMO plan: no se borra nada. Igual se pisa el guardado, que
+        // es cómo un plan adoptado desde una URL pegada —donde solo se sabía
+        // el código— se queda con su nombre de verdad al pasar por la sede.
+        setSelection(next);
+        return;
+      }
+
+      if (selection) {
+        // Cambio de plan: el semestre se reinicia entero.
+        setItems([]);
+      } else {
+        // Adoptar un plan cuando no había ninguno no es un cambio, así que no
+        // se borra todo. Sí se descartan las materias que no son de este plan:
+        // pueden haber quedado de antes de que el plan fuera único, y en este
+        // plan sus grupos no son los mismos.
+        setItems((prev) => prev.filter((i) => selectionId(i) === selectionId(next)));
+      }
+
+      setSelection(next);
+    },
+    [selection],
+  );
+
   // useMemo evita construir un objeto nuevo en cada repintado: si cambiara la
   // identidad del valor, TODO lo que consume el contexto se repintaría al
   // pedo.
   const api = useMemo<PlanApi>(
-    () => ({ items, has, add, remove, clear, full: items.length >= MAX_ITEMS }),
-    [items, has, add, remove, clear],
+    () => ({
+      items,
+      has,
+      add,
+      remove,
+      clear,
+      full: items.length >= MAX_ITEMS,
+      selection,
+      select,
+    }),
+    [items, has, add, remove, clear, selection, select],
   );
 
   return <PlanContext value={api}>{children}</PlanContext>;

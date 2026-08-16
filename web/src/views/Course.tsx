@@ -86,10 +86,9 @@ export function Course() {
   return (
     <Layout
       crumbs={[
-        { label: level, to: `/nivel/${level}` },
-        { label: campus, to: `/nivel/${level}/sede/${campus}` },
+        { label: 'tablero', to: '/' },
         {
-          label: program,
+          label: `plan ${program}`,
           to: `/nivel/${level}/sede/${campus}/plan/${program}${faculty ? `?f=${faculty}` : ''}`,
         },
         { label: code },

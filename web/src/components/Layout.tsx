@@ -1,5 +1,6 @@
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import type { Freshness as F } from '../api/client';
+import { CHANGING_QS } from '../hooks/useChangingPlan';
 import { usePlan } from '../hooks/usePlan';
 import { Freshness } from './Freshness';
 import './Layout.css';
@@ -20,6 +21,20 @@ export function Layout({
   children: React.ReactNode;
 }) {
   const plan = usePlan();
+  const navigate = useNavigate();
+  const sel = plan.selection;
+
+  // Cambiar de plan es volver al directorio de la sede. Acá no se borra nada:
+  // el semestre se reinicia recién cuando se elige OTRO plan, que es la
+  // decisión de verdad. Salir a mirar y volverse no debería costar la lista.
+  //
+  // El `?cambiar=1` es lo que le da permiso a esa pantalla de mostrarse: con
+  // plan elegido, llegar ahí sin la marca rebota al catálogo. Este botón es la
+  // única puerta, que es exactamente lo que se quería.
+  const changePlan = () => {
+    if (!sel) return;
+    navigate(`/nivel/${sel.level}/sede/${sel.campus}${CHANGING_QS}`);
+  };
 
   return (
     <div className="shell">
@@ -58,7 +73,23 @@ export function Layout({
               </span>
             ))}
           </nav>
-          <Freshness value={freshness ?? null} />
+
+          <div className="masthead__end">
+            {sel && (
+              <button
+                className="planchip"
+                onClick={changePlan}
+                title={`${sel.programName} · ${sel.campusName}${sel.facultyName ? ` · ${sel.facultyName}` : ''}`}
+              >
+                <span className="planchip__name">{sel.programName}</span>
+                <span className="planchip__swap" aria-hidden="true">
+                  cambiar
+                </span>
+                <span className="sr-only">Cambiar de plan</span>
+              </button>
+            )}
+            <Freshness value={freshness ?? null} />
+          </div>
         </header>
 
         <main className="content">{children}</main>

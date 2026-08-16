@@ -15,13 +15,17 @@ import { fileURLToPath } from 'node:url';
 // se entera de ninguno de los dos.
 export default defineConfig(({ mode }) => {
   // Lee variables VITE_* del .env de la raíz del monorepo (un nivel arriba).
-  const env = loadEnv(mode, resolve(dirname(fileURLToPath(import.meta.url)), '..'), 'VITE_');
+  // También lee explícitamente FETCH_COOLDOWN para exportarla al cliente
+  const env = loadEnv(mode, resolve(dirname(fileURLToPath(import.meta.url)), '..'), '');
 
   const apiTarget = env.VITE_API_TARGET || 'http://localhost:8080';
   const devPort = Number(env.VITE_DEV_PORT) || 5173;
 
   return {
     plugins: [react()],
+    define: {
+      'import.meta.env.VITE_FETCH_COOLDOWN': JSON.stringify(env.FETCH_COOLDOWN || '60'),
+    },
     server: {
       port: devPort,
       proxy: {

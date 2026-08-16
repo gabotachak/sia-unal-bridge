@@ -4,6 +4,7 @@ package httpapi
 
 import (
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -15,19 +16,20 @@ import (
 // rule for this adapter.
 type api struct {
 	svc *catalog.Service
+	cooldown time.Duration
 }
 
 // NewRouter builds the /v1 router. gin.New(), not Default(): the logger is
 // slog via requestLogger, not gin's own stdout writer (docs/LAYOUT.md
 // "Gin: cuatro reglas").
-func NewRouter(svc *catalog.Service) *gin.Engine {
+func NewRouter(svc *catalog.Service, cooldown int) *gin.Engine {
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	a := &api{svc: svc}
+	a := &api{svc: svc, cooldown: time.Duration(cooldown) * time.Second}
 
 	r := gin.New()
-	r.Use(gin.Recovery(), requestID(), requestLogger())
+	r.Use(gin.Recovery(), requestID(), requestLogger(), secureHeaders())
 
 	v1 := r.Group("/v1")
 	{

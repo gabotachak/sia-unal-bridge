@@ -11,12 +11,9 @@ import (
 
 func requestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id := c.GetHeader("X-Request-Id")
-		if id == "" {
-			var b [8]byte
-			_, _ = rand.Read(b[:])
-			id = hex.EncodeToString(b[:])
-		}
+		var b [8]byte
+		_, _ = rand.Read(b[:])
+		id := hex.EncodeToString(b[:])
 		c.Set("request_id", id)
 		c.Header("X-Request-Id", id)
 		c.Next()
@@ -34,5 +31,17 @@ func requestLogger() gin.HandlerFunc {
 			"dur_ms", time.Since(start).Milliseconds(),
 			"request_id", c.GetString("request_id"),
 		)
+	}
+}
+
+func secureHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-Frame-Options", "DENY")
+		c.Header("X-XSS-Protection", "1; mode=block")
+		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		c.Header("Content-Security-Policy", "default-src 'self'")
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Next()
 	}
 }

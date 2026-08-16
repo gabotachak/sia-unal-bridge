@@ -5,7 +5,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-sia}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sia}
       POSTGRES_DB: ${POSTGRES_DB:-sia_bridge}
-    ports: ["5432:5432"]
+    ports: ["127.0.0.1:${DB_PORT:-5432}:5432"]
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
@@ -19,7 +19,7 @@ services:
       # Hostname `db` es el nombre del servicio en la red interna de Docker,
       # NO localhost. El DATABASE_URL del .env (sección 4) es para el host.
       DATABASE_URL: postgres://${POSTGRES_USER:-sia}:${POSTGRES_PASSWORD:-sia}@db:5432/${POSTGRES_DB:-sia_bridge}?sslmode=disable
-      PORT: ${API_PORT:-8080}
+      PORT: 8080
       SIA_BASE_URL: ${SIA_BASE_URL:-https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf}
       SIA_POOL_SIZE: ${SIA_POOL_SIZE:-4}
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -31,7 +31,7 @@ services:
 
   web:
     build: ./web
-    ports: ["${WEB_PORT:-3000}:80"]
+    ports: ["${WEB_PORT:-3000}:8080"]
     depends_on:
       - api
 

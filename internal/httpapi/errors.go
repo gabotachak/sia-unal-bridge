@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -47,7 +48,8 @@ func writeError(c *gin.Context, err error, notFoundCode string) {
 	case errors.Is(err, catalog.ErrSIANoop):
 		c.JSON(http.StatusBadGateway, gin.H{"error": "sia_noop", "message": "SIA returned an empty re-render"})
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal", "message": err.Error()})
+		slog.Error("unhandled error", "err", err, "request_id", c.GetString("request_id"))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal", "message": "internal server error"})
 	}
 }
 

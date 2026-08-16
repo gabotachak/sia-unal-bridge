@@ -47,7 +47,7 @@ func main() {
 	src := sia.NewSource(pool)
 	svc := catalog.NewService(st, src, cfg.Term)
 
-	router := httpapi.NewRouter(svc)
+	router := httpapi.NewRouter(svc, cfg.FetchCooldown)
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: router}
 
 	// signal.NotifyContext intercepts SIGINT/SIGTERM and stops the process

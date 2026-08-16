@@ -21,6 +21,18 @@ func (a *api) courseDetail(c *gin.Context) {
 		return
 	}
 
+	if maxAge == 0 && a.cooldown > 0 {
+		offering, _, err := a.svc.CourseDetail(c.Request.Context(), program, code, catalog.DefaultFreshness)
+		if err == nil {
+			now := time.Now()
+			age := courseAge(offering, now)
+			if age < a.cooldown {
+				c.JSON(http.StatusTooManyRequests, gin.H{"error": "rate_limit", "message": "refresh too soon, wait for cooldown", "cooldown_seconds": int(a.cooldown.Seconds())})
+				return
+			}
+		}
+	}
+
 	offering, res, err := a.svc.CourseDetail(c.Request.Context(), program, code, maxAge)
 	if err != nil {
 		writeError(c, err, "unknown_course")
@@ -45,6 +57,17 @@ func (a *api) courseSections(c *gin.Context) {
 	if !ok {
 		badRequest(c, "invalid max_age")
 		return
+	}
+
+	if maxAge == 0 && a.cooldown > 0 {
+		offering, _, err := a.svc.CourseDetail(c.Request.Context(), program, code, catalog.DefaultFreshness)
+		if err == nil {
+			now := time.Now()
+			if courseAge(offering, now) < a.cooldown {
+				c.JSON(http.StatusTooManyRequests, gin.H{"error": "rate_limit", "message": "refresh too soon, wait for cooldown"})
+				return
+			}
+		}
 	}
 
 	offering, res, err := a.svc.CourseDetail(c.Request.Context(), program, code, maxAge)
@@ -72,6 +95,24 @@ func (a *api) courseSection(c *gin.Context) {
 	if !ok {
 		badRequest(c, "invalid max_age")
 		return
+	}
+
+	if maxAge == 0 && a.cooldown > 0 {
+		offering, _, err := a.svc.CourseDetail(c.Request.Context(), program, code, catalog.DefaultFreshness)
+		if err == nil {
+			section, found := findSection(offering.Course.Sections, key)
+			if found {
+				now := time.Now()
+				age := section.FetchedAt
+				if section.Seats != nil && section.Seats.MeasuredAt.Before(age) {
+					age = section.Seats.MeasuredAt
+				}
+				if now.Sub(age) < a.cooldown {
+					c.JSON(http.StatusTooManyRequests, gin.H{"error": "rate_limit", "message": "refresh too soon"})
+					return
+				}
+			}
+		}
 	}
 
 	offering, res, err := a.svc.CourseDetail(c.Request.Context(), program, code, maxAge)
@@ -106,6 +147,17 @@ func (a *api) sectionSeats(c *gin.Context) {
 	if !ok {
 		badRequest(c, "invalid max_age")
 		return
+	}
+
+	if maxAge == 0 && a.cooldown > 0 {
+		section, _, err := a.svc.SectionSeats(c.Request.Context(), program, code, key, catalog.DefaultFreshness)
+		if err == nil && section.Seats != nil {
+			now := time.Now()
+			if now.Sub(section.Seats.MeasuredAt) < a.cooldown {
+				c.JSON(http.StatusTooManyRequests, gin.H{"error": "rate_limit", "message": "refresh too soon"})
+				return
+			}
+		}
 	}
 
 	section, res, err := a.svc.SectionSeats(c.Request.Context(), program, code, key, maxAge)

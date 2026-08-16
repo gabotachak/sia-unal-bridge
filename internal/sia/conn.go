@@ -18,6 +18,7 @@ const (
 	windowID  = "winnoloop" // Adf-Window-Id, constant once the JS loopback is skipped. GOTCHAS §2.
 	pageID    = "0"
 	adsPageID = "1"
+	maxBodySize = 10 * 1024 * 1024 // 10 MB limit for SIA responses
 )
 
 // SIAConn is one live, stateful ADF session. Strictly sequential: the caller
@@ -97,6 +98,7 @@ func (c *SIAConn) Bootstrap(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("sia: bootstrap: %w", err)
 	}
 	defer resp.Body.Close()
+	resp.Body = http.MaxBytesReader(nil, resp.Body, maxBodySize)
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("sia: bootstrap: read body: %w", err)
@@ -142,6 +144,7 @@ func (c *SIAConn) post(ctx context.Context, values url.Values) ([]byte, map[stri
 		return nil, nil, fmt.Errorf("sia: post: %w", err)
 	}
 	defer resp.Body.Close()
+	resp.Body = http.MaxBytesReader(nil, resp.Body, maxBodySize)
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, nil, fmt.Errorf("sia: post: read body: %w", err)

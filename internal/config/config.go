@@ -8,14 +8,18 @@ import (
 	"strconv"
 )
 
+// Config is what the RUNNING process needs. TEST_DATABASE_URL is
+// deliberately absent: the tests that use it read it straight from the
+// environment (store_test.go, integration_test.go) because they must decide
+// whether to skip before any config is loaded. Carrying it here would be a
+// field nobody reads, and an invitation to set it expecting an effect.
 type Config struct {
-	DatabaseURL     string
-	TestDatabaseURL string
-	Port            string
-	SIABaseURL      string
-	SIAPoolSize     int
-	LogLevel        string
-	Term            string // SIA exposes only the current term — docs/API.md
+	DatabaseURL string
+	Port        string
+	SIABaseURL  string
+	SIAPoolSize int
+	LogLevel    string
+	Term        string // SIA exposes only the current term — docs/API.md
 }
 
 func Load() (Config, error) {
@@ -25,13 +29,12 @@ func Load() (Config, error) {
 	}
 
 	return Config{
-		DatabaseURL:     getenv("DATABASE_URL", "postgres://sia:sia@localhost:5432/sia_bridge"),
-		TestDatabaseURL: os.Getenv("TEST_DATABASE_URL"),
-		Port:            getenv("PORT", "8080"),
-		SIABaseURL:      getenv("SIA_BASE_URL", "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf"),
-		SIAPoolSize:     poolSize,
-		LogLevel:        getenv("LOG_LEVEL", "info"),
-		Term:            getenv("SIA_TERM", "2026-2"), // NOT "TERM" — collides with the shell's terminal-type var
+		DatabaseURL: getenv("DATABASE_URL", "postgres://sia:sia@localhost:5432/sia_bridge"),
+		Port:        getenv("PORT", "8080"),
+		SIABaseURL:  getenv("SIA_BASE_URL", "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf"),
+		SIAPoolSize: poolSize,
+		LogLevel:    getenv("LOG_LEVEL", "info"),
+		Term:        getenv("SIA_TERM", "2026-2"), // NOT "TERM" — collides with the shell's terminal-type var
 	}, nil
 }
 

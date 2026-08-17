@@ -24,6 +24,43 @@
   transition: transform var(--slow) var(--ease-out);
 }
 
+/* ── Wrapper de tabla, header y tarjetas ─────────────────────────
+   Misma rejilla que el catálogo: las columnas son idénticas y se
+   definen UNA vez en .sem__table, de donde las heredan el header
+   y cada card__head sin posibilidad de desalinearse.              */
+
+.sem__table {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  --cols: 6.2rem minmax(0, 1fr) 2.4rem 2.2rem 6.4rem 2.25rem;
+}
+
+/* Igual a .table__head del catálogo. */
+.sem__head,
+.card__head {
+  display: grid;
+  grid-template-columns: var(--cols);
+  align-items: center;
+  gap: var(--gap-sm);
+}
+
+.sem__head {
+  padding: 0 0.6rem var(--gap-sm);
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.sem__head .col-cr,
+.sem__head .col-seats {
+  text-align: right;
+}
+.sem__head .col-typ {
+  text-align: center;
+}
+
 /* ── Lista de materias ──────────────────────────────────────────── */
 
 .sem {
@@ -48,31 +85,37 @@
 }
 
 .card__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--gap);
-  padding: var(--gap-sm) var(--gap);
+  padding: 0.6rem 0.6rem;
   border-bottom: 1px solid var(--rule);
+  transition: background-color var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .card__head:hover {
+    background: var(--surface-2);
+  }
 }
 
-.card__id {
-  min-width: 0;
+/* Código: mismo estilo que .row__code del catálogo. */
+.card__code {
+  font-size: var(--t-micro);
+  color: var(--text-faint);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card__head:hover .card__code {
+  color: var(--accent);
 }
 
+/* Nombre: el único que cede ancho. */
 .card__name {
-  display: block;
-  font-family: var(--display);
-  font-weight: 400;
-  font-size: 1.35rem;
-  line-height: 1.15;
-  letter-spacing: var(--track-title);
-  color: var(--text);
-  /* Un nombre largo se recorta: la altura de la tarjeta no puede depender
-     del largo del título o la lista deja de ser una lista. */
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--t-body);
+  color: var(--text);
   transition: color var(--fast) var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
@@ -81,45 +124,75 @@
   }
 }
 
-.card__meta {
-  margin: 0.15rem 0 0;
-  font-size: var(--t-micro);
-  color: var(--text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* Créditos: igual que .row__credits. */
+.card__credits {
+  text-align: right;
+  font-size: var(--t-small);
+  color: var(--text-dim);
 }
 
-.card__end {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-sm);
-  flex: none;
-}
-
+/* Cupos: apilados, alineados a la derecha, igual que .row__seats. */
 .card__tally {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  line-height: 1.1;
+  line-height: 1.15;
+  text-align: right;
 }
 
-/* Es un número, no un título: mono y tabular, para que no baile al cambiar. */
 .card__big {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  font-size: 1.6rem;
+  font-size: var(--t-small);
   color: var(--ok);
 }
 .card__big.is-zero {
   color: var(--bad);
 }
+/* Sin oferta: gris y sin peso, igual que .is-none del catálogo. */
+.card__big--none {
+  color: var(--text-faint);
+  font-weight: 400;
+}
 
 .card__tallyLabel {
-  font-size: var(--t-micro);
+  font-size: 0.6rem;
   color: var(--text-faint);
   white-space: nowrap;
+}
+
+.card__age {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Etiqueta de tipología ─────────────────────────────────────────
+   Mismos estilos que en Program.css; se duplican porque Program.css
+   es un módulo de vista y no una hoja compartida. */
+
+.tag {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 1.35rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--surface-2);
+  color: var(--text-dim);
+}
+.tag--obligatoria {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.tag--optativa {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.tag--libre {
+  background: var(--warn-soft);
+  color: var(--warn);
 }
 
 .card__error {
@@ -209,6 +282,29 @@
   color: var(--text-faint);
 }
 
+/* ── Responsivo ─────────────────────────────────────────────────────
+   Mismos breakpoints que Program.css: cr cae primero, luego
+   código y tip. Lo que nunca se va: nombre, cupos, botón.  */
+
+@media (max-width: 700px) {
+  .sem__table {
+    --cols: 6.2rem minmax(0, 1fr) 2.4rem 6.4rem 2.25rem;
+  }
+  .col-cr {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .sem__table {
+    --cols: minmax(0, 1fr) 4.2rem 2.25rem;
+  }
+  .col-typ,
+  .col-code {
+    display: none;
+  }
+}
+
 @media (max-width: 640px) {
   .slots {
     --slot-cols: 3.5rem minmax(0, 1fr) 3.5rem;
@@ -218,8 +314,8 @@
   }
   .card__head,
   .slot {
-    padding-left: var(--gap-sm);
-    padding-right: var(--gap-sm);
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
   }
 }
 

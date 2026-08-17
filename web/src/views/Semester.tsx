@@ -226,16 +226,26 @@ export function Semester() {
             <i style={{ transform: `scaleX(${running ? done / plan.items.length : 0})` }} />
           </div>
 
-          <ul className="sem">
-            {rows.map((r) => (
-              <CourseCard
-                key={itemId(r.item)}
-                row={r}
-                onlyOpen={onlyOpen}
-                onRemove={() => plan.remove(itemId(r.item))}
-              />
-            ))}
-          </ul>
+          <div className="sem__table">
+            <div className="sem__head" aria-hidden="true">
+              <span className="col-code">código</span>
+              <span>asignatura</span>
+              <span className="col-typ">tip</span>
+              <span className="col-cr">cr</span>
+              <span className="col-seats">cupos</span>
+              <span />
+            </div>
+            <ul className="sem">
+              {rows.map((r) => (
+                <CourseCard
+                  key={itemId(r.item)}
+                  row={r}
+                  onlyOpen={onlyOpen}
+                  onRemove={() => plan.remove(itemId(r.item))}
+                />
+              ))}
+            </ul>
+          </div>
 
           <p className="sem__note">
             Los cupos se guardan con su hora de medición, así que lo que ves aquí es lo que
@@ -261,50 +271,73 @@ function CourseCard({
   const { item, detail, status, error } = row;
   const all = detail?.sections ?? [];
   const sections = all.filter((s) => !onlyOpen || (s.seats?.available ?? 0) > 0);
-  const open = all.filter((s) => (s.seats?.available ?? 0) > 0).length;
   const totalSeats = all.reduce((n, s) => n + (s.seats?.available ?? 0), 0);
+  const noGroups = status === 'done' && detail && all.length === 0;
+
+  // La edad más antigua entre los grupos: el dato que limita.
+  const oldestAge = all.reduce<number | null>(
+    (max, s) =>
+      s.seats ? (max === null ? s.seats.age_seconds : Math.max(max, s.seats.age_seconds)) : max,
+    null,
+  );
+
+  // Para "sin grupos": edad desde la última consulta al SIA.
+  const noGroupsAge =
+    noGroups && detail?.fetched_at
+      ? (Date.now() - Date.parse(detail.fetched_at)) / 1000
+      : null;
 
   return (
     <li className={`card ${status === 'loading' ? 'is-loading' : ''}`}>
       <header className="card__head">
-        <div className="card__id">
-          <Link
-            className="card__name"
-            to={`/nivel/${item.level}/sede/${item.campus}/plan/${item.program}/asignatura/${encodeURIComponent(item.code)}?f=${item.faculty}`}
-          >
-            {item.name}
-          </Link>
-          <p className="card__meta tnum">
-            {item.code}
-            <span className="head__dot">·</span>
-            {item.credits} cr
-            <span className="head__dot">·</span>
-            {item.typology}
-          </p>
-        </div>
+        <span className="card__code tnum col-code">{item.code}</span>
 
-        <div className="card__end">
+        <Link
+          className="card__name"
+          to={`/nivel/${item.level}/sede/${item.campus}/plan/${item.program}/asignatura/${encodeURIComponent(item.code)}?f=${item.faculty}`}
+        >
+          {item.name}
+        </Link>
+
+        <span
+          className={`tag tag--${slugTypology(item.typology)} col-typ`}
+          title={item.typology}
+        >
+          {shortTypology(item.typology)}
+        </span>
+
+        <span className="card__credits tnum col-cr">{item.credits}</span>
+
+        <div className="card__tally col-seats">
           {status === 'done' && detail && (
-            <div className="card__tally">
-              <span className={`card__big tnum ${totalSeats === 0 ? 'is-zero' : ''}`}>
-                {totalSeats}
-              </span>
+            <>
+              {noGroups ? (
+                <span className="card__big card__big--none tnum" aria-hidden="true">—</span>
+              ) : (
+                <span className={`card__big tnum ${totalSeats === 0 ? 'is-zero' : ''}`}>
+                  {totalSeats}
+                </span>
+              )}
               <span className="card__tallyLabel tnum">
-                cupos · {open}/{all.length} grupos
+                {noGroups ? (
+                  <>sin grupos · <span className="card__age">{noGroupsAge !== null ? formatAge(noGroupsAge) : '—'}</span></>
+                ) : (
+                  <span className="card__age">{oldestAge !== null ? formatAge(oldestAge) : '—'}</span>
+                )}
               </span>
-            </div>
+            </>
           )}
           {status === 'loading' && <span className="card__tallyLabel">midiendo…</span>}
-
-          <IconButton onClick={onRemove} label="Quitar del semestre" tip="left" className="iconbtn--danger">
-            <Trash2 size={16} strokeWidth={1.75} />
-          </IconButton>
         </div>
+
+        <IconButton onClick={onRemove} label="Quitar del semestre" tip="left" className="iconbtn--danger">
+          <Trash2 size={16} strokeWidth={1.75} />
+        </IconButton>
       </header>
 
       {status === 'error' && <p className="card__error">{error}</p>}
 
-      {status === 'done' && all.length === 0 && (
+      {noGroups && (
         <p className="card__error card__error--soft">Sin grupos este semestre.</p>
       )}
 
@@ -329,7 +362,6 @@ function CourseCard({
                 </span>
                 <span className="slot__seats">
                   <b className="tnum">{seats === null ? '—' : seats}</b>
-                  {s.seats && <small className="tnum">{formatAge(s.seats.age_seconds)}</small>}
                 </span>
               </li>
             );
@@ -350,4 +382,16 @@ function summarize(rows: Row[]) {
     }
   }
   return { sections, open };
+}
+
+/** 'FUND. OBLIGATORIA (B)' → 'B'. Misma lógica que Program.tsx. */
+function shortTypology(t: string): string {
+  return t.match(/\(([^)]+)\)/)?.[1] ?? t.slice(0, 3);
+}
+
+function slugTypology(t: string): string {
+  if (t.startsWith('LIBRE')) return 'libre';
+  if (t.includes('OBLIGATORIA')) return 'obligatoria';
+  if (t.includes('OPTATIVA')) return 'optativa';
+  return 'otra';
 }

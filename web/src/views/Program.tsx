@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
-import { ArrowLeftRight, Check, CornerUpLeft, HelpCircle, Search, Ticket, X } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  Check,
+  CornerUpLeft,
+  HelpCircle,
+  Search,
+  SlidersHorizontal,
+  Ticket,
+  X,
+} from 'lucide-react';
 import { routes } from '../api/client';
 import type { CoursesResponse, CourseSummary, ProgramsResponse } from '../api/types';
 import { useApi } from '../hooks/useApi';
@@ -43,6 +52,20 @@ export function Program() {
   const [creds, setCreds] = useState<ReadonlySet<number>>(new Set());
   const [onlyOpen, setOnlyOpen] = useState(false);
 
+  /**
+   * Las dos filas de facetas, plegadas en el teléfono.
+   *
+   * Diecisiete chips con nombre largo envuelven en cuatro o cinco líneas: media
+   * pantalla gastada en opciones antes de ver la primera asignatura. En el
+   * escritorio caben en dos filas y ahí se quedan siempre a la vista —esto no
+   * es un desplegable nuevo, es la misma pantalla con menos ancho—, así que el
+   * botón que las pliega solo existe bajo 700px, por CSS.
+   *
+   * Plegadas no son filtros invisibles: el contador del botón dice cuántos hay
+   * puestos, y la cuenta del encabezado ('120 de 694') no cambia de sitio.
+   */
+  const [showFacets, setShowFacets] = useState(false);
+
   // Los valores que EXISTEN en este plan, con su cuenta. Nada de listas fijas:
   // Medellín llega a 12 créditos y Bogotá no pasa de 6.
   const facets = useMemo(() => {
@@ -72,7 +95,8 @@ export function Program() {
   }, [data, q, typols, creds, onlyOpen]);
 
   const total = data?.courses.length ?? 0;
-  const filtering = !!q || typols.size > 0 || creds.size > 0 || onlyOpen;
+  const facetCount = typols.size + creds.size;
+  const filtering = !!q || facetCount > 0 || onlyOpen;
 
   function clearAll() {
     setQ('');
@@ -235,6 +259,20 @@ export function Program() {
               con cupos
             </button>
 
+            {/* Solo se ve en el teléfono (CSS). El número es lo que evita que
+                plegar esconda información: dice cuántas facetas hay puestas
+                sin tener que abrir a mirar. */}
+            <button
+              className={`chip filters__toggle ${facetCount ? 'is-on' : ''}`}
+              onClick={() => setShowFacets((v) => !v)}
+              aria-expanded={showFacets}
+              aria-controls="facetas"
+            >
+              <SlidersHorizontal size={14} strokeWidth={1.75} aria-hidden="true" />
+              filtros
+              {facetCount > 0 && <span className="chip__code tnum">{facetCount}</span>}
+            </button>
+
             {filtering && (
               <button
                 className="toolbar__clear"
@@ -247,7 +285,7 @@ export function Program() {
             )}
           </div>
 
-          <div className="filters">
+          <div className={`filters ${showFacets ? 'is-open' : ''}`} id="facetas">
             <div className="filters__row">
               <span className="filters__label">tipología</span>
               <div className="chips">

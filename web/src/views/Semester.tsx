@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { Eraser, Filter, RefreshCw, Trash2 } from 'lucide-react';
+import { Clock, Eraser, Filter, RefreshCw, Trash2, User } from 'lucide-react';
 import { ApiError, get, routes } from '../api/client';
 import type { CourseDetail } from '../api/types';
 import { usePlan } from '../hooks/usePlan';
@@ -250,7 +250,8 @@ export function Semester() {
           <p className="sem__note">
             Los cupos se guardan con su hora de medición, así que lo que ves aquí es lo que
             había en ese momento — no una promesa de que sigan ahí. El botón vuelve a
-            preguntarle al SIA por las {plan.items.length} materias, en tandas de {CONCURRENCY} a la
+            preguntarle al SIA por las {plan.items.length} materias, en tandas de {CONCURRENCY} a
+            la
             vez, que es lo que el pool de conexiones puede atender en paralelo.
           </p>
         </>
@@ -352,17 +353,24 @@ function CourseCard({
             return (
               <li key={s.key} className={`slot ${seats === 0 ? 'is-zero' : ''}`}>
                 <span className="slot__key tnum">{s.key}</span>
-                <span className="slot__who">{s.instructor ? titleCase(s.instructor) : '—'}</span>
-                <span className="slot__when tnum">
-                  {s.schedule.length === 0
-                    ? 'sin horario'
-                    : s.schedule
-                        .map((c) => `${DAYS_SHORT[c.weekday]} ${c.start_time}`)
-                        .join(' · ')}
+                <span className="slot__info">
+                  <span className="slot__who">
+                    <User size={12} strokeWidth={1.75} aria-hidden="true" />
+                    {s.instructor ? titleCase(s.instructor) : 'sin profesor asignado'}
+                  </span>
+                  <span className={`slot__when${s.schedule.length > 0 ? ' tnum' : ''}`}>
+                    <Clock size={12} strokeWidth={1.75} aria-hidden="true" />
+                    {s.schedule.length === 0
+                      ? 'sin horario'
+                      : s.schedule
+                          .map((c) => `${DAYS_SHORT[c.weekday]} ${c.start_time}`)
+                          .join(' · ')}
+                  </span>
                 </span>
                 <span className="slot__seats">
                   <b className="tnum">{seats === null ? '—' : seats}</b>
                 </span>
+                <span className="slot__radio" aria-hidden="true" />
               </li>
             );
           })}

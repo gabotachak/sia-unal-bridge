@@ -207,24 +207,24 @@
   background: transparent;
 }
 
-/* ── Grupos de una materia ──────────────────────────────────────────
-   Misma regla que el catálogo: columnas fijas, y lo que sobra se recorta.
-   El profesor y el horario son los que ceden; la clave del grupo y los
-   cupos nunca, porque son los que se comparan entre filas. */
+/* ── Grupos de una materia ───────────────────────────────────────────
+   Heredan --cols del .sem__table: la clave del grupo cae bajo
+   CÓDIGO, el instructor bajo ASIGNATURA, el horario abarca
+   TIP+CR con grid-column span, y los cupos quedan perfectamente
+   alineados bajo el header CUPOS.                               */
 
 .slots {
   list-style: none;
   margin: 0;
   padding: 0;
-  --slot-cols: 4.5rem minmax(0, 1fr) minmax(0, 15rem) 4rem;
 }
 
 .slot {
   display: grid;
-  grid-template-columns: var(--slot-cols);
+  grid-template-columns: var(--cols);
   align-items: center;
   gap: var(--gap-sm);
-  padding: 0.35rem var(--gap);
+  padding: 0.5rem 0.6rem;
   font-size: var(--t-small);
   border-top: 1px solid var(--rule);
 }
@@ -233,6 +233,7 @@
 }
 
 .slot__key {
+  grid-column: 1;
   font-size: var(--t-micro);
   color: var(--accent);
   font-weight: 600;
@@ -241,24 +242,44 @@
   white-space: nowrap;
 }
 
-.slot__who {
+/* Instructor y horario en columna: ocupa asignatura + tip + cr
+   para tener espacio suficiente y no cortar. */
+.slot__info {
+  grid-column: 2 / 5;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
+/* Cada línea es icono + texto, como en Course.tsx. */
+.slot__who,
 .slot__when {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.slot__who {
+  color: var(--text);
+  font-size: var(--t-small);
+}
+.slot__when {
   color: var(--text-faint);
   font-size: var(--t-micro);
 }
+.slot__who svg,
+.slot__when svg {
+  flex: none;
+  opacity: 0.6;
+}
 
 .slot__seats {
+  grid-column: 5;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -269,9 +290,10 @@
   font-weight: 600;
   color: var(--ok);
 }
-.slot__seats small {
-  font-size: 0.6rem;
-  color: var(--text-faint);
+
+/* Reservado para el futuro radiobutton de selección de grupo. */
+.slot__radio {
+  grid-column: 6;
 }
 
 .slot.is-zero .slot__seats b {
@@ -293,6 +315,10 @@
   .col-cr {
     display: none;
   }
+  /* Con 5 cols: info span 2/4, seats col 4, radio col 5. */
+  .slot__info  { grid-column: 2 / 4; }
+  .slot__seats { grid-column: 4; }
+  .slot__radio { grid-column: 5; }
 }
 
 @media (max-width: 520px) {
@@ -303,15 +329,14 @@
   .col-code {
     display: none;
   }
+  /* Con 3 cols: clave oculta, info en col 1. */
+  .slot__key  { display: none; }
+  .slot__info  { grid-column: 1; }
+  .slot__seats { grid-column: 2; }
+  .slot__radio { grid-column: 3; }
 }
 
 @media (max-width: 640px) {
-  .slots {
-    --slot-cols: 3.5rem minmax(0, 1fr) 3.5rem;
-  }
-  .slot__when {
-    display: none;
-  }
   .card__head,
   .slot {
     padding-left: 0.4rem;

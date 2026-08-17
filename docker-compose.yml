@@ -9,8 +9,10 @@ services:
     # interfaces y se salta el firewall del host por sus reglas en iptables.
     ports: ["127.0.0.1:${DB_PORT:-15432}:5432"]
     restart: unless-stopped
+    # Bind mount, no volumen nombrado: así los datos no caen en /var/lib/docker
+    # (SSD del sistema). Sin default a propósito — la ruta es de cada máquina.
     volumes:
-      - pgdata:/var/lib/postgresql
+      - ${PGDATA_DIR:?falta PGDATA_DIR en .env}:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sia}"]
       interval: 5s
@@ -46,6 +48,3 @@ services:
     restart: unless-stopped
     depends_on:
       - api
-
-volumes:
-  pgdata:

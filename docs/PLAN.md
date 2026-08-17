@@ -229,7 +229,10 @@ de `API.md`, con `X-Cache: miss` la primera vez y `hit` la segunda.
 
 ---
 
-## Fase 2 — `Refresher` (esbozo)
+## Fase 2 — `Refresher`
+
+> **Plan completo: [`FASE-2.md`](FASE-2.md)** — pasos, criterios de aceptación,
+> concurrencia y cadencia. Lo de abajo es el esbozo que lo originó.
 
 - `internal/refresher` + `cmd/refresher`, consumiendo los mismos puertos.
 - Dimensionado: **1380 entradas de programa**, 852 códigos. Una carrera con detalle son

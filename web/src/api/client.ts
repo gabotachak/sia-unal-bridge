@@ -25,12 +25,12 @@ export type Result<T> = {
 /**
  * Cada cuánto acepta la API un `?max_age=0` para la misma asignatura.
  *
- * Se hornea en tiempo de build desde FETCH_COOLDOWN (ver web/vite.config.ts),
- * así que es una PISTA para no ofrecer un botón que va a rebotar — no la
- * autoridad. La autoridad es el 429 del servidor con su `retry_after_seconds`,
- * que es quien manda cuando los dos no coinciden.
+ * Sale de FETCH_COOLDOWN, la misma variable que lee el backend (ver
+ * web/vite.config.ts), así que es una PISTA para no ofrecer un botón que va a
+ * rebotar — no la autoridad. La autoridad es el 429 del servidor con su
+ * `retry_after_seconds`, que es quien manda cuando los dos no coinciden.
  */
-export const FETCH_COOLDOWN = Number(import.meta.env.VITE_FETCH_COOLDOWN) || 60;
+export const FETCH_COOLDOWN = Number(import.meta.env.VITE_FETCH_COOLDOWN) || 300;
 
 /** Un error de la API con su significado, no un `Error` genérico. */
 export class ApiError extends Error {
@@ -58,7 +58,7 @@ export class ApiError extends Error {
       case 'sia_session_lost':
         return 'Se perdió la sesión contra el SIA. Reintentar abre una nueva.';
       case 'busy':
-        return 'Todas las conexiones al SIA están ocupadas. Es momentáneo.';
+        return 'El SIA está atendiendo otras consultas ahora mismo. Es momentáneo.';
       case 'unknown_campus':
         return 'Esa sede no existe en el catálogo del SIA.';
       case 'unknown_program':

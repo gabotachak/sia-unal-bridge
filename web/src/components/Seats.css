@@ -1,32 +1,64 @@
-.seats {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.2rem;
-  min-width: 4.5rem;
-}
-
 /* ── La cifra ───────────────────────────────────────────────────────
    Dos dígitos independientes, cada uno en su propia cajita. Cuando uno
    cambia, React lo remonta y solo ESE gira: el otro se queda quieto, que
-   es lo que hace un tablero de verdad. */
+   es lo que hace un tablero de verdad.
 
-.seats__figure {
-  display: flex;
+   Es la única pieza de `Seats` que viaja a las tres pantallas, así que los
+   tamaños salen de variables y no de valores sueltos: `lg` en la ficha,
+   donde el dato es el protagonista, y `sm` en las dos listas, donde tiene
+   que caber en la misma altura de fila que ya tenían. */
+
+.seatfig {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.seatfig--lg {
+  --flap-font: 1.25rem;
+  --flap-min: 1.5rem;
+  --flap-pad: 0.1rem 0.2rem;
   gap: 2px;
 }
 
-.seats__flap {
+/* Sin padding vertical, para que la fila del catálogo no crezca ni un píxel
+   respecto de cuando el número era texto pelado.
+
+   Y sin costura: a esta talla, en una columna que se barre 313 veces, las
+   cajitas separadas dejaban de leerse como UN número —'126' se leía como tres
+   cifras—. Con `gap: 0` y el radio en el contorno en vez de en cada aleta, la
+   pastilla es una sola y los dígitos van dentro. No se pierde nada: el giro es
+   un `transform` sobre cada span, así que siguen volteando por separado
+   —encima el `overflow` los recorta contra la carcasa, que es exactamente lo
+   que hace un tablero de verdad. */
+.seatfig--sm {
+  --flap-font: var(--t-small);
+  --flap-min: 1.05rem;
+  --flap-pad: 0 0.15rem;
+  gap: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.seatfig--sm .seatfig__flap {
+  border-radius: 0;
+}
+
+.seatfig__flap {
   display: grid;
   place-items: center;
-  min-width: 1.5rem;
-  padding: 0.1rem 0.2rem;
+  min-width: var(--flap-min);
+  padding: var(--flap-pad);
   border-radius: var(--radius-sm);
   background: var(--ok-soft);
   color: var(--ok);
-  font-size: 1.25rem;
+  font-size: var(--flap-font);
   font-weight: 600;
   line-height: 1.15;
+}
+
+/* Solo gira donde el número puede cambiar mientras lo mirás. En el catálogo
+   nada cambia después de cargar, y 700 aletas girando en la primera pintura
+   serían ruido y trabajo por nada. */
+.seatfig.is-live .seatfig__flap {
   animation: flap 260ms var(--ease-out) both;
 }
 
@@ -42,19 +74,46 @@
     opacity: 1;
   }
 }
+@media (prefers-reduced-motion: reduce) {
+  .seatfig.is-live .seatfig__flap {
+    animation: none;
+  }
+}
 
 /* Sin cupos: rojo. Es el único estado que hay que ver de lejos en una lista
    de doce grupos. */
-.seats--empty .seats__flap {
+.seatfig--empty .seatfig__flap {
   background: var(--bad-soft);
   color: var(--bad);
 }
 
 /* Dato vencido: pierde el color. Un número que ya no vale no puede seguir
    pintado del verde de "hay lugar". */
-.seats--stale .seats__flap {
+.seatfig--stale .seatfig__flap {
   background: var(--surface-2);
   color: var(--text-faint);
+}
+
+/* Sin dato. Una raya, no un cero: en una columna de cupos el cero significa
+   "hay grupos y están llenos", que es la mala noticia accionable; acá no hay
+   nada que llenar. Sin cajita tampoco — la aleta representa un dígito, y no
+   hay dígito. */
+.seatfig--none {
+  color: var(--text-faint);
+  font-size: var(--t-small);
+}
+.seatfig--lg.seatfig--none {
+  font-size: 1.25rem;
+}
+
+/* ── El contador completo, de la ficha ──────────────────────────── */
+
+.seats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+  min-width: 4.5rem;
 }
 
 /* ── Rótulo y edad ──────────────────────────────────────────────── */
@@ -67,7 +126,7 @@
 }
 
 .seats__label {
-  font-size: 0.6rem;
+  font-size: var(--t-nano);
   letter-spacing: var(--track-micro);
   text-transform: uppercase;
   color: var(--text-faint);

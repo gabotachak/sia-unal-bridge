@@ -33,7 +33,7 @@ services:
       SIA_POOL_SIZE: ${SIA_POOL_SIZE:-4}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SIA_TERM: ${SIA_TERM:-2026-2}
-      FETCH_COOLDOWN: ${FETCH_COOLDOWN:-60}
+      FETCH_COOLDOWN: ${FETCH_COOLDOWN:-300}
       # Para que los logs cuadren con el reloj del host y con el cron. Necesita
       # tzdata en la imagen (ver Dockerfile), o Go se queda en UTC en silencio.
       TZ: ${TZ:-America/Bogota}
@@ -88,7 +88,7 @@ services:
       # El front necesita el mismo cooldown que la API para no ofrecer un botón
       # que el backend va a rechazar con 429.
       args:
-        FETCH_COOLDOWN: ${FETCH_COOLDOWN:-60}
+        FETCH_COOLDOWN: ${FETCH_COOLDOWN:-300}
     ports: ["${WEB_PORT:-13000}:8080"]
     restart: unless-stopped
     depends_on:

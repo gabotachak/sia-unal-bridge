@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Clock, MapPin, RefreshCw, User } from 'lucide-react';
 import { FETCH_COOLDOWN, routes } from '../api/client';
 import type { ClassSession, CourseDetail, Section } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { Layout } from '../components/Layout';
 import { AddButton } from '../components/AddButton';
-import { IconButton } from '../components/IconButton';
 import { Empty, Fault, Loading } from '../components/States';
 import { Seats } from '../components/Seats';
-import { sentence, titleCase } from '../lib/format';
+import { formatCountdown, sentence, titleCase } from '../lib/format';
 import './Course.css';
 
 const DAYS = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
@@ -23,7 +22,34 @@ export function Course() {
   const path = routes.course(scope, program, code);
   const { data, error, loading, elapsed, attempt, reload } = useApi<CourseDetail>(path);
 
-  const backToCatalog = `/nivel/${level}/sede/${campus}/plan/${program}${faculty ? `?f=${faculty}` : ''}`;
+  /**
+   * A dónde vuelve la flecha.
+   *
+   * Estaba fija al catálogo, y desde Mi semestre eso mandaba a una pantalla en
+   * la que nunca se había estado. No es un atajo roto: es una salida que
+   * miente sobre el camino recorrido.
+   *
+   * Quién lo dice es el enlace de origen, con el `state` de react-router. Se
+   * eligió eso y no un `?from=` en la URL porque de dónde vienes no es parte
+   * de la identidad de la asignatura: dos URLs distintas para la misma ficha
+   * ensuciarían el historial y lo que se copie y pegue.
+   *
+   * Tampoco `navigate(-1)`: con la URL pegada a pelo, "atrás" saca de la app.
+   *
+   * El `state` de react-router vive en el history del navegador, así que
+   * sobrevive a recargar la página. Lo que no sobrevive es entrar por un
+   * enlace pegado en una pestaña nueva — y ahí el catálogo del plan es
+   * justamente la respuesta correcta, porque no hay camino que recordar.
+   */
+  const from = (useLocation().state as { from?: string } | null)?.from;
+
+  const back =
+    from === 'semester'
+      ? { to: '/semestre', label: 'mi semestre' }
+      : {
+          to: `/nivel/${level}/sede/${campus}/plan/${program}${faculty ? `?f=${faculty}` : ''}`,
+          label: `catálogo del plan ${program}`,
+        };
 
   /**
    * Medir los cupos = volver a pedir la asignatura con max_age=0.
@@ -49,23 +75,31 @@ export function Course() {
    */
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [now, setNow] = useState(() => Date.now());
+  // El intervalo solo corre mientras hay cuenta atrás que mostrar, y se para
+  // solo al llegar a cero: con un cooldown de minutos, un tick por segundo
+  // permanente serían cientos de renders para no cambiar nada en pantalla.
   useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    if (cooldownUntil <= Date.now()) return;
+    const t = window.setInterval(() => {
+      const tick = Date.now();
+      setNow(tick);
+      if (tick >= cooldownUntil) window.clearInterval(t);
+    }, 1000);
     return () => window.clearInterval(t);
-  }, []);
+  }, [cooldownUntil]);
 
-  // La medición más reciente de la asignatura: el POST del SIA las sella todas
-  // a la vez, así que la más nueva marca cuándo se habló con el SIA.
-  const freshestSeats = data?.sections?.reduce<number | null>(
-    (min, s) =>
-      s.seats ? (min === null ? s.seats.age_seconds : Math.min(min, s.seats.age_seconds)) : min,
-    null,
-  );
+  // Cuándo se habló con el SIA por esta asignatura. Sale de `fetched_at` y no
+  // de la edad de los cupos porque es lo mismo que mira el backend
+  // (`course_program.detail_fetched_at`, ver internal/httpapi/cooldown.go) — y
+  // porque una asignatura sin grupos no tiene cupos de los que sacar una edad,
+  // así que por ahí el botón se quedaba encendido y rebotaba con un 429.
+  const fetchedAt = data?.fetched_at;
   useEffect(() => {
-    if (freshestSeats === null || freshestSeats === undefined) return;
-    const left = FETCH_COOLDOWN - freshestSeats;
-    if (left > 0) setCooldownUntil((prev) => Math.max(prev, Date.now() + left * 1000));
-  }, [freshestSeats]);
+    const at = fetchedAt ? Date.parse(fetchedAt) : NaN;
+    if (!Number.isFinite(at)) return;
+    const until = at + FETCH_COOLDOWN * 1000;
+    if (until > Date.now()) setCooldownUntil((prev) => Math.max(prev, until));
+  }, [fetchedAt]);
 
   useEffect(() => {
     if (error?.status === 429 && error.retryAfter) {
@@ -93,9 +127,9 @@ export function Course() {
     <Layout>
       {/* Sin migas de pan, hace falta una salida explícita. Una sola, y al
           sitio del que se vino: el catálogo de este plan. */}
-      <Link className="back" to={backToCatalog}>
+      <Link className="back" to={back.to}>
         <ArrowLeft size={15} strokeWidth={1.75} aria-hidden="true" />
-        catálogo del plan {program}
+        {back.label}
       </Link>
 
       {loading && !data && (
@@ -106,8 +140,12 @@ export function Course() {
 
       {data && (
         <>
-          <header className="course">
-            <div className="course__id">
+          {/* Mismo `.head` que el catálogo y Mi semestre: identidad a la
+              izquierda, lo que la pantalla ofrece a la derecha. En las listas
+              eso de la derecha es un conteo; acá es la acción, porque una
+              ficha no tiene nada que contar a nivel de página. */}
+          <header className="head">
+            <div>
               <p className="eyebrow tnum">
                 {data.code}
                 <span className="head__dot">·</span>
@@ -115,7 +153,7 @@ export function Course() {
                 <span className="head__dot">·</span>
                 {data.typology}
               </p>
-              <h1 className="course__title">{sentence(data.name)}</h1>
+              <h1 className="head__title">{sentence(data.name)}</h1>
             </div>
 
             <AddButton
@@ -142,36 +180,53 @@ export function Course() {
             />
           ) : (
             <section>
+              {/* La barra va acá y no pegada al header como en las listas: en
+                  ellas lo que sigue al header es la tabla, y la barra la
+                  gobierna. Acá en medio hay una descripción, que es
+                  continuación del título y no algo sobre lo que este botón
+                  actúe. Partirla con un control dejaba el botón mandando sobre
+                  un texto con el que no tiene nada que ver. */}
+              <div className="toolbar">
+                {/* El mismo chip de Mi semestre, con la cuenta atrás metida en
+                    el `.chip__code` que el catálogo usa para el número de
+                    filtros puestos. Acá la cuenta atrás SÍ se muestra —a
+                    diferencia de Mi semestre— porque es una sola asignatura y
+                    el número se refresca de verdad cada segundo. */}
+                <button
+                  className="chip"
+                  onClick={measureAll}
+                  disabled={measuring || cooldownLeft > 0}
+                  title={
+                    measuring
+                      ? 'Preguntándole al SIA por los cupos.'
+                      : cooldownLeft > 0
+                        ? 'Se midió hace un momento. El dato que ves es el mismo que traería preguntar otra vez.'
+                        : 'Mide los cupos de todos los grupos a la vez.'
+                  }
+                >
+                  <RefreshCw
+                    size={14}
+                    strokeWidth={1.75}
+                    className={measuring ? 'spin' : undefined}
+                    aria-hidden="true"
+                  />
+                  {measuring ? 'midiendo' : 'medir cupos'}
+                  {cooldownLeft > 0 && !measuring && (
+                    <span className="chip__code tnum">{formatCountdown(cooldownLeft)}</span>
+                  )}
+                </button>
+
+                <p className="toolbar__note">Mide los cupos de todos los grupos a la vez.</p>
+              </div>
+
+              {/* El equivalente de la fila de cabeceras de columna de las dos
+                  listas: versalitas micro sobre un filete. Lo que separa la
+                  tabla de lo que hay encima. */}
               <div className="groups__bar">
                 <h2 className="groups__head">
                   {data.sections.length} {data.sections.length === 1 ? 'grupo' : 'grupos'}
                 </h2>
-
-                <div className="head__actions">
-                  {cooldownLeft > 0 && !measuring && (
-                    <span className="groups__wait tnum">{cooldownLeft} s</span>
-                  )}
-                  <IconButton
-                    onClick={measureAll}
-                    disabled={measuring || cooldownLeft > 0}
-                    tip="left"
-                    className={measuring ? 'is-spinning' : ''}
-                    label={
-                      measuring
-                        ? 'Midiendo…'
-                        : cooldownLeft > 0
-                          ? `Recién medido: esperar ${cooldownLeft} s`
-                          : 'Medir los cupos de todos los grupos'
-                    }
-                  >
-                    <RefreshCw size={18} strokeWidth={1.75} />
-                  </IconButton>
-                </div>
               </div>
-
-              <p className="groups__note">
-                El botón mide los cupos de todos los grupos a la vez.
-              </p>
 
               <ul className={`groups ${measuring ? 'is-measuring' : ''}`}>
                 {data.sections.map((s) => (

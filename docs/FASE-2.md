@@ -63,7 +63,8 @@ Lo que ya existe y no hay que volver a construir:
 - `sia.Source` con las dos cascadas, el comodín por sede (§32) y el arreglo de §33.
 - `store` con upserts idempotentes de catálogo, detalle, visibilidad y cupos.
 - Los marcadores de frescura: `program.catalog_fetched_at`,
-  `course_program.detail_fetched_at`, `section.fetched_at`, `seat_snapshot.measured_at`.
+  `course_program.detail_fetched_at`, `section.fetched_at`, `seat_snapshot.measured_at`
+  (el de cupos pasó a ser `section.seats_checked_at` en el paso 6 — ver *Cupos*).
 
 Lo que **no** existe y esta fase agrega: enumeración masiva, control de concurrencia
 propio, presupuesto de cortesía, cadencia y observabilidad de corridas.

@@ -47,6 +47,22 @@ docker compose up -d db
 psql postgres://sia:sia@localhost:5432/sia_bridge
 ```
 
+### La base de test es OTRA base
+
+`TEST_DATABASE_URL` apunta a `sia_bridge_test`, no a `sia_bridge`. No es una
+formalidad: los tests de `internal/store` y `cmd/refresher` **escriben de verdad** —es el
+tradeoff elegido frente a testcontainers ([LAYOUT.md](LAYOUT.md))— y apuntar las dos a la
+misma base metió 28 planes de sedes inventadas (`999x`) dentro de producción, con
+`/v1/status` reportando 1408 planes donde el censo real son 1380.
+
+La crea `deploy/initdb/01-test-database.sql` en el primer arranque del contenedor `db`. Si
+la base ya existía, a mano:
+
+```bash
+psql -h localhost -p 15432 -U sia -d postgres -c 'CREATE DATABASE sia_bridge_test OWNER sia;'
+make migrate-test        # y de nuevo tras cada migración nueva
+```
+
 ---
 
 ## API en contenedor

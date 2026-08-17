@@ -409,7 +409,7 @@ validez distinta**:
 
 | Capa | Válida para | Gobernada por |
 |---|---|---|
-| filas de `section` — profesor, horario, aula, cupos | **todos** los programas | `section.fetched_at`, `seat_snapshot.measured_at` |
+| filas de `section` — profesor, horario, aula, cupos | **todos** los programas | `section.fetched_at`, `section.seats_checked_at` |
 | `section_program` — qué grupos ve este plan | **solo** los programas ya consultados | `course_program.detail_fetched_at` |
 
 Concreto: se bajó `1000004-B` desde Sistemas (25 grupos). Llega una consulta de

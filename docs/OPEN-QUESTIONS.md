@@ -6,6 +6,12 @@ apuntados los experimentos pendientes.
 
 Léelo antes de asumir algo. Varias afirmaciones "obvias" resultaron falsas al medirlas.
 
+> **Tercera ronda: 2026-08-17, implementando la fase 2.** El `Refresher` recorrió sedes y
+> niveles que la API nunca había pisado y eso midió cosas que aquí estaban inferidas
+> (coste por asignatura, ritmo del barrido) y destapó tres hallazgos nuevos: §34, §35 y
+> §36 de `GOTCHAS.md`. El más caro: **el comodín de sede de `soc6` no existe en
+> doctorado**, en ninguna sede.
+>
 > **Segunda ronda de experimentos: 2026-08-15 (tarde).** Se cerraron 4 de las 5
 > preguntas abiertas, se probó el punto que estaba solo inferido y aparecieron 8
 > hallazgos nuevos, dos de ellos críticos: la región de detalle numerada (§20) y la
@@ -24,13 +30,14 @@ Léelo antes de asumir algo. Varias afirmaciones "obvias" resultaron falsas al m
 | Cookie y ViewState deben ser de la misma sesión | matriz de 6 combinaciones, solo una funciona |
 | La cascada no se puede saltar | 3 intentos (todo vacío / solo nivel / nivel+sede) → 896 B |
 | Cascada de electivas = 9 pasos | HAR de navegador, paso a paso; reproducida con 240 filas exactas |
-| `soc6=12` = comodín "toda la sede" | opciones del dropdown + reproducción de las 240 filas |
+| `soc6=12` = comodín "toda la sede" | opciones del dropdown + reproducción de las 240 filas. **Solo Bogotá-pregrado**: la posición es por sede (§32) y la EXISTENCIA es por (sede, nivel) — en doctorado no hay comodín (§35) |
 | `_afrRK` se acumula entre búsquedas | 3 búsquedas seguidas: 0..97, 98..168, 169..225 |
 | `_afrRK` se renumera tras re-render | `2016353` pasó de rk=101 a rk=8 tras Volver |
 | `_rowCount` no es fiable | dice 98 cuando las filas reales son 67, 59 y 66 |
 | El `selection` es innecesario | 1 POST con `selectedRowKeys` → 48 524 B con cupos |
 | Volver es necesario antes de cualquier acción de región 0 | búsqueda y detalle desde región 1 → 895 B |
-| `it11` filtra por nombre en servidor | 241 KB → 15 KB; `calculo` encuentra `Cálculo` |
+| `it11` filtra por nombre en servidor | 241 KB → 15 KB; `calculo` encuentra `Cálculo`. Re-medido 2026-08-17 sobre el barrido: 232 675 B → 17 862 B (13×) |
+| `it11` viaja en CADA POST y no se limpia solo | un catálogo completo tras uno filtrado devolvía 3 filas en vez de 98 (§34) |
 | `it10` filtra por créditos | etiqueta del `<label for=...>` |
 | Filas duplicadas → detalle idéntico | `sha256` igual entre rk=142 y rk=81 de `2019510` |
 | Los grupos visibles dependen del programa | `1000004-B`: 25 grupos en Sistemas, 23 en Industrial |
@@ -149,6 +156,21 @@ reexponen los de las demás sedes (mecanismo PEAMA). No son programas propios.
 Dimensiona la fase 2: el crawl de catálogo completo son ~1380 POSTs de `cb1`
 (dedupeando, ~850). El crawl **con detalle** es otra cosa: ~100 s por programa de 98
 asignaturas → del orden de **30-40 h** para la universidad entera.
+
+**Medido al implementarlo (2026-08-17), ya no inferido:**
+
+| Magnitud | Medido | Cómo |
+|---|---|---|
+| Referencia completa (3 niveles × 9 sedes) | **131 POSTs, 72 s**, 1380 entradas | `refresher --mode=reference` |
+| Ritmo del barrido de catálogo | **8.0 planes/min** con 2 workers → **~2.7 h** para 1380 | delta de `catalog_fetched_at` en 90 s |
+| Catálogo de un plan | ~13 POSTs (regular + electivas, con los rebotes de §30) | 9 planes de LA PAZ: 114 POSTs |
+| Detalle por asignatura | **~3.7 POSTs, ~87 KB** con `it11` en los dos listados | 40 asignaturas, 136 POSTs, 3.5 MB |
+| Ritmo del barrido de detalle | **~0.7 asignaturas/s/worker** | 123 asignaturas en 3 min con 2 workers |
+| Ahorro de `FetchDetails` por lote | 24 POSTs contra 28 de llamadas sueltas intercaladas | 6 asignaturas, 2 planes, pool de 1 |
+
+Las ~3.7 POSTs por asignatura son más que las ~2 que este documento estimaba: faltaba
+contar el `soc3` de reparqueo, el `Volver`, y —para las de libre elección— la cascada de
+electivas entera, que con los rebotes del §30 son 8 POSTs.
 
 ### 5. Concurrencia — al menos 8 conexiones, sin fricción
 

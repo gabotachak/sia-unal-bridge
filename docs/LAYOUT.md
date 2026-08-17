@@ -174,7 +174,7 @@ Dependencias de verdad: **gin, pgx, goose, goquery**. Más tres paquetes
 | `sqlx` / `scany` | `pgx.RowToStructByName` | pgx v5 ya lo hace nativo |
 | `golang-migrate` | `goose` | goose embebe más fácil y permite migraciones en Go si algún día hace falta |
 | `colly` / frameworks de scraping | `net/http` a mano | necesitan control total de UA, cookies y secuencialidad. Un framework estorba ([GOTCHAS §1](GOTCHAS.md)) |
-| `testcontainers-go` | `docker-compose.yml` que ya existe | `TEST_DATABASE_URL` + `t.Skip()` si no está. Menos maquinaria, mismo resultado |
+| `testcontainers-go` | `docker-compose.yml` que ya existe | `TEST_DATABASE_URL` + `t.Skip()` si no está. Menos maquinaria, mismo resultado — **pero apuntando a otra base**: estos tests escriben de verdad, y compartir base con producción le metió 28 planes de sedes falsas (`make migrate-test`) |
 | regex sobre el HTML | goquery | es el fallo que mató al proyecto anterior |
 
 ### Avisos de uso

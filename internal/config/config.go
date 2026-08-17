@@ -14,6 +14,11 @@ import (
 // environment (store_test.go, integration_test.go) because they must decide
 // whether to skip before any config is loaded. Carrying it here would be a
 // field nobody reads, and an invitation to set it expecting an effect.
+//
+// It must point at a DIFFERENT DATABASE than DATABASE_URL. Those tests write
+// for real, and pointing both at the same base put 28 fake-campus programs
+// into production and left /v1/status reporting 1408 known plans where the
+// real census is 1380. `make migrate-test` migrates it.
 type Config struct {
 	DatabaseURL   string
 	Port          string

@@ -39,6 +39,11 @@ Pon `tipologia = 7` en el entorno antes del paso 09.
 Con `facElect = 12` (comodín "2000 SEDE BOGOTÁ") devuelve ~240 asignaturas de libre
 elección de todas las facultades de la sede.
 
+> **`facElect = 12` solo sirve para Bogotá-pregrado.** La posición del comodín cambia con
+> la sede (10 en Medellín, 3 en Palmira) y **en doctorado no existe**: `soc6` lista solo
+> facultades, así que hay que consultar una por una y unir los resultados. Medido
+> 2026-08-17, ver [GOTCHAS §32 y §35](../../docs/GOTCHAS.md).
+
 ---
 
 ## Variables
@@ -82,7 +87,9 @@ búsqueda o el detalle de otra asignatura. No es solo entre detalles.
 antes, el segundo Volver devolvía 893 B y la sesión parecía muerta.
 Ver [`GOTCHAS.md §20`](../../docs/GOTCHAS.md).
 
-**`nombre` (`it11`) filtra en el servidor.** Substring, insensible a acentos.
+**`nombre` (`it11`) filtra en el servidor.** Substring, insensible a acentos. Ojo al
+reusar la sesión a mano: el campo viaja en cada POST, así que si lo dejas puesto la
+siguiente consulta sale recortada sin avisar ([GOTCHAS §34](../../docs/GOTCHAS.md)).
 Baja el payload de 241 KB a 15-27 KB. La ruta más rápida para una asignatura concreta
 es `06` con `nombre` puesto, y luego `08`.
 

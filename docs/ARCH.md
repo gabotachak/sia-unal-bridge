@@ -48,7 +48,7 @@ Cada refresco de cupos trae horarios y profesor gratis, en el mismo response.
                             ^
                             │ (driving)
                      ┌──────┴───────┐
-                     │   Refresher  │  ← cron/worker, fase 2
+                     │   Refresher  │  ← cron, POOL PROPIO (fase 2)
                      └──────────────┘
 ```
 
@@ -57,10 +57,29 @@ Cada refresco de cupos trae horarios y profesor gratis, en el mismo response.
 | `API` | driving | expone JSON, traduce a casos de uso |
 | `Store` | driven | persistencia y cache (Postgres) |
 | `SIASource` | driven | todo lo que toca el SIA real |
-| `Refresher` | driving | llena la cache proactivamente — **aplazado** |
+| `Refresher` | driving | llena la cache proactivamente — **implementado (fase 2)** |
 
-`Refresher` está en el diagrama pero no en la fase 1: la cache se llena sola con el
-uso. Cuando se implemente, el adaptador de `SIASource` ya estará probado.
+`Refresher` entra por los **mismos casos de uso** que `httpapi` (`catalog.Service`) y no
+escribe en la base por su cuenta: si lo hiciera habría dos implementaciones del upsert de
+catálogo y la segunda se desincronizaría en la primera corrección de bug. La única
+diferencia entre un fetch del job y uno de un cliente es **quién lo pidió**
+([FASE-2.md](FASE-2.md)).
+
+### El pool del job es suyo, no el de la API
+
+`cmd/refresher` levanta **su propio pool**. Compartirlo sería servir `503 busy` —el error
+que [API.md](API.md) reserva para picos— durante las horas que dura un barrido de detalle.
+La invariante que no se negocia es el techo medido de 8 sesiones concurrentes:
+
+```
+conexiones(api) + conexiones(refresher) ≤ 8
+   4 (api, por defecto)  +  2 (refresher)  =  6   ← operación normal
+   4                     +  4              =  8   ← ventana de mantenimiento
+```
+
+Coste aceptado: dos procesos no comparten `singleflight`, así que el job y un cliente
+pueden pedir la misma asignatura a la vez y gastar dos POSTs en vez de uno. Es
+desperdicio, no incorrección — los upserts son idempotentes.
 
 ---
 
@@ -189,7 +208,7 @@ Con eso, las goroutines se ganan su sitio en cuatro puntos y solo en cuatro:
 | Keepalive | una goroutine con ticker para todo el pool: ping ≤3 min mantiene la sesión 30 min; 5 min de silencio la mata |
 | Auto-reparación | `Pool.Do` re-bootstrapea y reintenta una vez ante un no-op: una sesión ADF muerta no revive sola |
 | `singleflight` | con pool chico es lo que evita que 3 clientes en frío hagan 3 × 10 s en cola |
-| `Refresher` (fase 2) | 30-40 h en serie; `errgroup` acotado + checkpoint por programa |
+| `Refresher` | `errgroup` con `SetLimit(W)` sobre la lista de **programas** — una goroutine por programa, nunca por asignatura: la conexión queda parqueada y repartir sus 98 asignaturas reabre §30/§31/§33. `errgroup` se usa **solo** por `SetLimit`: los errores se acumulan en el `Report`, porque un no-op no puede matar un barrido de nueve horas |
 
 Dos trampas propias de este proyecto:
 
@@ -244,13 +263,19 @@ default ni forma de omitirla: es un segmento obligatorio de la ruta,
 
 Verificado en vivo contra Bogotá, Medellín y Amazonia.
 
+**Fase 2 — `Refresher`** (`internal/refresher` + `cmd/refresher`, ver
+[FASE-2.md](FASE-2.md))
+
+- Cuatro modos con cadencias distintas: `reference` (mensual), `catalog` (semanal),
+  `detail --scope=global` (diario) y `seats --scope=hot` (cada 15 min, solo en
+  inscripciones). Medido 2026-08-17: la referencia completa son **131 POSTs / 72 s** y
+  deja 1380 entradas de programa; el catálogo de un plan, ~13 POSTs.
+- **El checkpoint son los marcadores de frescura**, no un cursor: reanudar es volver a
+  correr, y dos corridas seguidas no hacen ni un POST.
+- Un `pg_try_advisory_lock` por modo evita que dos corridas se solapen.
+
 **Después**
 
-- `Refresher`: crawl inicial y polling. Ya está dimensionado: el censo son **1380
-  entradas de programa** (852 códigos distintos) en toda la UNAL, y una carrera con
-  detalle cuesta **201 POSTs / 99 s / 31 MB**. El crawl completo con detalle son del
-  orden de **30-40 h**; diseñarlo resumible con checkpoint por programa. Se puede
-  paralelizar: el SIA aguantó 8 conexiones sin quejarse.
 - Otras sedes: `campus` ya está en el esquema, es iterar.
 - Alertas de cupo: el historial de `seat_snapshot` ya lo soporta.
 

@@ -2,6 +2,7 @@ package sia
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
@@ -95,11 +96,11 @@ func (s *Source) FetchCatalog(ctx context.Context, key catalog.ProgramKey) ([]ca
 
 func (s *Source) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([]catalog.CourseOffering, error) {
 	return Do(ctx, s.pool, func(conn *SIAConn) ([]catalog.CourseOffering, error) {
-		body, err := conn.FetchElectives(ctx, key)
+		bodies, err := conn.FetchElectives(ctx, key)
 		if err != nil {
 			return nil, err
 		}
-		rows, err := ParseList(body)
+		rows, err := electiveRows(bodies)
 		if err != nil {
 			return nil, err
 		}
@@ -107,14 +108,75 @@ func (s *Source) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([]
 	})
 }
 
+// electiveRows unions the listings FetchElectives came back with: one body
+// with the sede wildcard, one per faculty at the levels that have no wildcard.
+// Codes repeat across faculties, so the union is deduped by the caller.
+//
+// A body that has no results table is an EMPTY faculty, not a failure — at
+// doctorado level most faculties have no libre elección at all. The parse
+// error is only returned when nothing at all could be read, which is a real
+// protocol problem.
+func electiveRows(bodies [][]byte) ([]Row, error) {
+	var rows []Row
+	var firstErr error
+	for _, body := range bodies {
+		parsed, err := ParseList(body)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		rows = append(rows, parsed...)
+	}
+	if len(rows) == 0 && firstErr != nil {
+		return nil, firstErr
+	}
+	return rows, nil
+}
+
 func (s *Source) FetchDetail(ctx context.Context, key catalog.ProgramKey, code, term string) (catalog.CourseOffering, error) {
 	return Do(ctx, s.pool, func(conn *SIAConn) (catalog.CourseOffering, error) {
-		return fetchDetail(ctx, conn, key, code, term)
+		return fetchDetail(ctx, conn, key, catalog.CourseRef{Code: code}, term)
 	})
 }
 
-func fetchDetail(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code, term string) (catalog.CourseOffering, error) {
-	row, err := findRow(ctx, conn, key, code)
+// FetchDetails walks several courses of one program over ONE connection.
+// The saving is the re-parking, not the cb1: the _afrRK are renumbered by
+// every Volver (GOTCHAS §4), so the listing is re-read for each course and
+// never cached — that shortcut is what killed the previous project.
+//
+// A per-course failure goes to yield and the batch continues; a dead session
+// (noop) re-bootstraps in place, because a 98-course batch that gives up on
+// the first expiry is a batch that never finishes.
+func (s *Source) FetchDetails(ctx context.Context, key catalog.ProgramKey, refs []catalog.CourseRef, term string,
+	yield func(catalog.CourseOffering, error) error) error {
+	_, err := Do(ctx, s.pool, func(conn *SIAConn) (struct{}, error) {
+		for _, ref := range refs {
+			if err := ctx.Err(); err != nil {
+				return struct{}{}, err
+			}
+			off, ferr := fetchDetail(ctx, conn, key, ref, term)
+			if ferr != nil && isRecoverable(ferr) {
+				rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rebootstrapTimeout)
+				_, berr := conn.Bootstrap(rctx)
+				cancel()
+				if berr == nil {
+					off, ferr = fetchDetail(ctx, conn, key, ref, term)
+				}
+			}
+			if err := yield(off, ferr); err != nil {
+				return struct{}{}, err
+			}
+		}
+		return struct{}{}, nil
+	})
+	return err
+}
+
+func fetchDetail(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, ref catalog.CourseRef, term string) (catalog.CourseOffering, error) {
+	code := ref.Code
+	row, err := findRow(ctx, conn, key, code, ref.Name)
 	if err != nil {
 		return catalog.CourseOffering{}, err
 	}
@@ -138,6 +200,9 @@ func fetchDetail(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, cod
 	if err != nil {
 		return catalog.CourseOffering{}, err
 	}
+	if err := checkDetailCode(d, code); err != nil {
+		return catalog.CourseOffering{}, err
+	}
 
 	course := catalog.Course{
 		CampusCode:  campusCode,
@@ -152,33 +217,90 @@ func fetchDetail(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, cod
 }
 
 // findRow locates code's row key in the program's regular listing, falling
-// back to its electives listing (libre elección never appears in the
-// regular one — GOTCHAS §21). Returns catalog.ErrNotFound if neither has it.
-func findRow(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code string) (Row, error) {
+// back to its electives listing (libre elección never appears in the regular
+// one — GOTCHAS §21). Returns catalog.ErrNotFound if neither has it.
+//
+// With a name it first narrows the listing through it11, which is the single
+// optimisation of fase 2 that is worth a factor of 4: the unfiltered cb1 is
+// 241 KB and the filtered one 15–27 KB, twice per course. It does NOT make
+// the search faster — 0.5–0.9 s either way (measured) — it makes it lighter
+// on a public university server.
+//
+// Two traps, both of the GOTCHAS §33 family:
+//
+//   - the filter can return several rows: the row is picked by CODE, never
+//     by position;
+//   - it11 stays put on the connection, so an unfiltered catalog fetched
+//     right after a filtered detail would come back silently trimmed. The
+//     form state carries it11 on every POST, so clearing the field IS the
+//     reset — and it happens here, inside the logical operation, with the
+//     same criterion by which FetchCatalog reposts soc4.
+func findRow(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code, name string) (Row, error) {
+	if name != "" {
+		conn.form.Nombre = name
+		row, err := findRowInListings(ctx, conn, key, code)
+		conn.form.Nombre = "" // see above: never leave the filter behind
+		if err == nil {
+			return row, nil
+		}
+		// 0 rows, a parse failure, or a code the filter did not match
+		// (accents, odd names) all fall through to the full listings.
+	}
+	return findRowInListings(ctx, conn, key, code)
+}
+
+// findRowInListings looks for code in the regular listing and then in the
+// electives one, with whatever it11 filter the caller has set. Both halves are
+// searched under the filter: the electives listing is the biggest single
+// response the SIA serves (~240–320 KB, and libre elección courses are only
+// ever found there), so filtering just the regular half would leave most of
+// the bytes on the table.
+func findRowInListings(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code string) (Row, error) {
 	if body, err := conn.FetchCatalog(ctx, key); err == nil {
 		if rows, perr := ParseList(body); perr == nil {
-			for _, r := range rows {
-				if r.Code == code {
-					return r, nil
-				}
+			if r, ok := rowWithCode(rows, code); ok {
+				return r, nil
 			}
 		}
 	}
 
-	body, err := conn.FetchElectives(ctx, key)
+	bodies, err := conn.FetchElectives(ctx, key)
 	if err != nil {
 		return Row{}, err
 	}
-	rows, err := ParseList(body)
+	rows, err := electiveRows(bodies)
 	if err != nil {
 		return Row{}, err
 	}
-	for _, r := range rows {
-		if r.Code == code {
-			return r, nil
-		}
+	if r, ok := rowWithCode(rows, code); ok {
+		return r, nil
 	}
 	return Row{}, catalog.ErrNotFound
+}
+
+// checkDetailCode compares the code the detail page printed with the one we
+// asked for. They can only differ for reasons that all end in silently
+// plausible data: two POSTs interleaved on one connection (GOTCHAS §28), an
+// _afrRK read from a stale render (§4), or a row picked by position. There is
+// no benign case, so it is an error and not a warning.
+//
+// A header that did not parse is left alone: the detail is still usable, and
+// turning a header-regex miss into a hard failure would break the API over a
+// cosmetic change to the page.
+func checkDetailCode(d Detail, code string) error {
+	if d.HeaderCode == "" || d.HeaderCode == code {
+		return nil
+	}
+	return fmt.Errorf("%w: asked for %s, the detail page says %s", catalog.ErrSuspectRun, code, d.HeaderCode)
+}
+
+func rowWithCode(rows []Row, code string) (Row, bool) {
+	for _, r := range rows {
+		if r.Code == code {
+			return r, true
+		}
+	}
+	return Row{}, false
 }
 
 func offeringsFromRows(rows []Row, key catalog.ProgramKey) []catalog.CourseOffering {

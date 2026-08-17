@@ -347,16 +347,27 @@ func (c *SIAConn) postValueChangeFresh(ctx context.Context, id string, cur *stri
 }
 
 // FetchElectives runs the 9-step electives cascade (soc1,soc9,soc2,soc3,
-// soc4=7,soc5,soc10,soc6,cb1) and returns the campus-wide libre elección
-// listing. campus-wide because soc6 has a per-sede faculty wildcard — there
-// is no per-program equivalent (PROTOCOL.md §5). Skipping soc10 before soc6
-// produces silent garbage (GOTCHAS §5 of PROTOCOL.md); this always runs both.
+// soc4=7,soc5,soc10,soc6,cb1) and returns ONE LISTING BODY PER SEARCH it had
+// to make. Skipping soc10 before soc6 produces silent garbage (GOTCHAS §5 of
+// PROTOCOL.md); this always runs both.
+//
+// Usually one body: soc6 carries a per-sede "whole campus" wildcard and a
+// single search covers every faculty (PROTOCOL.md §5). But the wildcard is
+// LEVEL-dependent, and at doctorado level it does not exist in ANY sede —
+// measured 2026-08-17 against Bogotá, Medellín and Palmira, where soc6 lists
+// only faculties. There the campus-wide listing is the UNION of one search per
+// faculty, which is what the extra bodies are.
+//
+// Treating the missing wildcard as an error (which it used to be) made the
+// catalog of every doctorado plan unfetchable: ~82 plans answering 5xx through
+// the API, and failing programs in the sweep. The wildcard is an optimisation,
+// not the mechanism.
 //
 // soc4 and soc5 post the same value on every call, and soc10/soc6 repeat
 // whenever two consecutive requests target the same sede — so the second
 // time a pooled connection is reused they would repost unchanged and noop
 // (GOTCHAS §30) without postValueChangeFresh's bounce.
-func (c *SIAConn) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([]byte, error) {
+func (c *SIAConn) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([][]byte, error) {
 	// soc4=7 is a value CHANGE on top of an already-parked program: run the
 	// regular cascade first so soc1..soc3 are populated, then switch soc4.
 	if err := c.gotoProgram(ctx, key); err != nil {
@@ -384,23 +395,36 @@ func (c *SIAConn) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([
 		return nil, err
 	}
 
-	// soc10's response carries the sede's own soc6 list. The wildcard's
-	// position is read from it, never assumed — see campusWildcardPrefix.
-	wildcard, alt, err := electivesWildcard(env)
+	// soc10's response carries the sede's own soc6 list. Every position is
+	// read from it, never assumed — see campusWildcardPrefix.
+	targets, err := electivesTargets(env)
 	if err != nil {
-		return nil, err
-	}
-	if _, _, err := c.postValueChangeFresh(ctx, "pt1:r1:0:soc6", &c.navFacElect,
-		wildcard, alt, func(v string) { c.form.FacElect = v }); err != nil {
 		return nil, err
 	}
 
-	body, _, err := c.postAction(ctx, "pt1:r1:0:cb1", "")
-	if err != nil {
-		return nil, err
+	bodies := make([][]byte, 0, len(targets))
+	var lastNoop error
+	for _, t := range targets {
+		if _, _, err := c.postValueChangeFresh(ctx, "pt1:r1:0:soc6", &c.navFacElect,
+			t.value, t.alt, func(v string) { c.form.FacElect = v }); err != nil {
+			return nil, err
+		}
+		body, _, err := c.postAction(ctx, "pt1:r1:0:cb1", "")
+		if err != nil {
+			return nil, err
+		}
+		if isNoop(body) {
+			// With the wildcard there is one search and a no-op is the honest
+			// answer. Per faculty it is ambiguous — a faculty with no libre
+			// elección at this level looks the same as a dead session — so it
+			// is remembered and only reported if EVERY search no-ops.
+			lastNoop = newNoopError(body)
+			continue
+		}
+		bodies = append(bodies, body)
 	}
-	if isNoop(body) {
-		return nil, newNoopError(body)
+	if len(bodies) == 0 && lastNoop != nil {
+		return nil, lastNoop
 	}
 
 	// NOTE: soc4 is deliberately NOT reset here. Writing c.form.Tipologia
@@ -409,38 +433,51 @@ func (c *SIAConn) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([
 	// FetchCatalog no-op. FetchCatalog now posts the real change itself, and
 	// navTipologia keeps saying the truth: this connection is on soc4=7.
 
-	return body, nil
+	return bodies, nil
 }
 
-// electivesWildcard finds the "whole sede" option in the soc6 list a soc10
-// response just rendered, and a different option to bounce through when the
-// connection already sits on it (GOTCHAS §30). Both are positions in THIS
-// sede's list, so both are read from THIS response.
-func electivesWildcard(env map[string]string) (wildcard, alt string, err error) {
+// electivesTarget is one soc6 search to run: the position to post, plus a
+// different position to bounce through when the connection already sits on it
+// (GOTCHAS §30). Both are positions in THIS sede's list at THIS level.
+type electivesTarget struct{ value, alt string }
+
+// electivesTargets decides which soc6 searches cover the sede's libre
+// elección: the wildcard alone when the sede offers one at this level, every
+// faculty otherwise. See FetchElectives for why the second case exists.
+func electivesTargets(env map[string]string) ([]electivesTarget, error) {
 	html, ok := env["pt1:r1:0:soc6"]
 	if !ok {
-		return "", "", fmt.Errorf("sia: FetchElectives: no update id=%q in the soc10 response", "pt1:r1:0:soc6")
+		return nil, fmt.Errorf("sia: FetchElectives: no update id=%q in the soc10 response", "pt1:r1:0:soc6")
 	}
 	opts, err := parseOptionsHTML(html)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
-	idx := -1
+	if len(opts) < 2 {
+		// One option means there is nothing to bounce through, so a repeated
+		// request could not be told apart from a dead session.
+		return nil, fmt.Errorf("sia: FetchElectives: soc6 has %d options, need at least 2", len(opts))
+	}
+
+	alt := func(idx int) string {
+		for _, o := range opts {
+			if o.Index != idx {
+				return strconv.Itoa(o.Index)
+			}
+		}
+		return "" // unreachable: len(opts) >= 2
+	}
 	for _, o := range opts {
 		if strings.HasPrefix(o.Name, campusWildcardPrefix) {
-			idx = o.Index
-			break
+			return []electivesTarget{{value: strconv.Itoa(o.Index), alt: alt(o.Index)}}, nil
 		}
 	}
-	if idx == -1 {
-		return "", "", fmt.Errorf("sia: FetchElectives: no %q wildcard among %d soc6 options", campusWildcardPrefix, len(opts))
-	}
+
+	targets := make([]electivesTarget, 0, len(opts))
 	for _, o := range opts {
-		if o.Index != idx {
-			return strconv.Itoa(idx), strconv.Itoa(o.Index), nil
-		}
+		targets = append(targets, electivesTarget{value: strconv.Itoa(o.Index), alt: alt(o.Index)})
 	}
-	return "", "", fmt.Errorf("sia: FetchElectives: soc6 has only the wildcard, no option to bounce through")
+	return targets, nil
 }
 
 // detailRegionFrom finds the numbered "Volver" button id in a detail

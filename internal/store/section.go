@@ -120,13 +120,28 @@ func (s *Store) UpsertDetail(ctx context.Context, programID int64, offering cata
 			}
 
 			if sec.Seats != nil {
+				// Dedupe: a snapshot only when the NUMBER changed. The
+				// measurement itself is always recorded, on
+				// section.seats_checked_at — sin esa columna, no insertar
+				// haría que el dato pareciera viejo y el read-through lo
+				// volviera a pedir (docs/FASE-2.md "Cupos").
 				if _, err := tx.Exec(ctx, `
 					INSERT INTO seat_snapshot (section_id, available_seats, measured_at)
-					VALUES ($1, $2, $3)
+					SELECT $1, $2, $3
+					WHERE NOT EXISTS (
+						SELECT 1 FROM current_seats cs
+						WHERE cs.section_id = $1 AND cs.available_seats = $2
+					)
 					ON CONFLICT (section_id, measured_at) DO NOTHING`,
 					sectionID, sec.Seats.Available, sec.Seats.MeasuredAt,
 				); err != nil {
 					return fmt.Errorf("seat_snapshot %s: %w", sec.Key, err)
+				}
+				if _, err := tx.Exec(ctx,
+					`UPDATE section SET seats_checked_at = $2 WHERE id = $1`,
+					sectionID, sec.Seats.MeasuredAt,
+				); err != nil {
+					return fmt.Errorf("seats_checked_at %s: %w", sec.Key, err)
 				}
 			}
 		}

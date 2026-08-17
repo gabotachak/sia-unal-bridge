@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
@@ -61,6 +62,12 @@ type SIAConn struct {
 	// detail opened in the session. Never hardcode it. GOTCHAS §20.
 	DetailRegion int
 
+	// Traffic counters, atomic because Pool.Stats reads them from another
+	// goroutine while this connection is checked out. They are the courtesy
+	// budget made visible: "18.8 MB/min por worker" is a number this
+	// project has to keep an eye on (docs/FASE-2.md "Riesgos").
+	posts, bytes atomic.Int64
+
 	LastUsed time.Time
 }
 
@@ -104,6 +111,7 @@ func (c *SIAConn) Bootstrap(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sia: bootstrap: read body: %w", err)
 	}
+	c.bytes.Add(int64(len(body)))
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("sia: bootstrap: status %d", resp.StatusCode)
 	}
@@ -150,6 +158,8 @@ func (c *SIAConn) post(ctx context.Context, values url.Values) ([]byte, map[stri
 	if err != nil {
 		return nil, nil, fmt.Errorf("sia: post: read body: %w", err)
 	}
+	c.posts.Add(1)
+	c.bytes.Add(int64(len(body)))
 	if resp.StatusCode != http.StatusOK {
 		return nil, nil, fmt.Errorf("sia: post: status %d", resp.StatusCode)
 	}

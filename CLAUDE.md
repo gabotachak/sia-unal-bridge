@@ -9,10 +9,11 @@ Nacional de Colombia). El SIA solo expone el catálogo mediante una app Oracle A
 estado de sesión en servidor y navegación por POSTs de formulario encadenados. Este
 proyecto traduce eso a JSON.
 
-**Estado: API en pie.** Read-through de referencia, catálogo, detalle y cupos, sobre
-Postgres. La ingeniería inversa del protocolo está completa y verificada contra
-producción (2026-08-15), igual que el funcionamiento multi-sede (Bogotá, Medellín,
-Amazonia).
+**Estado: API en pie + fase 2 (`Refresher`) implementada.** Read-through de referencia,
+catálogo, detalle y cupos sobre Postgres, y un Job por cron que llena la cache antes de
+que un cliente pague el miss. La ingeniería inversa del protocolo está completa y
+verificada contra producción (2026-08-15, ampliada el 2026-08-17), igual que el
+funcionamiento multi-sede (Bogotá, Medellín, Amazonia, Palmira, La Paz).
 
 **La sede es un segmento obligatorio de la ruta**: `/v1/campuses/{campus}/…`. No hay
 sede ni nivel privilegiado en el código; las dos listas salen de sus dropdowns y se
@@ -27,11 +28,12 @@ cachean como cualquier otra referencia.
 
 ## Antes de escribir código
 
-Lee **`docs/GOTCHAS.md`** completo. No es opcional. Son 33 trampas verificadas contra
+Lee **`docs/GOTCHAS.md`** completo. No es opcional. Son 36 trampas verificadas contra
 el servidor real, varias de las cuales fallan **en silencio** (devuelven datos
 plausibles pero equivocados). El proyecto anterior murió por asumir mal cuatro de ellas.
 
-Las cuatro que más código han roto:
+Las cuatro que más código han roto (y §34–§36, que las destapó el Job de la fase 2 en
+sedes y niveles que la API nunca había recorrido):
 
 1. **La región de detalle está numerada y el número sube.** Volver es
    `pt1:r1:<N>:cb4`, con `N` leído de la respuesta del detalle. Con `1` fijo, la
@@ -51,13 +53,13 @@ Las cuatro que más código han roto:
 | Ruta | Qué hay |
 |---|---|
 | `docs/PLAN.md` | **Plan de implementación: pasos, criterios de aceptación, fixtures** |
-| `docs/FASE-2.md` | **Plan de la fase 2: el Job que baja todo el SIA, concurrencia y cadencia** |
+| `docs/FASE-2.md` | **La fase 2: el Job, su concurrencia, su cadencia y lo medido al implementarla** |
 | `docs/ARCH.md` | Arquitectura: puertos, read-through, pool de sesiones, concurrencia |
 | `docs/API.md` | Contrato HTTP: endpoints, IDs públicos, frescura, errores |
 | `docs/LAYOUT.md` | Árbol de paquetes Go y librerías — propuesta, sin implementar |
 | `docs/PROTOCOL.md` | Handshake ADF completo con cuerpos de petición reales |
 | `docs/FIELDS.md` | Componentes ADF, opciones de cada dropdown, mapeo a columnas |
-| `docs/GOTCHAS.md` | Las 33 trampas |
+| `docs/GOTCHAS.md` | Las 36 trampas |
 | `docs/DATA-MODEL.md` | Esquema Postgres + structs de Go |
 | `docs/OPEN-QUESTIONS.md` | Qué está verificado y qué no. Léelo antes de asumir |
 | `docs/DEVELOPMENT.md` | Entorno: Docker, Postgres, cómo replicar el flujo |
@@ -66,8 +68,15 @@ Las cuatro que más código han roto:
 
 ## Arquitectura acordada
 
-Hexagonal. Un puerto driving (`API`), dos driven (`Store` Postgres, `SIASource` ADF),
-y un `Refresher` aplazado a fase 2.
+Hexagonal. Dos puertos driving (`API` y `Refresher`) y dos driven (`Store` Postgres,
+`SIASource` ADF).
+
+El `Refresher` **no escribe en la base**: entra por los mismos casos de uso que `httpapi`
+(`catalog.Service`), así que hay un solo upsert de catálogo y no dos que se
+desincronicen. Levanta **su propio pool** de conexiones, y la invariante que no se negocia
+es `conexiones(api) + conexiones(refresher) ≤ 8`. Su checkpoint son los marcadores de
+frescura, no un cursor: reanudar es volver a correr, y dos corridas seguidas no hacen ni
+un POST.
 
 Flujo principal: **read-through**. Si está en cache y fresco se sirve; si no, se
 consulta al SIA, se responde al cliente y se persiste.

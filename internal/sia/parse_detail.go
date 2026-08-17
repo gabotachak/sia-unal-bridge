@@ -16,7 +16,16 @@ import (
 // list; ProgramName/ProgramFaculty are the context the detail was fetched
 // from, not part of the persisted schema.
 type Detail struct {
-	Code           string
+	Code string
+
+	// HeaderCode is the code the DETAIL page itself printed, next to the
+	// name: "Álgebra Lineal (1000003-B)". It is the only self-describing
+	// field in the whole response, so it is the only way to notice that this
+	// detail belongs to a different course than the one we clicked — the
+	// silent shape of GOTCHAS §28 (cross-talk on a shared connection) and of
+	// a stale _afrRK (§4). Empty when the header did not parse.
+	HeaderCode string
+
 	Name           string
 	Typology       string // detail vocabulary, e.g. 'ELEGIBLES' — differs from the listing's. GOTCHAS §17.
 	Credits        int
@@ -87,6 +96,7 @@ func ParseDetail(raw []byte, campusCode, code, term string) (Detail, error) {
 	d := Detail{Code: code}
 	if m := headerRe.FindStringSubmatch(text); m != nil {
 		d.Name = strings.TrimSpace(m[1])
+		d.HeaderCode = strings.TrimSpace(m[2])
 		d.Typology = strings.TrimSpace(m[3])
 		if n, err := strconv.Atoi(m[4]); err == nil {
 			d.Credits = n

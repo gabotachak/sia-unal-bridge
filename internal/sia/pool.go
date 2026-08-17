@@ -42,6 +42,12 @@ type Pool struct {
 	baseURL string
 	conns   chan *SIAConn
 	size    int
+
+	// all is every connection the pool owns, checked out or not — the
+	// channel only holds the idle ones, so it cannot answer "how much
+	// traffic did this process generate". Written once at construction,
+	// read-only afterwards.
+	all []*SIAConn
 }
 
 // NewPool bootstraps size connections SEQUENTIALLY — never fan them out in
@@ -60,9 +66,21 @@ func NewPool(ctx context.Context, baseURL string, size int) (*Pool, error) {
 		if _, err := c.Bootstrap(ctx); err != nil {
 			return nil, fmt.Errorf("sia: pool: bootstrap conn %d: %w", i, err)
 		}
+		p.all = append(p.all, c)
 		p.conns <- c
 	}
 	return p, nil
+}
+
+// Stats reports the traffic this pool has generated: POSTs made and bytes
+// read (bootstraps included). It is what refresh_run stores and what makes
+// the courtesy budget of docs/FASE-2.md auditable instead of estimated.
+func (p *Pool) Stats() (posts, bytes int64) {
+	for _, c := range p.all {
+		posts += c.posts.Load()
+		bytes += c.bytes.Load()
+	}
+	return posts, bytes
 }
 
 // Acquire blocks until a connection is free or ctx is done. The release

@@ -9,6 +9,11 @@ Mismo formato que [`PLAN.md`](PLAN.md): pasos con criterio de aceptación. La
 justificación de cada número vive en el documento que lo midió; aquí solo está el
 enlace.
 
+> **Estado: implementada y verificada contra producción el 2026-08-17.**
+> `internal/refresher` + `cmd/refresher`, migración `00002`, los cuatro modos, `/v1/status`
+> y el crontab de `deploy/cron.d/sia-refresher`. Lo medido y las desviaciones respecto a
+> este plan están al final, en [Resultado](#resultado-2026-08-17).
+
 | Documento | Para qué lo abres |
 |---|---|
 | [`GOTCHAS.md`](GOTCHAS.md) | **§28, §30, §31, §33 son las que rompen un crawler** |
@@ -523,6 +528,60 @@ Al cerrar esta fase hay que tocar, y conviene hacerlo en el mismo PR que el cód
 | [`LAYOUT.md`](LAYOUT.md) | `internal/refresher` y `cmd/refresher` dejan de ser una nota al pie |
 | [`GOTCHAS.md`](GOTCHAS.md) | §34 si `it11` deja estado pegado, que es lo que el paso 3 espera encontrar |
 | [`PLAN.md`](PLAN.md) | el esbozo de "Fase 2" apunta acá |
+
+---
+
+---
+
+## Resultado (2026-08-17)
+
+Medido contra producción, no estimado.
+
+| Barrido | Medido | El plan decía |
+|---|---|---|
+| `reference` (todos los niveles × sedes) | 27 directorios, 1380 entradas, **131 POSTs, 72 s** | 142 POSTs, 78 s |
+| `reference`, segunda corrida | **0 POSTs, <1 s** — todo fresco | criterio del paso 1 ✔ |
+| `catalog` (SEDE DE LA PAZ, 9 planes) | 468 asignaturas, 114 POSTs, **39 s** con 2 workers | ~13 POSTs/plan ✔ |
+| `catalog` (Palmira, 27 planes) | 16 recorridos + **11 saltados** tras un `SIGINT`: cero repeticiones | criterio del paso 2 ✔ |
+| `it11` en el listado | 232 675 B → **17 862 B (13×)**, misma fila encontrada por código | 241 KB → 15–27 KB ✔ |
+| `detail --scope=global` | **~0.7 asignaturas/s/worker**, ~3.7 POSTs y **~87 KB** por asignatura | ~1/s, ~2 POSTs, ~68 KB |
+| `FetchDetails` por lote | 24 POSTs contra **28** de llamadas sueltas intercaladas (6 asignaturas, 2 planes) | "menos POSTs" ✔ |
+| `seats --scope=hot` | 5 asignaturas en 24 s; segundo barrido: **0 filas nuevas** en `seat_snapshot`, `seats_checked_at` refrescado en las 244 secciones | criterio del paso 6 ✔ |
+| Bogotá, `detail` a mitad | **201 de 505 planes saltados** porque otro plan ya había traído sus asignaturas | la aritmética de las 3 h ✔ |
+
+`-race` limpio con W=4 sobre programas concurrentes. `REFRESH_ENABLED=false` sale con
+código 0 y un log **sin abrir una conexión al SIA**. Dos corridas del mismo modo: la
+segunda sale con código 0 por el `pg_try_advisory_lock`.
+
+### Lo que el Job destapó (y era de la API también)
+
+Tres trampas nuevas, las tres en rutas que la API podía recorrer y nunca había recorrido:
+[GOTCHAS §34](GOTCHAS.md) (`it11` se queda en el formulario y recorta el siguiente
+listado), [§35](GOTCHAS.md) (**en doctorado no existe el comodín de sede**, así que el
+catálogo de ~82 planes era `502`) y [§36](GOTCHAS.md) (el nombre del listado venía pegado
+a la insignia `ASIGNATURA SIN PROGRAMAR`, y ese texto llegaba a `course.name`).
+
+Era la predicción explícita de este documento: *"cualquier bug de persistencia que el job
+destape es un bug que la API también tenía. Eso es una feature."*
+
+### Desviaciones deliberadas del plan
+
+| Plan | Implementado | Por qué |
+|---|---|---|
+| `CoursesNeedingDetail(...) ([]string, error)` | devuelve `[]CourseRef` con `Name` y `HadSections` | el nombre es lo que filtra `it11`, y sin él el paso 3 no aplica al barrido; `HadSections` es lo que hace honesta la aserción de 0 grupos |
+| `plan.go`, `worker.go`, `hotset.go` como archivos | fundidos en `refresher.go` y `modes.go` | tres archivos de ~40 líneas cada uno no se buscan mejor que dos de ~250 |
+| Aserción *"`_afrRK` idéntico entre dos búsquedas"* | **no implementada** | con `it11` una búsqueda filtrada devuelve 1–3 filas y el renumerado puede repetir la clave legítimamente: la aserción abortaría barridos válidos. La invariante real —nunca cachear un `_afrRK`— se sostiene en el código y en `TestLive_FetchDetails_TwoWorkersDoNotCrossTalk` |
+| Aserción *">90 % con 0 grupos = el parser"* | solo sobre las asignaturas que **ya tenían** grupos | SEDE DE LA PAZ responde 0 grupos en todas sus asignaturas, y es verdad. La primera versión falló dos de sus planes por decir la verdad |
+| — | **añadido**: el detalle verifica el código que la propia página imprime | es gratis (el regex del encabezado ya lo capturaba y lo tiraba) y es el único detector directo de §28/§4: un detalle bien formado que habla de otra asignatura |
+
+### Números que este plan estimaba de más
+
+- **POSTs por asignatura: ~3.7, no ~2.** El plan contaba el `cb1` de `findRow` más el
+  detalle; faltaban el `soc3` de reparqueo, el `Volver` y —para las de libre elección— la
+  cascada de electivas completa, que con las rebotes de §30 son 8 POSTs.
+- **Bytes por asignatura: ~87 KB, no ~68 KB**, por lo mismo. Aun así el filtro bajó el
+  barrido de ~366 KB a ~87 KB por asignatura (4.2×) al aplicarlo también al listado de
+  electivas, que es el más gordo de los dos.
 
 ---
 

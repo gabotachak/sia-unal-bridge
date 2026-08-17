@@ -1,10 +1,14 @@
 # Trampas verificadas
 
-Cada punto fue comprobado contra el servidor de producción el **2026-08-15**.
+Cada punto fue comprobado contra el servidor de producción el **2026-08-15**, y las tres
+últimas (§34–§36) el **2026-08-17**, implementando la fase 2.
 Varios contradicen lo que asumía el proyecto anterior (`BetterCampus/sia-scraper`).
 
 Léelo antes de escribir código.
 
+> §34-§36 las destapó el `Refresher` al recorrer sedes y niveles que la API nunca había
+> tocado. Las tres eran bugs de la API tambien, no del Job.
+>
 > §20-§28 salen de la segunda ronda de experimentos (2026-08-15, tarde). Las dos caras
 > de descubrir por tu cuenta son la §20 —se disfraza de sesión colgada— y la §27, que
 > no se nota nunca: simplemente faltan grupos.
@@ -822,3 +826,101 @@ fresco (§4), así que el fallo aparece al pedir cupos y parece un problema de c
 `sia/cascade.go`: `FetchCatalog`. Verificado con
 `TestLive_CatalogAfterElectivesOnSameConn`, que hace electivas y luego catálogo sobre la
 misma conexión y el mismo plan: 98 filas donde antes había un no-op.
+
+---
+
+## 34. `it11` viaja en el estado del formulario: si no lo limpias, recorta el siguiente listado
+
+Descubierta implementando la fase 2 (2026-08-17). El filtro por nombre es lo que hace
+barato el barrido de detalle: el `cb1` sin filtrar son **232 KB** y con filtro **17.8 KB**
+sobre el mismo plan — **13× menos** (medido, Ingeniería de Sistemas, Bogotá).
+
+La trampa no es el servidor, es el formulario. `it11` va en **cada POST** junto con los
+nueve `soc*` ([PROTOCOL §2](PROTOCOL.md)), así que una conexión que filtró y vuelve al
+pool con `form.Nombre` puesto convierte el **siguiente catálogo completo** en un listado
+recortado: ~3 filas plausibles donde debían ir 98. Nadie ve un error; se guarda un
+catálogo mutilado y se marca fresco.
+
+Es la familia del §33 con la causa invertida:
+
+| | §33 (`soc4`) | §34 (`it11`) |
+|---|---|---|
+| Dónde vive el estado | en el **servidor** | en el **formulario** |
+| Por qué falla | escribir `form` no cambia el servidor | escribir `form` **sí** llega, y se queda |
+| Cómo se limpia | posteando el `valueChange` real | poniendo el campo en `""` |
+
+**Cómo se resuelve:** limpiarlo es parte de la operación lógica, no de la buena educación
+del llamador. `findRow` pone `form.Nombre`, hace su búsqueda y lo borra en la misma
+función, tanto en el listado regular como en el de electivas — que es el más caro de los
+dos (~240–320 KB) y el único donde viven las de libre elección.
+
+Y el filtro puede devolver **varias filas**: la fila se elige por **código**, jamás por
+posición. Si el código no aparece (acentos, nombres raros), se repite la búsqueda sin
+filtro; el filtro es una optimización, no la fuente de verdad.
+
+`sia/source.go`: `findRow`, `findRowInListings`. Verificado con
+`TestLive_NameFilterShrinksTheListingAndDoesNotStick`: filtra, comprueba que la fila está,
+y exige que el listado inmediatamente posterior vuelva a traer las 98 filas.
+
+---
+
+## 35. El comodín "toda la sede" de `soc6` NO EXISTE en doctorado
+
+Medido 2026-08-17, en las tres sedes con doctorado que se probaron:
+
+| Sede | Nivel | Opciones `soc6` | Comodín `SEDE …` |
+|---|---|---|---|
+| Bogotá | pregrado | 13 | sí, índice 12 |
+| Bogotá | posgrado | 13 | sí, índice 12 |
+| Bogotá | **doctorado** | **11** | **no** |
+| Medellín | **doctorado** | **6** | **no** |
+| Palmira | pregrado | 4 | sí, índice 3 |
+| Palmira | **doctorado** | **2** | **no** |
+
+El §32 dice que la posición del comodín es por sede. Es más que eso: su **existencia** es
+por *(sede, nivel)*. En doctorado `soc6` lista solo facultades.
+
+Tratar su ausencia como error —que es lo que hacía el código— dejaba el catálogo de
+**~82 planes de doctorado** inservible: `502` por la API y programas fallidos en el
+barrido. El síntoma es un error explícito y honesto (`no "SEDE " wildcard among 2 soc6
+options`), así que no es de los silenciosos; pero se descubrió porque el Job lo destapó
+en Palmira, no por la API. La fase 2 predijo exactamente eso: *"cualquier bug de
+persistencia que el job destape es un bug que la API también tenía"*.
+
+**Cómo se resuelve:** el comodín es una **optimización, no el mecanismo**. Cuando existe,
+una búsqueda cubre la sede; cuando no, el listado de la sede es la **unión de una búsqueda
+por facultad** (Palmira doctorado: 186 + 21 = 207 filas, 76 tras dedupe). Por eso
+`FetchElectives` devuelve `[][]byte` — un cuerpo por búsqueda — y no un cuerpo solo.
+
+Con la unión aparece un caso nuevo: una facultad **sin** libre elección. Un no-op ahí es
+ambiguo (§6/§7), así que se recuerda y solo se reporta si **todas** las búsquedas dan
+no-op; si alguna trajo filas, la sesión está viva y las vacías son vacías de verdad.
+
+`sia/cascade.go`: `electivesTargets`. Verificado con
+`TestLive_FetchElectives_LevelWithoutSedeWildcard`.
+
+---
+
+## 36. El nombre de la asignatura en el listado viene pegado a una insignia
+
+En la celda `c2` del listado, una asignatura sin programar mete un cartel **dentro del
+mismo `<td>`**:
+
+```html
+<td id="...:c2"><span class="af_column_data-container">
+  <span title="">Complemento a teoría de la computación </span>
+  <div></div>ASIGNATURA SIN PROGRAMAR
+</span></td>
+```
+
+Leer el texto de la celda entera los pega: `"Complemento a teoría de la
+computaciónASIGNATURA SIN PROGRAMAR"`. Eso llegaba a la columna `course.name` — dato
+plausible y equivocado, del tipo que este dominio produce sin avisar — y además rompía el
+filtro del §34, que busca por el nombre que tenemos guardado.
+
+**Cómo se resuelve:** el nombre está en el `<span title="">` más interno, no en la celda.
+`parse_list.go` lee `td[id$=":c2"] span[title]` y solo cae al texto completo de la celda
+si eso no existe.
+
+`sia/parse_list.go`: `ParseList`. Verificado con
+`TestParseList_NameExcludesTheUnscheduledBadge` sobre el fixture del 2026-08-15.

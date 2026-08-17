@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -8,6 +9,19 @@ import (
 
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
+
+// recordDemand counts that a CLIENT asked for this course — the signal the
+// Refresher's seats hot set is built from. It lives here because httpapi is
+// the only adapter that knows there is a person on the other side: if the job
+// fed this counter, the hot set would just be a list of everything the job
+// already swept (docs/FASE-2.md "Cupos").
+//
+// Best-effort on purpose: failing to count must never fail the response.
+func (a *api) recordDemand(c *gin.Context, campusCode, code string) {
+	if err := a.svc.RecordDemand(c.Request.Context(), campusCode, code); err != nil {
+		slog.Warn("httpapi: could not record demand", "campus", campusCode, "code", code, "err", err)
+	}
+}
 
 func (a *api) courseDetail(c *gin.Context) {
 	program, err := a.resolveProgram(c)
@@ -20,6 +34,8 @@ func (a *api) courseDetail(c *gin.Context) {
 		badRequest(c, "invalid max_age")
 		return
 	}
+
+	a.recordDemand(c, program.CampusCode, code)
 
 	if a.refreshBlocked(c, program, code, maxAge) {
 		return
@@ -51,6 +67,8 @@ func (a *api) courseSections(c *gin.Context) {
 		return
 	}
 
+	a.recordDemand(c, program.CampusCode, code)
+
 	if a.refreshBlocked(c, program, code, maxAge) {
 		return
 	}
@@ -81,6 +99,8 @@ func (a *api) courseSection(c *gin.Context) {
 		badRequest(c, "invalid max_age")
 		return
 	}
+
+	a.recordDemand(c, program.CampusCode, code)
 
 	if a.refreshBlocked(c, program, code, maxAge) {
 		return
@@ -120,6 +140,8 @@ func (a *api) sectionSeats(c *gin.Context) {
 		return
 	}
 
+	a.recordDemand(c, program.CampusCode, code)
+
 	if a.refreshBlocked(c, program, code, maxAge) {
 		return
 	}
@@ -136,11 +158,18 @@ func (a *api) sectionSeats(c *gin.Context) {
 
 	now := time.Now()
 	setFreshnessHeaders(c, res, now.Sub(section.Seats.MeasuredAt), resolveMaxAge(maxAge, catalog.FreshnessSeats))
-	c.JSON(http.StatusOK, gin.H{
+	body := gin.H{
 		"key": section.Key, "number": section.Number,
 		"available": section.Seats.Available, "measured_at": section.Seats.MeasuredAt,
 		"age_seconds": int(now.Sub(section.Seats.MeasuredAt).Seconds()),
-	})
+	}
+	// measured_at/age_seconds keep their meaning — "de cuándo es este
+	// número". changed_at is the new, additive datum: when the number last
+	// actually moved (docs/FASE-2.md "Cupos").
+	if section.Seats.ChangedAt != nil {
+		body["changed_at"] = *section.Seats.ChangedAt
+	}
+	c.JSON(http.StatusOK, body)
 }
 
 func findSection(sections []catalog.Section, key string) (catalog.Section, bool) {
@@ -191,10 +220,14 @@ func sectionJSON(s catalog.Section, now time.Time) gin.H {
 	}
 	h["schedule"] = schedule
 	if s.Seats != nil {
-		h["seats"] = gin.H{
+		seats := gin.H{
 			"available": s.Seats.Available, "measured_at": s.Seats.MeasuredAt,
 			"age_seconds": int(now.Sub(s.Seats.MeasuredAt).Seconds()),
 		}
+		if s.Seats.ChangedAt != nil {
+			seats["changed_at"] = *s.Seats.ChangedAt
+		}
+		h["seats"] = seats
 	}
 	return h
 }

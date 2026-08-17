@@ -239,9 +239,33 @@ func (f *fakeStore) ProgramCoverage(context.Context, string) (int, int, error) {
 	return 0, 0, nil
 }
 
+// Fase 2's port additions. Stubs: the sweeps themselves are covered in
+// internal/refresher, these only keep fakeStore satisfying catalog.Store.
+func (f *fakeStore) CoursesNeedingDetail(context.Context, int64, time.Duration) ([]CourseRef, error) {
+	return nil, nil
+}
+func (f *fakeStore) CoursesNeedingVisibility(context.Context, int64, time.Duration) ([]CourseRef, error) {
+	return nil, nil
+}
+func (f *fakeStore) SeatsHotSet(context.Context, string, int) ([]CourseRef, error) { return nil, nil }
+func (f *fakeStore) RecordDemand(context.Context, string, string) error            { return nil }
+func (f *fakeStore) StartRun(context.Context, string, string) (int64, error)       { return 1, nil }
+func (f *fakeStore) FinishRun(context.Context, RefreshRun) error                   { return nil }
+func (f *fakeStore) LastRuns(context.Context) ([]RefreshRun, error)                { return nil, nil }
+func (f *fakeStore) TryLock(context.Context, string) (func(), bool, error) {
+	return func() {}, true, nil
+}
+
 // fakeSIA counts calls per key so tests can assert singleflight dedup.
 type fakeSIA struct {
-	delay          time.Duration
+	delay time.Duration
+
+	// catalogRows overrides the regular listing's size — 1000 is the SIA's
+	// truncation cap (GOTCHAS §14); catalogEmpty makes it come back with no
+	// rows at all, which is what a dirty soc4 or a re-painted page looks like.
+	catalogRows  int
+	catalogEmpty bool
+
 	detailCalls    atomic.Int64
 	catalogCalls   atomic.Int64
 	electiveCalls  atomic.Int64
@@ -304,6 +328,16 @@ func (f *fakeSIA) FetchProgramDirectory(_ context.Context, _, campusIdx int) ([]
 func (f *fakeSIA) FetchCatalog(context.Context, ProgramKey) ([]CourseOffering, error) {
 	f.catalogCalls.Add(1)
 	time.Sleep(f.delay)
+	switch {
+	case f.catalogEmpty:
+		return nil, nil
+	case f.catalogRows > 0:
+		out := make([]CourseOffering, f.catalogRows)
+		for i := range out {
+			out[i] = CourseOffering{Course: Course{CampusCode: "1101", Code: fmt.Sprintf("C%04d", i), Name: "Relleno"}}
+		}
+		return out, nil
+	}
 	return []CourseOffering{{Course: Course{CampusCode: "1101", Code: "2016696", Name: "Algoritmos", Credits: 3}}}, nil
 }
 
@@ -325,6 +359,20 @@ func (f *fakeSIA) FetchDetail(_ context.Context, _ ProgramKey, code, term string
 			}},
 		},
 	}, nil
+}
+
+// FetchDetails is the batch of paso 4: one connection, many courses,
+// incremental yield. The fake reuses FetchDetail so the count of SIA calls
+// stays comparable between the two paths.
+func (f *fakeSIA) FetchDetails(ctx context.Context, key ProgramKey, refs []CourseRef, term string,
+	yield func(CourseOffering, error) error) error {
+	for _, ref := range refs {
+		o, err := f.FetchDetail(ctx, key, ref.Code, term)
+		if yerr := yield(o, err); yerr != nil {
+			return yerr
+		}
+	}
+	return nil
 }
 
 func testProgram(id int64) Program {

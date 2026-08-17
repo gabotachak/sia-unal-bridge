@@ -65,6 +65,10 @@
 .head__title {
   font-size: var(--t-title);
   margin: 0.1rem 0 0;
+  /* El título de una asignatura puede ser una frase entera y ocupar dos
+     líneas: es el título de la pantalla, no una fila de una lista. Lo que no
+     puede es desbordar. */
+  overflow-wrap: anywhere;
 }
 
 .head__meta {
@@ -83,13 +87,5 @@
   display: flex;
   align-items: center;
   gap: 0.15rem;
-  flex: none;
-}
-
-.head__sep {
-  width: 1px;
-  height: 1.4rem;
-  background: var(--rule);
-  margin: 0 var(--gap-xs);
   flex: none;
 }

@@ -33,15 +33,9 @@
   flex: none;
 }
 
-/* ── Barra de filtros ───────────────────────────────────────────── */
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-  flex-wrap: wrap;
-  margin-bottom: var(--gap);
-}
+/* ── Barra de filtros ─────────────────────────────────────────────
+   `.toolbar` y `.toolbar__clear` viven en styles/base.css: el semestre
+   tiene la suya y las dos tienen que verse igual. */
 
 .search--flex {
   flex: 1;
@@ -120,26 +114,6 @@
   }
 }
 
-.toolbar__clear {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: var(--radius-sm);
-  color: var(--text-faint);
-  transition:
-    color var(--fast) var(--ease-out),
-    background-color var(--fast) var(--ease-out),
-    transform var(--fast) var(--ease-out);
-}
-.toolbar__clear:hover {
-  color: var(--bad);
-  background: var(--bad-soft);
-}
-.toolbar__clear:active {
-  transform: scale(0.94);
-}
-
 /* ── La tabla ───────────────────────────────────────────────────────
    La rejilla, la cabecera y la etiqueta de tipología viven en
    styles/table.css: son las mismas que las de Mi semestre. Acá queda
@@ -202,27 +176,14 @@
   line-height: 1.15;
   text-align: right;
 }
-.row__seats b {
-  font-size: var(--t-small);
-  font-weight: 600;
-}
+/* La cifra la pinta `SeatsFigure` (components/Seats.css), que es la misma de
+   la ficha en su talla chica: tamaño, peso y los tres colores —verde con
+   lugar, óxido en cero, gris sin dato— viven allá. Acá queda solo lo que es
+   propio de esta fila. */
 .row__seats small {
   font-size: var(--t-nano);
   color: var(--text-faint);
   white-space: nowrap;
-}
-.row__seats.is-open b {
-  color: var(--ok);
-}
-.row__seats.is-zero b {
-  color: var(--bad);
-}
-
-/* Sin oferta. Gris y sin peso: no es una advertencia —no hay nada que se haya
-   llenado— sino la ausencia de dato que medir. */
-.row__seats.is-none b {
-  color: var(--text-faint);
-  font-weight: 400;
 }
 /* El signo de pregunta de "nadie preguntó todavía". Se pinta en jade —el
    color de lo tocable— y no en gris: gris se lee como dato faltante y

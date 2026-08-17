@@ -217,6 +217,109 @@ select {
   opacity: 0.55;
 }
 
+/* El que borra. Óxido desde el reposo: si solo se tiñe al apuntarlo, la
+   advertencia llega cuando el cursor ya está encima, que es tarde. En una
+   barra de tres, uno perfilado en rojo no es una alarma — es lo que separa
+   "esto deshace trabajo" de "esto filtra".
+
+   Perfilado y no sólido, que es el escalón de `.btn--danger` (ver
+   Confirm.css): el sólido está reservado para confirmar dentro del diálogo,
+   donde el botón ES la acción. Aquí solo tiene que avisar.
+
+   El `:hover` va después de `.chip:hover` a propósito: los dos selectores
+   pesan igual (clase + pseudoclase), así que gana el último del archivo. */
+.chip--danger {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+@media (hover: hover) and (pointer: fine) {
+  .chip--danger:hover {
+    border-color: var(--bad);
+    background: var(--bad-soft);
+    color: var(--bad);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chip:disabled:hover {
+    border-color: var(--rule-strong);
+    background: var(--surface);
+    color: var(--text-dim);
+  }
+}
+.chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Barra de controles ─────────────────────────────────────────────
+   La fila de chips que va entre la cabecera de la pantalla y la tabla.
+   La usan el catálogo y el semestre, y por eso vive acá: las dos hacen
+   las mismas tres cosas —buscar, filtrar, limpiar— y si cada una las
+   dibuja a su manera dejan de leerse como la misma app. */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  margin-bottom: var(--gap);
+}
+
+/* La aclaración que cuelga de un control de la barra. Rompe la fila para
+   quedar debajo, porque explica lo que tiene al lado y no compite con ello. */
+.toolbar__note {
+  flex-basis: 100%;
+  margin: calc(var(--gap-sm) * -1) 0 0;
+  font-size: var(--t-micro);
+  color: var(--text-faint);
+  max-width: 42rem;
+}
+
+/* El botón de deshacer del final de la barra: sin caja, gris, y recién al
+   apuntarlo se tiñe de rojo. Permanentemente rojo convertiría la barra en
+   una alarma por algo que casi nunca se pulsa. */
+.toolbar__clear {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  transition:
+    color var(--fast) var(--ease-out),
+    background-color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .toolbar__clear:hover {
+    color: var(--bad);
+    background: var(--bad-soft);
+  }
+}
+.toolbar__clear:active {
+  transform: scale(0.94);
+}
+
+/* ── Gira mientras algo está en vuelo ───────────────────────────────
+   Utilidad suelta para los iconos que no son .iconbtn (los de dentro de
+   un chip, que tiene su propia caja y no puede girar entera). */
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: spin 900ms linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+    opacity: 0.5;
+  }
+}
 
 /* ── Aparición ──────────────────────────────────────────────────── */
 

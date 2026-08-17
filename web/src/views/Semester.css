@@ -44,14 +44,22 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--gap);
+  /* El mismo hueco que entre los grupos de la ficha (.groups). Eran 1rem
+     acá y 0.6rem allá, para separar cosas que cumplen el mismo papel. */
+  gap: var(--gap-sm);
 }
 
+/* Una materia con sus grupos. Caja porque contiene: es la misma regla que
+   sigue `.group` en la ficha —caja envuelve algo compuesto, fila es un dato
+   atómico— y por eso el catálogo, que solo tiene datos atómicos, es plano.
+
+   Sin sombra a propósito. La tenía, y era la única de toda la app: nada más
+   flota. Eso hacía que la misma pieza pareciera de otro material que su
+   gemela de la ficha, que nunca tuvo. */
 .card {
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: var(--shadow-sm);
   overflow: hidden;
   transition: opacity var(--mid) var(--ease-out);
 }
@@ -117,21 +125,9 @@
   text-align: right;
 }
 
-.card__big {
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  font-size: var(--t-small);
-  color: var(--ok);
-}
-.card__big.is-zero {
-  color: var(--bad);
-}
-/* Sin oferta: gris y sin peso, igual que .is-none del catálogo. */
-.card__big--none {
-  color: var(--text-faint);
-  font-weight: 400;
-}
+/* La cifra la pinta `SeatsFigure` (components/Seats.css): la misma de la
+   ficha en talla chica, y la misma que la del catálogo. Los tres colores
+   —verde con lugar, óxido en cero, gris sin dato— viven allá. */
 
 .card__tallyLabel {
   font-size: var(--t-nano);
@@ -211,17 +207,11 @@
 }
 
 .slot__seats {
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
   line-height: 1.1;
 }
-.slot__seats b {
-  font-weight: 600;
-  color: var(--ok);
-}
 
-.slot.is-zero .slot__seats b {
-  color: var(--bad);
-}
 .slot.is-zero .slot__who,
 .slot.is-zero .slot__key {
   color: var(--text-faint);

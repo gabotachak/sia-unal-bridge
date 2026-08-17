@@ -16,6 +16,14 @@
     transform var(--fast) var(--ease-out);
 }
 
+/* El de dentro de una fila de tabla. Mide 2rem, exactamente como el botón
+   de agregar del catálogo (.add--plus): los dos caen en la misma columna,
+   a la misma altura, y con tamaños distintos se leían como dos sistemas. */
+.iconbtn--row {
+  width: 2rem;
+  height: 2rem;
+}
+
 .iconbtn__glyph {
   display: grid;
   place-items: center;

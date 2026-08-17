@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { Clock, Eraser, Filter, RefreshCw, Trash2, User } from 'lucide-react';
+import { Check, Clock, Eraser, RefreshCw, Ticket, Trash2, User } from 'lucide-react';
 import { ApiError, FETCH_COOLDOWN, get, routes } from '../api/client';
 import type { CourseDetail } from '../api/types';
 import { usePlan } from '../hooks/usePlan';
-import { formatAge, titleCase } from '../lib/format';
+import { formatAge, formatCountdown, titleCase } from '../lib/format';
 import { pooled } from '../lib/pooled';
 import { MAX_RETRIES, backoffMs, isTransient, sleep } from '../lib/retry';
 import { itemId, selectionPath, type PlanItem } from '../lib/storage';
@@ -12,6 +12,7 @@ import { Layout } from '../components/Layout';
 import { useConfirm } from '../components/Confirm';
 import { IconButton } from '../components/IconButton';
 import { Empty } from '../components/States';
+import { SeatsFigure } from '../components/Seats';
 import './Semester.css';
 
 /** El pool del back son 4 sesiones ADF. Pedir de a más no acelera nada. */
@@ -244,86 +245,134 @@ export function Semester() {
     rows.length > 0 ? rows.filter((r) => r.readyAt <= now).map((r) => r.item) : plan.items;
   const waiting = rows.length - ready.length;
 
-  // Despertar justo cuando la primera materia salga del cooldown, en vez de un
-  // intervalo de 1 s corriendo cinco minutos para no hacer nada 299 veces.
-  // Cada disparo mueve `now` más allá de un readyAt, así que la cadena avanza
-  // materia por materia y se agota sola.
+  // Cuándo sale del cooldown la primera materia que sigue dentro.
   const nextReadyAt = rows.reduce(
     (min, r) => (r.readyAt > now ? Math.min(min, r.readyAt) : min),
     Infinity,
   );
+  const waitLeft = Number.isFinite(nextReadyAt)
+    ? Math.max(0, Math.ceil((nextReadyAt - now) / 1000))
+    : 0;
+
   useEffect(() => {
     if (!Number.isFinite(nextReadyAt)) return;
-    const t = window.setTimeout(() => setNow(Date.now()), Math.max(250, nextReadyAt - Date.now()));
+    // Con el chip apagado hay una cuenta atrás a la vista y hay que moverla
+    // cada segundo. Con alguna materia medible no hay número que mover: basta
+    // un único despertar cuando la siguiente salga del cooldown, y así no se
+    // gastan 299 renders en cinco minutos para no cambiar nada.
+    const delay = ready.length === 0 ? 1000 : Math.max(250, nextReadyAt - Date.now());
+    const t = window.setTimeout(() => setNow(Date.now()), delay);
     return () => window.clearTimeout(t);
-  }, [nextReadyAt]);
+    // `now` está en las dependencias a propósito: es lo que vuelve a armar el
+    // temporizador después de cada tic. Sin él solo habría un disparo.
+  }, [nextReadyAt, ready.length, now]);
 
-  // Sin cuenta atrás a propósito: un número en un tooltip que solo se refresca
-  // al abrirlo miente más de lo que informa, y el cooldown no es una espera
-  // que haya que vigilar.
-  const measureLabel = running
-    ? `Midiendo ${done}/${total}…`
+  /**
+   * Lo que dice el chip de medir, y por qué lo dice con palabras.
+   *
+   * Antes era un icono pelado con globito, y el globito tenía que cargar con
+   * una frase entera —cuántas se van a medir, por qué las otras no— que en un
+   * icono no cabe y en un tooltip se lee tarde. Con el chip el texto está a la
+   * vista, así que el rótulo puede ser corto y el detalle vive en el `title`.
+   *
+   * El `chip__code` —el mismo hueco donde el catálogo pone cuántos filtros hay
+   * puestos— dice una cosa distinta en cada estado, nunca dos a la vez:
+   *
+   *   apagado  → cuánto falta para que se libere la PRIMERA materia
+   *   parcial  → cuántas se van a medir de verdad
+   *   entero   → nada, no hay matiz que contar
+   */
+  const measure = running
+    ? { text: `midiendo ${done}/${total}`, code: '', title: 'Preguntándole al SIA por los cupos.' }
     : ready.length === 0
-      ? `Todas se midieron hace menos de ${formatAge(FETCH_COOLDOWN)}`
-      : waiting > 0
-        ? `Medir ${ready.length} materias · ${waiting} son recientes`
-        : 'Medir todos los cupos';
+      ? {
+          text: 'medir cupos',
+          code: formatCountdown(waitLeft),
+          title: `Todas se midieron hace menos de ${formatAge(FETCH_COOLDOWN)}. El dato que ves es el mismo que traería preguntar otra vez.`,
+        }
+      : {
+          text: 'medir cupos',
+          code: waiting > 0 ? String(ready.length) : '',
+          title:
+            waiting > 0
+              ? `Mide ${ready.length} de ${rows.length} materias. Las otras ${waiting} se midieron hace menos de ${formatAge(FETCH_COOLDOWN)} y se dejan como están.`
+              : 'Le pregunta al SIA por los cupos de todas las materias de la lista.',
+        };
 
   return (
     <Layout>
       {confirmDialog}
+      {/* Mismo reparto que el catálogo: el título a la izquierda y el conteo
+          a la derecha, a la altura del título. Los controles NO viven acá —
+          bajan a la barra de chips, que es donde el catálogo los tiene. */}
       <header className="head">
         <div>
           <p className="eyebrow">planificador</p>
           <h1 className="head__title">Mi semestre</h1>
-          <p className="head__meta tnum">
-            {plan.items.length} de 10 materias
-            {totals.sections > 0 && (
-              <>
-                <span className="head__dot">·</span>
-                {totals.open} de {totals.sections} grupos con cupo
-              </>
-            )}
-          </p>
         </div>
 
-        {!empty && (
-          <div className="head__actions">
-            <IconButton
-              onClick={() => void fetchAll(true, ready)}
-              disabled={running || ready.length === 0}
-              label={measureLabel}
-              // Hacia la izquierda: estos rótulos son frases, no dos palabras,
-              // y centrado bajo un botón de la esquina derecha el globito se
-              // sale de la página. Hacia dentro tiene todo el ancho que quiera.
-              tip="left"
-              className={running ? 'is-spinning' : ''}
-            >
-              <RefreshCw size={18} strokeWidth={1.75} />
-            </IconButton>
-
-            <IconButton
-              onClick={() => setOnlyOpen((v) => !v)}
-              pressed={onlyOpen}
-              label="Mostrar solo los grupos con cupo"
-              tip="left"
-            >
-              <Filter size={18} strokeWidth={1.75} />
-            </IconButton>
-
-            <span className="head__sep" aria-hidden="true" />
-
-            <IconButton
-              onClick={clearAll}
-              label="Vaciar la lista (el plan no se toca)"
-              tip="left"
-              className="iconbtn--danger"
-            >
-              <Eraser size={18} strokeWidth={1.75} />
-            </IconButton>
-          </div>
-        )}
+        <p className="head__meta tnum">
+          {plan.items.length} de 10 materias
+          {totals.sections > 0 && (
+            <>
+              <span className="head__dot">·</span>
+              {totals.open} de {totals.sections} grupos con cupo
+            </>
+          )}
+        </p>
       </header>
+
+      {!empty && (
+        <div className="toolbar">
+          <button
+            className="chip"
+            onClick={() => void fetchAll(true, ready)}
+            disabled={running || ready.length === 0}
+            title={measure.title}
+          >
+            <RefreshCw
+              size={14}
+              strokeWidth={1.75}
+              className={running ? 'spin' : undefined}
+              aria-hidden="true"
+            />
+            {measure.text}
+            {measure.code && <span className="chip__code tnum">{measure.code}</span>}
+          </button>
+
+          {/* Mismo icono y mismas palabras que el chip del catálogo: es la
+              misma pregunta —"¿qué puedo tomar hoy?"— hecha sobre grupos en
+              vez de sobre asignaturas. Dibujarla distinto la hacía parecer
+              otra cosa. */}
+          <button
+            className={`chip ${onlyOpen ? 'is-on' : ''}`}
+            onClick={() => setOnlyOpen((v) => !v)}
+            aria-pressed={onlyOpen}
+            title="Deja solo los grupos que tienen cupo ahora mismo."
+          >
+            {onlyOpen ? (
+              <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+            ) : (
+              <Ticket size={14} strokeWidth={1.75} aria-hidden="true" />
+            )}
+            con cupos
+          </button>
+
+          {/* Chip como los otros dos, y no el icono pelado de `.toolbar__clear`
+              del catálogo: allá ese botón es un deshacer contextual —solo
+              existe si hay filtros puestos, y anula los controles de su propia
+              barra—, y esto es una acción por derecho propio que está siempre.
+              Mismo rol que los vecinos, misma forma. */}
+          <button
+            className="chip chip--danger"
+            onClick={clearAll}
+            title="Quita las materias de la lista. Tu plan no se toca."
+          >
+            <Eraser size={14} strokeWidth={1.75} aria-hidden="true" />
+            vaciar
+          </button>
+        </div>
+      )}
 
       {empty ? (
         <>
@@ -416,9 +465,13 @@ function CourseCard({
       <header className="card__head table__row">
         <span className="card__code tnum col-code">{item.code}</span>
 
+        {/* El `state` es lo que le dice a la ficha que la flecha de volver
+            tiene que apuntar acá y no al catálogo — desde el que, viniendo por
+            este enlace, nunca se pasó. */}
         <Link
           className="card__name"
           to={`/nivel/${item.level}/sede/${item.campus}/plan/${item.program}/asignatura/${encodeURIComponent(item.code)}?f=${item.faculty}`}
+          state={{ from: 'semester' }}
         >
           {item.name}
         </Link>
@@ -449,13 +502,15 @@ function CourseCard({
         >
           {status === 'done' && detail && (
             <>
-              {noGroups ? (
-                <span className="card__big card__big--none tnum" aria-hidden="true">—</span>
-              ) : (
-                <span className={`card__big tnum ${totalSeats === 0 ? 'is-zero' : ''}`}>
-                  {totalSeats}
-                </span>
-              )}
+              {/* Anima: acá el número SÍ cambia mientras lo mirás —se pulsa
+                  'medir cupos' y las ocho materias giran—, que es justo el
+                  caso para el que existe la aleta. */}
+              <SeatsFigure
+                available={noGroups ? null : totalSeats}
+                tone={totalSeats === 0 ? 'empty' : 'ok'}
+                animate
+                announce={false}
+              />
               <span className="card__tallyLabel tnum" aria-hidden="true">
                 {noGroups ? (
                   <>
@@ -480,16 +535,25 @@ function CourseCard({
           {status === 'loading' && <span className="card__tallyLabel">midiendo…</span>}
         </div>
 
-        <IconButton onClick={onRemove} label="Quitar del semestre" tip="left" className="iconbtn--danger">
+        <IconButton
+          onClick={onRemove}
+          label="Quitar del semestre"
+          tip="left"
+          className="iconbtn--row iconbtn--danger"
+        >
           <Trash2 size={16} strokeWidth={1.75} />
         </IconButton>
       </header>
 
       {status === 'error' && <p className="card__error">{error}</p>}
 
-      {noGroups && (
-        <p className="card__error card__error--soft">Sin grupos este semestre.</p>
-      )}
+      {/* Repite lo que la celda de cupos ya dice en la fila de arriba, y se
+          queda a propósito: sin ella la tarjeta era una caja alrededor de UNA
+          fila, que contradice la regla de la que vive todo esto —caja envuelve
+          algo compuesto, fila es un dato atómico—. Con la banda, la caja vuelve
+          a tener dos filas y la lista mantiene su ritmo. La redundancia sale
+          más barata que la excepción. */}
+      {noGroups && <p className="card__error card__error--soft">Sin grupos este semestre.</p>}
 
       {onlyOpen && all.length > 0 && sections.length === 0 && (
         <p className="card__error card__error--soft">Ningún grupo con cupo ahora mismo.</p>
@@ -515,7 +579,7 @@ function CourseCard({
                         .join(' · ')}
                 </span>
                 <span className="slot__seats">
-                  <b className="tnum">{seats === null ? '—' : seats}</b>
+                  <SeatsFigure available={seats} tone={seats === 0 ? 'empty' : 'ok'} animate />
                 </span>
                 <span className="slot__radio" aria-hidden="true" />
               </li>

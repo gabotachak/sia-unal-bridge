@@ -18,6 +18,7 @@ import { Layout } from '../components/Layout';
 import { useConfirm } from '../components/Confirm';
 import { AddButton } from '../components/AddButton';
 import { Empty, Fault, Loading } from '../components/States';
+import { SeatsFigure } from '../components/Seats';
 import { fold, formatAge, sentence } from '../lib/format';
 import { selectionId, selectionPath } from '../lib/storage';
 import './Program.css';
@@ -433,11 +434,7 @@ function SeatsCell({
         className="row__seats is-none col-seats"
         title={`Sin grupos programados · consultado ${new Date(askedAt).toLocaleString('es-CO')}`}
       >
-        {/* Una raya, no un cero. En una columna de cupos el cero significa
-            "hay grupos y están llenos", que es la mala noticia accionable;
-            acá no hay nada que llenar. La raya es la convención de "no hay
-            valor" y deja el óxido para los ceros de verdad. */}
-        <b aria-hidden="true">—</b>
+        <SeatsFigure available={null} announce={false} />
         <small>
           sin grupos<span className="row__age tnum"> · {age}</span>
         </small>
@@ -449,7 +446,10 @@ function SeatsCell({
       className={`row__seats col-seats ${seats.available === 0 ? 'is-zero' : 'is-open'}`}
       title={`${seats.available} cupos en ${seats.sections} grupos · medido ${new Date(seats.measured_at).toLocaleString('es-CO')}`}
     >
-      <b className="tnum">{seats.available}</b>
+      {/* Sin animar: en el catálogo el número no cambia después de cargar, y
+          313 filas aleteando en la primera pintura serían ruido y trabajo por
+          nada. La forma y el color sí son los mismos que en la ficha. */}
+      <SeatsFigure available={seats.available} tone={seats.available === 0 ? 'empty' : 'ok'} />
       <small className="tnum">{formatAge(seats.age_seconds)}</small>
     </span>
   );

@@ -169,6 +169,7 @@ plausibles y equivocados.
 | [`docs/FIELDS.md`](docs/FIELDS.md) | Componentes ADF y opciones de cada dropdown |
 | [`docs/LAYOUT.md`](docs/LAYOUT.md) | Árbol de paquetes Go y librerías |
 | [`docs/PLAN.md`](docs/PLAN.md) | Plan de implementación y criterios de aceptación |
+| [`docs/FASE-2.md`](docs/FASE-2.md) | Fase 2: el `Refresher`, concurrencia del crawl y cada cuánto correrlo |
 | [`docs/PLAN-FRONTEND.md`](docs/PLAN-FRONTEND.md) | Plan de la interfaz **+ curso mínimo de front** |
 | [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | Qué está probado y qué no |
 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Entorno, fixtures, cómo replicar el flujo |

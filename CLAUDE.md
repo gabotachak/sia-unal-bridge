@@ -51,6 +51,7 @@ Las cuatro que más código han roto:
 | Ruta | Qué hay |
 |---|---|
 | `docs/PLAN.md` | **Plan de implementación: pasos, criterios de aceptación, fixtures** |
+| `docs/FASE-2.md` | **Plan de la fase 2: el Job que baja todo el SIA, concurrencia y cadencia** |
 | `docs/ARCH.md` | Arquitectura: puertos, read-through, pool de sesiones, concurrencia |
 | `docs/API.md` | Contrato HTTP: endpoints, IDs públicos, frescura, errores |
 | `docs/LAYOUT.md` | Árbol de paquetes Go y librerías — propuesta, sin implementar |

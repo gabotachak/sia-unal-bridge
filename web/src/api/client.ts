@@ -58,7 +58,7 @@ export class ApiError extends Error {
       case 'sia_session_lost':
         return 'Se perdió la sesión contra el SIA. Reintentar abre una nueva.';
       case 'busy':
-        return 'Todas las conexiones al SIA están ocupadas. Es momentáneo.';
+        return 'El SIA está atendiendo otras consultas ahora mismo. Es momentáneo.';
       case 'unknown_campus':
         return 'Esa sede no existe en el catálogo del SIA.';
       case 'unknown_program':

@@ -418,13 +418,15 @@ export function Semester() {
             </ul>
           </div>
 
+          {/* Dice dos cosas y las dos cambian lo que alguien hace con la
+              pantalla: que el número tiene fecha, y por qué el botón a veces
+              no toca una materia. Cómo repartimos las peticiones entre las
+              conexiones del pool no cambia nada de eso: es asunto nuestro. */}
           <p className="sem__note">
-            Los cupos se guardan con su hora de medición, así que lo que ves aquí es lo que
-            había en ese momento — no una promesa de que sigan ahí. El botón vuelve a
-            preguntarle al SIA, en tandas de {CONCURRENCY} a la vez, que es lo que el pool de
-            conexiones puede atender en paralelo. Solo por las materias que lleven más de{' '}
-            {formatAge(FETCH_COOLDOWN)} sin medir: por debajo de eso el dato es el mismo y
-            preguntar de nuevo solo le cuesta trabajo al SIA.
+            Los cupos se guardan con su hora de medición: lo que ves es lo que había en ese
+            momento, no una promesa de que siga ahí. El botón vuelve a preguntarle al SIA
+            solo por las materias que lleven más de {formatAge(FETCH_COOLDOWN)} sin medir —
+            por debajo de eso el dato sería el mismo.
           </p>
         </>
       )}

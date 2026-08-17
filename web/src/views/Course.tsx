@@ -201,7 +201,7 @@ export function Course() {
                       ? 'Preguntándole al SIA por los cupos.'
                       : cooldownLeft > 0
                         ? 'Se midió hace un momento. El dato que ves es el mismo que traería preguntar otra vez.'
-                        : 'Mide los cupos de todos los grupos a la vez: el SIA los devuelve todos en la misma respuesta.'
+                        : 'Mide los cupos de todos los grupos a la vez.'
                   }
                 >
                   <RefreshCw

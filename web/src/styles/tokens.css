@@ -195,6 +195,10 @@
   --t-body: 1rem;
   --t-small: 0.9rem;
   --t-micro: 0.72rem;
+  /* Fuera de la escala de lectura a propósito: es el tamaño de las edades y
+     los rótulos que cuelgan de un número ('· 2 h', 'sin grupos'). No se leen,
+     se consultan — y a 0.72rem competían con el dato del que dependen. */
+  --t-nano: 0.6rem;
 
   /* El tracking depende del tamaño y de la familia: la serif ya viene
      apretada de fábrica, así que casi no hay que ayudarla; el micro-texto

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { Clock, Eraser, Filter, RefreshCw, Trash2, User } from 'lucide-react';
-import { ApiError, get, routes } from '../api/client';
+import { ApiError, FETCH_COOLDOWN, get, routes } from '../api/client';
 import type { CourseDetail } from '../api/types';
 import { usePlan } from '../hooks/usePlan';
 import { formatAge, titleCase } from '../lib/format';
@@ -24,7 +24,33 @@ type Row = {
   detail: CourseDetail | null;
   status: 'idle' | 'loading' | 'done' | 'error';
   error?: string;
+  /**
+   * Epoch ms a partir del cual esta materia se puede volver a medir. 0 = ya.
+   *
+   * Es un instante y no una edad porque una edad se queda quieta: llega
+   * '30 s' y sigue diciendo '30 s' cinco minutos después. El instante se
+   * compara contra el reloj y no hay que refrescarlo.
+   *
+   * Sale de `detail.fetched_at` y no de la edad de los cupos porque es
+   * exactamente lo que mira el backend (`course_program.detail_fetched_at`,
+   * ver internal/httpapi/cooldown.go). Medir contra otra cosa haría que el
+   * botón se encendiera un segundo antes que el permiso del servidor.
+   */
+  readyAt: number;
 };
+
+const newRow = (item: PlanItem): Row => ({
+  item,
+  detail: null,
+  status: 'idle',
+  readyAt: 0,
+});
+
+/** Cuándo vuelve a estar disponible una materia según lo que respondió la API. */
+function readyAtFrom(detail: CourseDetail): number {
+  const at = detail.fetched_at ? Date.parse(detail.fetched_at) : NaN;
+  return Number.isFinite(at) ? at + FETCH_COOLDOWN * 1000 : 0;
+}
 
 export function Semester() {
   const plan = usePlan();
@@ -32,6 +58,12 @@ export function Semester() {
   const [rows, setRows] = useState<Row[]>([]);
   const [running, setRunning] = useState(false);
   const [onlyOpen, setOnlyOpen] = useState(false);
+  // Cuántas materias terminaron en ESTA ronda. No se deriva de los status:
+  // en un remedido todas entran ya en 'done' de la ronda anterior, así que
+  // contarlas daría la barra llena antes de empezar.
+  const [done, setDone] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
 
   // La lista de materias manda: al agregar o quitar, se rearman las filas
   // conservando lo que ya se había traído.
@@ -39,13 +71,19 @@ export function Semester() {
     setRows((prev) =>
       plan.items.map((item) => {
         const old = prev.find((r) => itemId(r.item) === itemId(item));
-        return old ?? { item, detail: null, status: 'idle' as const };
+        return old ?? newRow(item);
       }),
     );
   }, [plan.items]);
 
-  const patch = useCallback((id: string, next: Partial<Row>) => {
-    setRows((prev) => prev.map((r) => (itemId(r.item) === id ? { ...r, ...next } : r)));
+  // Acepta una función porque el caso del 429 necesita leer la fila para
+  // devolverla a como estaba: no sabe desde fuera si tenía detalle o no.
+  const patch = useCallback((id: string, next: Partial<Row> | ((r: Row) => Partial<Row>)) => {
+    setRows((prev) =>
+      prev.map((r) =>
+        itemId(r.item) === id ? { ...r, ...(typeof next === 'function' ? next(r) : next) } : r,
+      ),
+    );
   }, []);
 
   /**
@@ -64,45 +102,81 @@ export function Semester() {
    * Los errores transitorios del SIA (sesión caducada, respuesta vacía, pool
    * lleno) se reintentan silenciosamente hasta MAX_RETRIES veces con backoff
    * exponencial. El error solo se muestra si todos los intentos fallan.
+   *
+   * `targets` viene de fuera y no se calcula acá: con el botón son solo las
+   * materias fuera del cooldown, y quien sabe cuáles son es el render, que ya
+   * las cuenta para decidir si el botón se enciende.
    */
   const fetchAll = useCallback(
-    async (force: boolean) => {
-      const targets = plan.items;
+    async (force: boolean, targets: PlanItem[]) => {
       if (targets.length === 0) return;
 
       setRunning(true);
-      setRows((prev) => prev.map((r) => ({ ...r, status: 'loading', error: undefined })));
+      setDone(0);
+      setTotal(targets.length);
+      setRows((prev) => prev.map((r) => ({ ...r, error: undefined })));
 
       await pooled(targets, CONCURRENCY, async (item) => {
         const id = itemId(item);
         const scope = { level: item.level, campus: item.campus, faculty: item.faculty };
 
-        let lastError: unknown;
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-          // En reintentos, forzar max_age=0: si el primer intento falló por
-          // sesión caducada o respuesta vacía, repetir con cache no va a ayudar.
-          const forceRetry = force || attempt > 0;
-          const path = routes.course(scope, item.program, item.code, forceRetry ? 0 : undefined);
-          try {
-            const res = await get<CourseDetail>(path);
-            patch(id, { detail: res.data, status: 'done' });
-            return; // éxito → no seguir reintentando
-          } catch (e) {
-            lastError = e;
-            if (!isTransient(e) || attempt === MAX_RETRIES) break;
-            await sleep(backoffMs(attempt));
-          }
-        }
+        // `loading` se marca acá y no de entrada para las diez: en vuelo solo
+        // hay CONCURRENCY, y apagar la lista entera decía que se estaban
+        // midiendo todas cuando seis seguían en la cola. La barra ya lleva la
+        // cuenta del total; esto marca quién está siendo medida AHORA. Las que
+        // esperan turno siguen mostrando su número anterior, con su edad al
+        // lado, que es más útil que una columna en blanco.
+        patch(id, { status: 'loading' });
 
-        patch(id, {
-          status: 'error',
-          error: lastError instanceof ApiError ? lastError.humane : 'no se pudo consultar',
-        });
+        try {
+          let lastError: unknown;
+          for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            // En reintentos, forzar max_age=0: si el primer intento falló por
+            // sesión caducada o respuesta vacía, repetir con cache no va a ayudar.
+            const forceRetry = force || attempt > 0;
+            const path = routes.course(scope, item.program, item.code, forceRetry ? 0 : undefined);
+            try {
+              const res = await get<CourseDetail>(path);
+              patch(id, { detail: res.data, status: 'done', readyAt: readyAtFrom(res.data) });
+              return; // éxito → no seguir reintentando
+            } catch (e) {
+              // Un 429 no es un fallo. La materia está fresca y el número que
+              // ya está en pantalla es correcto: lo único que pasó es que se
+              // pidió antes de tiempo. Se anota cuándo vuelve a estar
+              // disponible —el servidor es la autoridad, no el FETCH_COOLDOWN
+              // horneado— y la fila queda como estaba, sin banner rojo.
+              //
+              // Con el filtrado del botón esto no debería dispararse casi
+              // nunca; queda como red: otra pestaña pudo medir hace 10 s, y un
+              // reintento tras un error transitorio fuerza max_age=0 aunque la
+              // ronda no fuera forzada.
+              if (e instanceof ApiError && e.status === 429) {
+                patch(id, (r) => ({
+                  status: r.detail ? 'done' : 'idle',
+                  readyAt: Date.now() + (e.retryAfter ?? FETCH_COOLDOWN) * 1000,
+                }));
+                return;
+              }
+              lastError = e;
+              if (!isTransient(e) || attempt === MAX_RETRIES) break;
+              await sleep(backoffMs(attempt));
+            }
+          }
+
+          patch(id, {
+            status: 'error',
+            error: lastError instanceof ApiError ? lastError.humane : 'no se pudo consultar',
+          });
+        } finally {
+          // En el finally porque el camino feliz sale por `return`: la materia
+          // que falló también terminó, y la barra tiene que llegar al final.
+          setDone((n) => n + 1);
+        }
       });
 
       setRunning(false);
     },
-    [plan.items, patch],
+    [patch],
   );
 
   // Carga inicial: lo que ya esté cacheado, que aparece al instante. Después
@@ -115,8 +189,8 @@ export function Semester() {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    if (plan.items.length > 0) void fetchAll(false);
-  }, [plan.items.length, fetchAll]);
+    if (plan.items.length > 0) void fetchAll(false, plan.items);
+  }, [plan.items, fetchAll]);
 
   /**
    * Vaciar la lista sin tocar el plan.
@@ -148,9 +222,52 @@ export function Semester() {
     plan.clear();
   }
 
-  const done = rows.filter((r) => r.status === 'done').length;
   const totals = summarize(rows);
   const empty = plan.items.length === 0;
+
+  /**
+   * Qué materias se pueden medir ahora mismo.
+   *
+   * El botón medía las diez siempre, y las que se habían medido hacía un
+   * momento volvían con un 429 que se pintaba en rojo debajo de la fila. Eso
+   * decía "algo falló" cuando lo que pasaba era lo contrario: el dato estaba
+   * tan fresco que no había nada que volver a preguntar.
+   *
+   * Ahora el cooldown se respeta antes de pedir. Las recientes ni se piden —no
+   * hay error que mostrar porque no hay petición—, y si no queda ninguna
+   * medible el botón se apaga y lo dice en su rótulo.
+   */
+  // El fallback a plan.items cubre el primer render: las filas se arman en un
+  // efecto, así que llegan un frame tarde, y sin esto el botón nacía apagado
+  // diciendo que todo estaba recién medido antes de haber medido nada.
+  const ready =
+    rows.length > 0 ? rows.filter((r) => r.readyAt <= now).map((r) => r.item) : plan.items;
+  const waiting = rows.length - ready.length;
+
+  // Despertar justo cuando la primera materia salga del cooldown, en vez de un
+  // intervalo de 1 s corriendo cinco minutos para no hacer nada 299 veces.
+  // Cada disparo mueve `now` más allá de un readyAt, así que la cadena avanza
+  // materia por materia y se agota sola.
+  const nextReadyAt = rows.reduce(
+    (min, r) => (r.readyAt > now ? Math.min(min, r.readyAt) : min),
+    Infinity,
+  );
+  useEffect(() => {
+    if (!Number.isFinite(nextReadyAt)) return;
+    const t = window.setTimeout(() => setNow(Date.now()), Math.max(250, nextReadyAt - Date.now()));
+    return () => window.clearTimeout(t);
+  }, [nextReadyAt]);
+
+  // Sin cuenta atrás a propósito: un número en un tooltip que solo se refresca
+  // al abrirlo miente más de lo que informa, y el cooldown no es una espera
+  // que haya que vigilar.
+  const measureLabel = running
+    ? `Midiendo ${done}/${total}…`
+    : ready.length === 0
+      ? `Todas se midieron hace menos de ${formatAge(FETCH_COOLDOWN)}`
+      : waiting > 0
+        ? `Medir ${ready.length} materias · ${waiting} son recientes`
+        : 'Medir todos los cupos';
 
   return (
     <Layout>
@@ -173,9 +290,13 @@ export function Semester() {
         {!empty && (
           <div className="head__actions">
             <IconButton
-              onClick={() => void fetchAll(true)}
-              disabled={running}
-              label={running ? `Midiendo ${done}/${plan.items.length}…` : 'Medir todos los cupos'}
+              onClick={() => void fetchAll(true, ready)}
+              disabled={running || ready.length === 0}
+              label={measureLabel}
+              // Hacia la izquierda: estos rótulos son frases, no dos palabras,
+              // y centrado bajo un botón de la esquina derecha el globito se
+              // sale de la página. Hacia dentro tiene todo el ancho que quiera.
+              tip="left"
               className={running ? 'is-spinning' : ''}
             >
               <RefreshCw size={18} strokeWidth={1.75} />
@@ -185,6 +306,7 @@ export function Semester() {
               onClick={() => setOnlyOpen((v) => !v)}
               pressed={onlyOpen}
               label="Mostrar solo los grupos con cupo"
+              tip="left"
             >
               <Filter size={18} strokeWidth={1.75} />
             </IconButton>
@@ -223,11 +345,11 @@ export function Semester() {
               apareciera y desapareciera, la lista entera daría un salto de
               4px cada vez que se mide. */}
           <div className={`sem__progress ${running ? 'is-on' : ''}`} aria-hidden="true">
-            <i style={{ transform: `scaleX(${running ? done / plan.items.length : 0})` }} />
+            <i style={{ transform: `scaleX(${running && total > 0 ? done / total : 0})` }} />
           </div>
 
-          <div className="sem__table">
-            <div className="sem__head" aria-hidden="true">
+          <div className="table sem__table">
+            <div className="table__head" aria-hidden="true">
               <span className="col-code">código</span>
               <span>asignatura</span>
               <span className="col-typ">tip</span>
@@ -250,9 +372,10 @@ export function Semester() {
           <p className="sem__note">
             Los cupos se guardan con su hora de medición, así que lo que ves aquí es lo que
             había en ese momento — no una promesa de que sigan ahí. El botón vuelve a
-            preguntarle al SIA por las {plan.items.length} materias, en tandas de {CONCURRENCY} a
-            la
-            vez, que es lo que el pool de conexiones puede atender en paralelo.
+            preguntarle al SIA, en tandas de {CONCURRENCY} a la vez, que es lo que el pool de
+            conexiones puede atender en paralelo. Solo por las materias que lleven más de{' '}
+            {formatAge(FETCH_COOLDOWN)} sin medir: por debajo de eso el dato es el mismo y
+            preguntar de nuevo solo le cuesta trabajo al SIA.
           </p>
         </>
       )}
@@ -290,7 +413,7 @@ function CourseCard({
 
   return (
     <li className={`card ${status === 'loading' ? 'is-loading' : ''}`}>
-      <header className="card__head">
+      <header className="card__head table__row">
         <span className="card__code tnum col-code">{item.code}</span>
 
         <Link
@@ -307,9 +430,23 @@ function CourseCard({
           {shortTypology(item.typology)}
         </span>
 
-        <span className="card__credits tnum col-cr">{item.credits}</span>
+        <span className="card__credits tnum col-cr" aria-label={`${item.credits} créditos`}>
+          {item.credits}
+        </span>
 
-        <div className="card__tally col-seats">
+        {/* La cabecera de columnas es aria-hidden —es una rejilla, no una
+            <table>—, así que sin rótulo propio un lector de pantalla
+            anunciaría '12' a secas. */}
+        <div
+          className="card__tally col-seats"
+          aria-label={
+            status === 'done' && detail
+              ? noGroups
+                ? 'Sin grupos programados'
+                : `${totalSeats} cupos disponibles`
+              : undefined
+          }
+        >
           {status === 'done' && detail && (
             <>
               {noGroups ? (
@@ -319,11 +456,23 @@ function CourseCard({
                   {totalSeats}
                 </span>
               )}
-              <span className="card__tallyLabel tnum">
+              <span className="card__tallyLabel tnum" aria-hidden="true">
                 {noGroups ? (
-                  <>sin grupos · <span className="card__age">{noGroupsAge !== null ? formatAge(noGroupsAge) : '—'}</span></>
+                  <>
+                    sin grupos
+                    {/* El separador va DENTRO del span: en el teléfono la columna se
+                        angosta y la edad se oculta, y un ' · ' suelto quedaría
+                        colgando de 'sin grupos'. Los espacios son duros para que
+                        'sin grupos · 2 h' no se parta en dos líneas. */}
+                    <span className="card__age">
+                      {'\u00a0·\u00a0'}
+                      {noGroupsAge !== null ? formatAge(noGroupsAge) : '—'}
+                    </span>
+                  </>
+                ) : oldestAge !== null ? (
+                  formatAge(oldestAge)
                 ) : (
-                  <span className="card__age">{oldestAge !== null ? formatAge(oldestAge) : '—'}</span>
+                  '—'
                 )}
               </span>
             </>
@@ -353,19 +502,17 @@ function CourseCard({
             return (
               <li key={s.key} className={`slot ${seats === 0 ? 'is-zero' : ''}`}>
                 <span className="slot__key tnum">{s.key}</span>
-                <span className="slot__info">
-                  <span className="slot__who">
-                    <User size={12} strokeWidth={1.75} aria-hidden="true" />
-                    {s.instructor ? titleCase(s.instructor) : 'sin profesor asignado'}
-                  </span>
-                  <span className={`slot__when${s.schedule.length > 0 ? ' tnum' : ''}`}>
-                    <Clock size={12} strokeWidth={1.75} aria-hidden="true" />
-                    {s.schedule.length === 0
-                      ? 'sin horario'
-                      : s.schedule
-                          .map((c) => `${DAYS_SHORT[c.weekday]} ${c.start_time}`)
-                          .join(' · ')}
-                  </span>
+                <span className="slot__who">
+                  <User size={12} strokeWidth={1.75} aria-hidden="true" />
+                  {s.instructor ? titleCase(s.instructor) : 'sin profesor asignado'}
+                </span>
+                <span className={`slot__when${s.schedule.length > 0 ? ' tnum' : ''}`}>
+                  <Clock size={12} strokeWidth={1.75} aria-hidden="true" />
+                  {s.schedule.length === 0
+                    ? 'sin horario'
+                    : s.schedule
+                        .map((c) => `${DAYS_SHORT[c.weekday]} ${c.start_time}`)
+                        .join(' · ')}
                 </span>
                 <span className="slot__seats">
                   <b className="tnum">{seats === null ? '—' : seats}</b>

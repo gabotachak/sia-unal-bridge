@@ -1,0 +1,117 @@
+/* ── La rejilla de asignaturas ──────────────────────────────────────
+   El catálogo (Program) y Mi semestre (Semester) pintan la MISMA tabla:
+   código, asignatura, tipología, créditos, cupos y un botón. Se ven
+   igual porque son la misma lista mirada desde dos sitios, así que la
+   rejilla, la cabecera y la etiqueta de tipología viven acá y no
+   duplicadas en cada vista — las hojas de vista son globales, no
+   módulos, así que duplicarlas era emitir el mismo selector dos veces y
+   confiar en que nadie tocara uno solo.
+
+   La regla de fondo: antes recortar un nombre que empujar lo que sigue a
+   otra línea. Una tabla donde las filas cambian de alto según el largo
+   del texto es imposible de barrer con la vista.
+
+   Las tres columnas de ancho fijo son variables aparte porque los grupos
+   de Mi semestre arman su propia rejilla y necesitan clavar la primera y
+   las dos últimas en la misma vertical que la cabecera. */
+
+.table {
+  --col-code: 6.2rem;
+  --col-typ: 2.4rem;
+  --col-cr: 2.2rem;
+  /* La de cupos es la única que creció: tiene que caber 'sin grupos ·
+     2 h' en una línea. Sale del ancho del nombre, que es el que cede. */
+  --col-seats: 6.4rem;
+  --col-act: 2.25rem;
+
+  --cols: var(--col-code) minmax(0, 1fr) var(--col-typ) var(--col-cr) var(--col-seats)
+    var(--col-act);
+}
+
+/* La cabecera comparte la MISMA rejilla que las filas: es lo que hace que
+   las columnas queden alineadas sin usar <table>, que no sabe truncar
+   celdas sin romper el ancho. */
+.table__head,
+.table__row {
+  display: grid;
+  grid-template-columns: var(--cols);
+  align-items: center;
+  gap: var(--gap-sm);
+}
+
+.table__head {
+  padding: 0 0.6rem var(--gap-sm);
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.table__head .col-cr,
+.table__head .col-seats {
+  text-align: right;
+}
+.table__head .col-typ {
+  text-align: center;
+}
+
+/* ── Etiqueta de tipología ──────────────────────────────────────────
+   Una letra. El literal completo ('FUND. OBLIGATORIA (B)') vive en el
+   title: en una lista de 700 filas la letra es lo que se compara, y el
+   resto sería ruido repetido 700 veces. */
+
+.tag {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 1.35rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--surface-2);
+  color: var(--text-dim);
+}
+.tag--obligatoria {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.tag--optativa {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.tag--libre {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+/* ── Cómo se encoge ─────────────────────────────────────────────────
+   Las columnas se van por prioridad, de menos a más informativa. Lo que
+   nunca se va: el nombre (qué es), los cupos (para qué se entró) y el
+   botón (a qué se vino). Redefinir --cols basta: la cabecera y las filas
+   la heredan juntas, así que no pueden desalinearse.
+
+   De grande a chico, en ese orden: cada bloque puede pisar al anterior. */
+
+@media (max-width: 700px) {
+  .table {
+    --cols: var(--col-code) minmax(0, 1fr) var(--col-typ) var(--col-seats) var(--col-act);
+  }
+  .col-cr {
+    display: none;
+  }
+}
+
+/* En el teléfono queda lo irreductible: qué materia es, cuántos cupos tiene,
+   y el botón. El código sigue a un toque de distancia, en la ficha de la
+   asignatura. */
+@media (max-width: 520px) {
+  .table {
+    --col-seats: 4.2rem;
+    --cols: minmax(0, 1fr) var(--col-seats) var(--col-act);
+  }
+  .col-typ,
+  .col-code {
+    display: none;
+  }
+}

@@ -26,7 +26,16 @@ export default defineConfig(({ mode }) => {
 
   // process.env es el caso Docker: el build corre con contexto ./web, donde el
   // .env de la raíz no existe, así que compose lo inyecta como build arg.
-  const cooldown = env.FETCH_COOLDOWN || process.env.FETCH_COOLDOWN || '60';
+  const cooldown = env.FETCH_COOLDOWN || process.env.FETCH_COOLDOWN || '300';
+
+  // El `define` de abajo solo actúa en el build: en dev, Vite sirve
+  // `import.meta.env` como un objeto de verdad y la propiedad se resuelve en
+  // tiempo de ejecución contra él, no contra el reemplazo textual. Ese objeto
+  // solo lleva las variables con prefijo VITE_, así que sin esta línea el
+  // servidor de desarrollo ignoraba el .env y se quedaba con el valor por
+  // defecto horneado en client.ts — el front y el backend podían discrepar sin
+  // que nada lo dijera. Vite recoge las VITE_* de process.env al arrancar.
+  process.env.VITE_FETCH_COOLDOWN = cooldown;
 
   const apiTarget = env.VITE_API_TARGET || 'http://localhost:18080';
   const devPort = Number(env.VITE_DEV_PORT) || 5173;

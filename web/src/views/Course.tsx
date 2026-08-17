@@ -9,7 +9,7 @@ import { AddButton } from '../components/AddButton';
 import { IconButton } from '../components/IconButton';
 import { Empty, Fault, Loading } from '../components/States';
 import { Seats } from '../components/Seats';
-import { sentence, titleCase } from '../lib/format';
+import { formatCountdown, sentence, titleCase } from '../lib/format';
 import './Course.css';
 
 const DAYS = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
@@ -49,23 +49,31 @@ export function Course() {
    */
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [now, setNow] = useState(() => Date.now());
+  // El intervalo solo corre mientras hay cuenta atrás que mostrar, y se para
+  // solo al llegar a cero: con un cooldown de minutos, un tick por segundo
+  // permanente serían cientos de renders para no cambiar nada en pantalla.
   useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    if (cooldownUntil <= Date.now()) return;
+    const t = window.setInterval(() => {
+      const tick = Date.now();
+      setNow(tick);
+      if (tick >= cooldownUntil) window.clearInterval(t);
+    }, 1000);
     return () => window.clearInterval(t);
-  }, []);
+  }, [cooldownUntil]);
 
-  // La medición más reciente de la asignatura: el POST del SIA las sella todas
-  // a la vez, así que la más nueva marca cuándo se habló con el SIA.
-  const freshestSeats = data?.sections?.reduce<number | null>(
-    (min, s) =>
-      s.seats ? (min === null ? s.seats.age_seconds : Math.min(min, s.seats.age_seconds)) : min,
-    null,
-  );
+  // Cuándo se habló con el SIA por esta asignatura. Sale de `fetched_at` y no
+  // de la edad de los cupos porque es lo mismo que mira el backend
+  // (`course_program.detail_fetched_at`, ver internal/httpapi/cooldown.go) — y
+  // porque una asignatura sin grupos no tiene cupos de los que sacar una edad,
+  // así que por ahí el botón se quedaba encendido y rebotaba con un 429.
+  const fetchedAt = data?.fetched_at;
   useEffect(() => {
-    if (freshestSeats === null || freshestSeats === undefined) return;
-    const left = FETCH_COOLDOWN - freshestSeats;
-    if (left > 0) setCooldownUntil((prev) => Math.max(prev, Date.now() + left * 1000));
-  }, [freshestSeats]);
+    const at = fetchedAt ? Date.parse(fetchedAt) : NaN;
+    if (!Number.isFinite(at)) return;
+    const until = at + FETCH_COOLDOWN * 1000;
+    if (until > Date.now()) setCooldownUntil((prev) => Math.max(prev, until));
+  }, [fetchedAt]);
 
   useEffect(() => {
     if (error?.status === 429 && error.retryAfter) {
@@ -149,7 +157,7 @@ export function Course() {
 
                 <div className="head__actions">
                   {cooldownLeft > 0 && !measuring && (
-                    <span className="groups__wait tnum">{cooldownLeft} s</span>
+                    <span className="groups__wait tnum">{formatCountdown(cooldownLeft)}</span>
                   )}
                   <IconButton
                     onClick={measureAll}
@@ -160,7 +168,7 @@ export function Course() {
                       measuring
                         ? 'Midiendo…'
                         : cooldownLeft > 0
-                          ? `Recién medido: esperar ${cooldownLeft} s`
+                          ? `Recién medido: esperar ${formatCountdown(cooldownLeft)}`
                           : 'Medir los cupos de todos los grupos'
                     }
                   >

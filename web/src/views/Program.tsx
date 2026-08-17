@@ -346,7 +346,7 @@ export function Program() {
                 {shown.map((c) => (
                   <li key={c.code}>
                     <Link
-                      className="row"
+                      className="row table__row"
                       to={`/nivel/${level}/sede/${campus}/plan/${program}/asignatura/${encodeURIComponent(c.code)}${
                         faculty ? `?f=${faculty}` : ''
                       }`}

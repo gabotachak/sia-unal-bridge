@@ -24,41 +24,16 @@
   transition: transform var(--slow) var(--ease-out);
 }
 
-/* ── Wrapper de tabla, header y tarjetas ─────────────────────────
-   Misma rejilla que el catálogo: las columnas son idénticas y se
-   definen UNA vez en .sem__table, de donde las heredan el header
-   y cada card__head sin posibilidad de desalinearse.              */
+/* ── Wrapper de tabla ────────────────────────────────────────────
+   Lleva `.table` de styles/table.css: la rejilla, la cabecera y la
+   etiqueta de tipología son literalmente las mismas del catálogo, y
+   estar declaradas en un solo sitio es lo que impide que una vista se
+   desalinee de la otra al tocar la otra.                          */
 
 .sem__table {
   display: flex;
   flex-direction: column;
   gap: 0;
-  --cols: 6.2rem minmax(0, 1fr) 2.4rem 2.2rem 6.4rem 2.25rem;
-}
-
-/* Igual a .table__head del catálogo. */
-.sem__head,
-.card__head {
-  display: grid;
-  grid-template-columns: var(--cols);
-  align-items: center;
-  gap: var(--gap-sm);
-}
-
-.sem__head {
-  padding: 0 0.6rem var(--gap-sm);
-  border-bottom: 1px solid var(--rule);
-  font-size: var(--t-micro);
-  letter-spacing: var(--track-micro);
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-.sem__head .col-cr,
-.sem__head .col-seats {
-  text-align: right;
-}
-.sem__head .col-typ {
-  text-align: center;
 }
 
 /* ── Lista de materias ──────────────────────────────────────────── */
@@ -104,8 +79,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.card__head:hover .card__code {
-  color: var(--accent);
+@media (hover: hover) and (pointer: fine) {
+  .card__head:hover .card__code {
+    color: var(--accent);
+  }
 }
 
 /* Nombre: el único que cede ancho. */
@@ -157,42 +134,9 @@
 }
 
 .card__tallyLabel {
-  font-size: 0.6rem;
+  font-size: var(--t-nano);
   color: var(--text-faint);
   white-space: nowrap;
-}
-
-.card__age {
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── Etiqueta de tipología ─────────────────────────────────────────
-   Mismos estilos que en Program.css; se duplican porque Program.css
-   es un módulo de vista y no una hoja compartida. */
-
-.tag {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 1.35rem;
-  border-radius: var(--radius-sm);
-  font-size: var(--t-micro);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  background: var(--surface-2);
-  color: var(--text-dim);
-}
-.tag--obligatoria {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.tag--optativa {
-  background: var(--ok-soft);
-  color: var(--ok);
-}
-.tag--libre {
-  background: var(--warn-soft);
-  color: var(--warn);
 }
 
 .card__error {
@@ -208,23 +152,26 @@
 }
 
 /* ── Grupos de una materia ───────────────────────────────────────────
-   Heredan --cols del .sem__table: la clave del grupo cae bajo
-   CÓDIGO, el instructor bajo ASIGNATURA, el horario abarca
-   TIP+CR con grid-column span, y los cupos quedan perfectamente
-   alineados bajo el header CUPOS.                               */
+   Rejilla propia de 5 columnas, no la de la cabecera: las del medio se
+   reparten en dos mitades iguales para que instructor y horario queden
+   alineados entre filas. Lo que sí toma prestado son los tres anchos
+   fijos de .table —código a la izquierda, cupos y botón a la derecha—,
+   que es lo que ancla la clave del grupo bajo CÓDIGO y su número de
+   cupos bajo CUPOS sin repetir ninguna medida.                     */
 
 .slots {
   list-style: none;
   margin: 0;
   padding: 0;
+  --slot-cols: var(--col-code) minmax(0, 1fr) minmax(0, 1fr) var(--col-seats) var(--col-act);
 }
 
 .slot {
   display: grid;
-  grid-template-columns: var(--cols);
+  grid-template-columns: var(--slot-cols);
   align-items: center;
   gap: var(--gap-sm);
-  padding: 0.5rem 0.6rem;
+  padding: 0.4rem 0.6rem;
   font-size: var(--t-small);
   border-top: 1px solid var(--rule);
 }
@@ -233,7 +180,6 @@
 }
 
 .slot__key {
-  grid-column: 1;
   font-size: var(--t-micro);
   color: var(--accent);
   font-weight: 600;
@@ -242,23 +188,11 @@
   white-space: nowrap;
 }
 
-/* Instructor y horario en columna: ocupa asignatura + tip + cr
-   para tener espacio suficiente y no cortar. */
-.slot__info {
-  grid-column: 2 / 5;
-  min-width: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-/* Cada línea es icono + texto, como en Course.tsx. */
 .slot__who,
 .slot__when {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -266,34 +200,23 @@
 }
 .slot__who {
   color: var(--text);
-  font-size: var(--t-small);
 }
 .slot__when {
   color: var(--text-faint);
-  font-size: var(--t-micro);
 }
 .slot__who svg,
 .slot__when svg {
   flex: none;
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .slot__seats {
-  grid-column: 5;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  line-height: 1.1;
   text-align: right;
+  line-height: 1.1;
 }
 .slot__seats b {
   font-weight: 600;
   color: var(--ok);
-}
-
-/* Reservado para el futuro radiobutton de selección de grupo. */
-.slot__radio {
-  grid-column: 6;
 }
 
 .slot.is-zero .slot__seats b {
@@ -305,42 +228,68 @@
 }
 
 /* ── Responsivo ─────────────────────────────────────────────────────
-   Mismos breakpoints que Program.css: cr cae primero, luego
-   código y tip. Lo que nunca se va: nombre, cupos, botón.  */
+   De grande a chico, en ese orden: cada bloque puede pisar al anterior.
 
-@media (max-width: 700px) {
-  .sem__table {
-    --cols: 6.2rem minmax(0, 1fr) 2.4rem 6.4rem 2.25rem;
-  }
-  .col-cr {
-    display: none;
-  }
-  /* Con 5 cols: info span 2/4, seats col 4, radio col 5. */
-  .slot__info  { grid-column: 2 / 4; }
-  .slot__seats { grid-column: 4; }
-  .slot__radio { grid-column: 5; }
-}
+   Qué columnas pierde la cabecera lo decide styles/table.css. Acá solo
+   lo propio: el margen de la tarjeta y qué hacen los grupos cuando la
+   fila de cinco columnas deja de caber.
 
-@media (max-width: 520px) {
-  .sem__table {
-    --cols: minmax(0, 1fr) 4.2rem 2.25rem;
-  }
-  .col-typ,
-  .col-code {
-    display: none;
-  }
-  /* Con 3 cols: clave oculta, info en col 1. */
-  .slot__key  { display: none; }
-  .slot__info  { grid-column: 1; }
-  .slot__seats { grid-column: 2; }
-  .slot__radio { grid-column: 3; }
-}
+   Hasta 520px no hace falta tocar --slot-cols: sus tres anchos fijos
+   salen de las variables de .table, que ya se ajustaron solas.      */
 
 @media (max-width: 640px) {
   .card__head,
   .slot {
     padding-left: 0.4rem;
     padding-right: 0.4rem;
+  }
+}
+
+/* En el teléfono el grupo se apila en vez de perder columnas.
+
+   Esta pantalla existe para comparar grupos entre sí, y lo que los
+   distingue es justo lo que no cabe en una línea: la clave, quién dicta
+   y a qué hora. Recortando, dos grupos del mismo profesor quedaban
+   idénticos en pantalla. Los cupos y el radio se quedan a la derecha,
+   centrados sobre las dos líneas, para que la columna de números siga
+   leyéndose de un vistazo de arriba abajo. */
+@media (max-width: 520px) {
+  .slot {
+    /* minmax(0, auto) y no `auto` a secas: la clave se dimensiona a su
+       contenido, pero puede encogerse por debajo de él. Con `auto` una clave
+       larga se lleva la fila entera y el nombre del profesor no tiene de
+       dónde recortar. */
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) var(--col-seats) var(--col-act);
+    grid-template-areas:
+      'key  who  seats radio'
+      'when when seats radio';
+    row-gap: 0.15rem;
+  }
+  .slot__key {
+    grid-area: key;
+  }
+  .slot__who {
+    grid-area: who;
+  }
+  .slot__when {
+    grid-area: when;
+    font-size: var(--t-micro);
+  }
+  .slot__seats {
+    grid-area: seats;
+  }
+  /* Reservado para el futuro radiobutton de selección de grupo. Acá sí
+     necesita área propia: con grid-template-areas, un hijo sin asignar
+     se iría a una fila implícita en vez de a su columna. */
+  .slot__radio {
+    grid-area: radio;
+  }
+
+  /* La columna de cupos vuelve a ser angosta y 'sin grupos · 2 h' ya no
+     cabe en una línea. Se va la edad y no la palabra, igual que en el
+     catálogo: importa más que no hay grupos que cuándo se supo. */
+  .card__age {
+    display: none;
   }
 }
 

@@ -141,45 +141,9 @@
 }
 
 /* ── La tabla ───────────────────────────────────────────────────────
-   La rejilla se declara UNA vez y la heredan la cabecera y todas las
-   filas. Es lo que garantiza que las columnas estén alineadas y —lo que
-   importa acá— que NUNCA se muevan: los anchos son fijos salvo el del
-   nombre, que es el único que cede.
-
-   La regla de fondo: antes recortar un nombre que empujar lo que sigue a
-   otra línea. Una tabla donde las filas cambian de alto según el largo
-   del texto es imposible de barrer con la vista, y ese salto es lo que
-   hacía que redimensionar la ventana se sintiera roto. */
-
-/* La de cupos es la única columna que creció: tiene que caber 'sin grupos ·
-   2 h' en una línea. Sale del ancho del nombre, que es el que cede. */
-.table {
-  --cols: 6.2rem minmax(0, 1fr) 2.4rem 2.2rem 6.4rem 2.25rem;
-}
-
-.table__head,
-.row {
-  display: grid;
-  grid-template-columns: var(--cols);
-  align-items: center;
-  gap: var(--gap-sm);
-}
-
-.table__head {
-  padding: 0 0.6rem var(--gap-sm);
-  border-bottom: 1px solid var(--rule);
-  font-size: var(--t-micro);
-  letter-spacing: var(--track-micro);
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-.table__head .col-cr,
-.table__head .col-seats {
-  text-align: right;
-}
-.table__head .col-typ {
-  text-align: center;
-}
+   La rejilla, la cabecera y la etiqueta de tipología viven en
+   styles/table.css: son las mismas que las de Mi semestre. Acá queda
+   solo lo que es propio de la fila del catálogo. */
 
 .rows {
   list-style: none;
@@ -243,7 +207,7 @@
   font-weight: 600;
 }
 .row__seats small {
-  font-size: 0.6rem;
+  font-size: var(--t-nano);
   color: var(--text-faint);
   white-space: nowrap;
 }
@@ -280,62 +244,12 @@
   color: var(--text-faint);
 }
 
-/* ── Etiqueta de tipología ──────────────────────────────────────────
-   Una letra. El literal completo ('FUND. OBLIGATORIA (B)') vive en el
-   title: en una lista de 700 filas la letra es lo que se compara, y el
-   resto sería ruido repetido 700 veces. */
-
-.tag {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 1.35rem;
-  border-radius: var(--radius-sm);
-  font-size: var(--t-micro);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  background: var(--surface-2);
-  color: var(--text-dim);
-}
-.tag--obligatoria {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.tag--optativa {
-  background: var(--ok-soft);
-  color: var(--ok);
-}
-.tag--libre {
-  background: var(--warn-soft);
-  color: var(--warn);
-}
-
 /* ── Cómo se encoge ─────────────────────────────────────────────────
-   Las columnas se van por prioridad, de menos a más informativa. Lo que
-   nunca se va: el nombre (qué es), los cupos (para qué se entró) y el
-   botón de agregar (a qué se vino). Redefinir --cols basta: la cabecera
-   y las filas la heredan juntas, así que no pueden desalinearse. */
+   Qué columnas se van y a qué ancho lo decide styles/table.css, que es
+   quien manda la rejilla. Acá solo lo que depende del contenido de la
+   celda de cupos. */
 
-@media (max-width: 700px) {
-  .table {
-    --cols: 6.2rem minmax(0, 1fr) 2.4rem 6.4rem 2.25rem;
-  }
-  .col-cr {
-    display: none;
-  }
-}
-
-/* En el teléfono queda lo irreductible: qué materia es, cuántos cupos tiene,
-   y el botón para meterla al semestre. El código sigue a un toque de
-   distancia, en la ficha de la asignatura. */
 @media (max-width: 520px) {
-  .table {
-    --cols: minmax(0, 1fr) 4.2rem 2.25rem;
-  }
-  .col-typ,
-  .col-code {
-    display: none;
-  }
   /* Acá la columna vuelve a ser angosta y 'sin grupos · 2 h' ya no cabe. Se
      va la edad y no la palabra: en el teléfono importa más que no hay grupos
      que cuándo se supo, y el dato completo sigue a un toque, en la ficha. */

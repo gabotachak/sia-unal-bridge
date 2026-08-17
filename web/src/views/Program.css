@@ -57,11 +57,17 @@
    créditos", "obligatorias y optativas"). Acá los valores están todos a
    la vista, con cuántas asignaturas hay en cada uno, y se acumulan. */
 
+/* Plegadas por defecto en todo ancho: el botón manda, no el viewport. */
 .filters {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: var(--gap-sm);
   margin-bottom: var(--gap);
+}
+
+.filters.is-open {
+  display: flex;
+  animation: rise var(--fast) var(--ease-out);
 }
 
 .filters__row {
@@ -89,24 +95,18 @@
   font-size: var(--t-small);
 }
 
-/* Plegar las facetas: el botón no existe donde caben (escritorio), y donde no
-   caben las facetas arrancan cerradas. Es todo por CSS a propósito — con
-   matchMedia habría que sincronizar un estado que el ancho ya sabe. */
-.filters__toggle {
-  display: none;
+/* El toggle vale en todo ancho: veinte chips de faceta son mucho ruido
+   permanente arriba de la tabla, también en escritorio. El contador en el
+   botón es lo que hace que plegarlas no esconda filtros activos.
+
+   El selector lleva `.chip` a propósito: sin él empata en especificidad con
+   `.chip { display: inline-flex }` de base.css y gana el que quede último en
+   el bundle. */
+.chip.filters__toggle {
+  display: inline-flex;
 }
 
 @media (max-width: 700px) {
-  .filters__toggle {
-    display: inline-flex;
-  }
-  .filters {
-    display: none;
-  }
-  .filters.is-open {
-    display: flex;
-    animation: rise var(--fast) var(--ease-out);
-  }
   /* Abierto, el rótulo va encima y no al lado: los 5rem de la columna
      izquierda son casi un tercio del ancho del teléfono, y ese tercio le
      hace falta a los chips para no envolver. */

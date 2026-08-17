@@ -12,6 +12,21 @@ export function formatAge(seconds: number): string {
 }
 
 /**
+ * Segundos que faltan → '43 s', '4:47'.
+ *
+ * No es formatAge con otro nombre: aquélla redondea hacia abajo porque una
+ * edad aproximada basta ('12 min' de antigüedad), y acá el número baja a la
+ * vista de quien espera. '4 min' quieto durante sesenta segundos se lee como
+ * congelado; el m:ss se mueve cada segundo y termina en cero, que es
+ * justamente lo que la persona está mirando.
+ */
+export function formatCountdown(seconds: number): string {
+  if (seconds < 60) return `${seconds} s`;
+  const m = Math.floor(seconds / 60);
+  return `${m}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+/**
  * El SIA devuelve TODO EN MAYÚSCULAS: 'INGENIERÍA AGRONÓMICA',
  * 'ÁLGEBRA LINEAL I'. Es cómo está en la base de ellos, no una decisión de
  * estilo — y pegado tal cual en una lista de 700 filas grita.

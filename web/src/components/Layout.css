@@ -3,6 +3,17 @@
   flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
+
+  /* Ningún adorno debería poder generar scroll horizontal en la página.
+     El caso concreto: el globito de .iconbtn está siempre en el DOM con
+     opacity 0 —para poder animarlo— y con white-space: nowrap. Un botón
+     pegado al borde derecho con un rótulo largo empuja esa caja fuera del
+     viewport, y aunque no se vea, cuenta para el área desplazable.
+
+     `clip` y no `hidden`: hidden convierte a .shell en contenedor de scroll,
+     que rompe position: sticky y los scroll-into-view de dentro. clip corta
+     y no deja nada que desplazar, que es exactamente lo que se quiere. */
+  overflow-x: clip;
 }
 
 .content {
@@ -54,6 +65,10 @@
 .head__title {
   font-size: var(--t-title);
   margin: 0.1rem 0 0;
+  /* El título de una asignatura puede ser una frase entera y ocupar dos
+     líneas: es el título de la pantalla, no una fila de una lista. Lo que no
+     puede es desbordar. */
+  overflow-wrap: anywhere;
 }
 
 .head__meta {
@@ -72,13 +87,5 @@
   display: flex;
   align-items: center;
   gap: 0.15rem;
-  flex: none;
-}
-
-.head__sep {
-  width: 1px;
-  height: 1.4rem;
-  background: var(--rule);
-  margin: 0 var(--gap-xs);
   flex: none;
 }

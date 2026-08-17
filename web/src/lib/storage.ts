@@ -13,6 +13,9 @@ const KEY = 'tablero.semestre.v2';
  *  guardarlas juntas obligaría a reescribir el plan en cada agregado. */
 const PICK_KEY = 'tablero.plan.v1';
 
+/** El orden de cada tabla. Ver loadSort. */
+const SORT_KEY = 'tablero.orden.v1';
+
 export type PlanItem = {
   level: string; // 'pregrado' — el mismo código puede existir en otro nivel
   campus: string; // '1101'
@@ -149,8 +152,63 @@ export function clearStored(): void {
   try {
     localStorage.removeItem(KEY);
     localStorage.removeItem(PICK_KEY);
+    localStorage.removeItem(SORT_KEY);
   } catch {
     // Modo privado. Si no se puede escribir, tampoco había nada guardado.
+  }
+}
+
+/* ── El orden de las tablas ─────────────────────────────────────────
+   Cómo ordenaste una tabla es una preferencia, no un estado de pantalla:
+   ordenas por cupos, entras a mirar una asignatura, vuelves — y esperas
+   encontrarla como la dejaste. Viviendo en `useState` se perdía al
+   desmontar la vista.
+
+   Guardado bajo UNA clave con las dos tablas dentro, y no una por tabla,
+   porque son la misma preferencia con dos ámbitos: así `clearStored`
+   olvida las dos de un borrado y no hay forma de dejarse una a medias.
+
+   No va en la URL a propósito. La ficha vuelve al catálogo por un enlace
+   que arma la ruta de cero, así que un `?sort=` se perdería justo en el
+   caso que esto viene a arreglar; y de dónde vienes ordenando no es parte
+   de la identidad del catálogo, que es lo que se copia y se pega.        */
+
+/** Qué tabla. Son dos y cada una recuerda la suya. */
+export type SortScope = 'catalog' | 'semester';
+
+/** Lo guardado. `col` se valida contra la tabla que la usa, no acá: este
+ *  módulo no sabe qué columnas existen y no tiene por qué saberlo. */
+export type StoredSort = { col: string; dir: 'asc' | 'desc' };
+
+function readSorts(): Record<string, StoredSort> {
+  try {
+    const raw = localStorage.getItem(SORT_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function loadSort(scope: SortScope): StoredSort | null {
+  const v = readSorts()[scope];
+  // Nunca confiar en lo guardado: puede venir de una versión con otras
+  // columnas, o de alguien jugando con las devtools.
+  if (!v || typeof v.col !== 'string') return null;
+  return v.dir === 'asc' || v.dir === 'desc' ? { col: v.col, dir: v.dir } : null;
+}
+
+export function saveSort(scope: SortScope, sort: StoredSort | null): void {
+  try {
+    const all = readSorts();
+    if (sort) all[scope] = sort;
+    else delete all[scope];
+    // Sin ninguna tabla ordenada, la clave se borra en vez de guardar `{}`:
+    // volver al orden de partida tiene que dejar el navegador como estaba.
+    if (Object.keys(all).length === 0) localStorage.removeItem(SORT_KEY);
+    else localStorage.setItem(SORT_KEY, JSON.stringify(all));
+  } catch {
+    // Cuota llena o modo privado: no vale la pena romper la app por esto.
   }
 }
 

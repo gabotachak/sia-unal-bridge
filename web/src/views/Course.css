@@ -22,28 +22,11 @@
   }
 }
 
-/* ── Cabecera de la asignatura ──────────────────────────────────── */
-
-.course {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--gap);
-  flex-wrap: wrap;
-  margin-bottom: var(--gap);
-}
-
-.course__id {
-  min-width: 0;
-}
-
-.course__title {
-  font-size: var(--t-title);
-  margin: 0.15rem 0 0;
-  /* El nombre sí puede ocupar dos líneas: es el título de la pantalla, no
-     una fila de una lista. Lo que no puede es desbordar. */
-  overflow-wrap: anywhere;
-}
+/* ── Cabecera de la asignatura ──────────────────────────────────────
+   Usa `.head` de Layout.css, el mismo del catálogo y Mi semestre. Tenía
+   una copia propia (`.course`) que hacía exactamente lo mismo con otros
+   valores, y ese medio milímetro de diferencia entre pantallas es de lo
+   que está hecha la sensación de estar en dos apps distintas. */
 
 .course__desc {
   max-width: 46rem;
@@ -65,10 +48,6 @@
 /* ── Barra de los grupos ────────────────────────────────────────── */
 
 .groups__bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gap);
   padding-bottom: var(--gap-sm);
   border-bottom: 1px solid var(--rule);
 }
@@ -80,18 +59,6 @@
   text-transform: uppercase;
   color: var(--text-faint);
   margin: 0;
-}
-
-.groups__wait {
-  font-size: var(--t-micro);
-  color: var(--text-faint);
-}
-
-.groups__note {
-  margin: var(--gap-sm) 0 var(--gap);
-  font-size: var(--t-micro);
-  color: var(--text-faint);
-  max-width: 42rem;
 }
 
 /* ── Un grupo ───────────────────────────────────────────────────────

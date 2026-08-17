@@ -29,7 +29,7 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("SIA_POOL_SIZE: %w", err)
 	}
 
-	cooldown, err := strconv.Atoi(getenv("FETCH_COOLDOWN", "60"))
+	cooldown, err := strconv.Atoi(getenv("FETCH_COOLDOWN", "300"))
 	if err != nil {
 		return Config{}, fmt.Errorf("FETCH_COOLDOWN: %w", err)
 	}

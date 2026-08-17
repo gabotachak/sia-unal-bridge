@@ -19,6 +19,10 @@ import { useConfirm } from '../components/Confirm';
 import { AddButton } from '../components/AddButton';
 import { Empty, Fault, Loading } from '../components/States';
 import { SeatsFigure } from '../components/Seats';
+import { TableHead } from '../components/TableHead';
+import type { TableCol } from '../lib/table';
+import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
+import { useTableSort } from '../hooks/useTableSort';
 import { fold, formatAge, sentence } from '../lib/format';
 import { selectionId, selectionPath } from '../lib/storage';
 import './Program.css';
@@ -84,16 +88,20 @@ export function Program() {
     };
   }, [data]);
 
+  /** Se recuerda entre visitas. `null` = como lo mandó el SIA, ya alfabético. */
+  const { sort, onSort } = useTableSort('catalog');
+
   const shown = useMemo(() => {
     const needle = fold(q);
-    return (data?.courses ?? []).filter((c) => {
+    const kept = (data?.courses ?? []).filter((c) => {
       if (needle && !fold(c.name).includes(needle) && !fold(c.code).includes(needle)) return false;
       if (typols.size && !typols.has(c.typology)) return false;
       if (creds.size && !creds.has(c.credits)) return false;
       if (onlyOpen && !hasRoom(c)) return false;
       return true;
     });
-  }, [data, q, typols, creds, onlyOpen]);
+    return sort ? sortBy(kept, (c) => sortKeyOf(c, sort.col), sort.dir) : kept;
+  }, [data, q, typols, creds, onlyOpen, sort]);
 
   const total = data?.courses.length ?? 0;
   const facetCount = typols.size + creds.size;
@@ -334,14 +342,7 @@ export function Program() {
               {/* La cabecera comparte la MISMA rejilla que las filas: es lo que
                   hace que las columnas queden alineadas sin usar <table>, que
                   no sabe truncar celdas sin romper el ancho. */}
-              <div className="table__head" aria-hidden="true">
-                <span className="col-code">código</span>
-                <span>asignatura</span>
-                <span className="col-typ">tip</span>
-                <span className="col-cr">cr</span>
-                <span className="col-seats">cupos</span>
-                <span />
-              </div>
+              <TableHead sort={sort} onSort={onSort} />
 
               <ul className="rows">
                 {shown.map((c) => (
@@ -453,6 +454,30 @@ function SeatsCell({
       <small className="tnum">{formatAge(seats.age_seconds)}</small>
     </span>
   );
+}
+
+/**
+ * Por qué se ordena cada columna. Cupos es la única con matiz: los cuatro
+ * estados de la celda caen en una sola recta según SEATS_RANK.
+ */
+function sortKeyOf(c: CourseSummary, col: TableCol): SortKey {
+  switch (col) {
+    case 'code':
+      return c.code;
+    case 'name':
+      return c.name;
+    case 'typology':
+      return c.typology;
+    case 'credits':
+      return c.credits;
+    case 'seats':
+      if (!c.seats) {
+        // El sello del detalle es lo único que separa 'no hay grupos' de
+        // 'nadie preguntó': sin cupos y sin sello, no se midió nunca.
+        return c.detail_fetched_at ? SEATS_RANK.noOffer : SEATS_RANK.unknown;
+      }
+      return c.seats.available === 0 ? SEATS_RANK.full : c.seats.available;
+  }
 }
 
 /** Añade o quita, sin mutar: React solo repinta si el objeto es otro. */

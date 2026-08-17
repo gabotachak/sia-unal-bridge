@@ -55,6 +55,53 @@
   text-align: center;
 }
 
+/* El rótulo de columna, que además ordena. Hereda la tipografía de la
+   cabecera en vez de declararla otra vez: si mañana cambia el tamaño de las
+   versalitas, cambia en un sitio.
+
+   `text-transform` y `letter-spacing` van explícitos aunque las dos sean
+   propiedades heredables: la hoja del navegador las fija sobre los controles
+   de formulario (`text-transform: none`), y una regla del UA gana a la
+   herencia. Sin esto el rótulo salía en minúscula y apretado, que a 0.72rem
+   se lee como si fuera de otro tamaño. */
+.table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  transition: color var(--fast) var(--ease-out);
+}
+.table__sort.is-on {
+  color: var(--accent);
+}
+
+/* La flecha está SIEMPRE en el DOM y solo cambia de opacidad. Si apareciera y
+   desapareciera, el rótulo se correría unos píxeles cada vez que se ordena por
+   esa columna, y la cabecera entera bailaría. */
+.table__sort svg {
+  flex: none;
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease-out);
+}
+.table__sort.is-on svg {
+  opacity: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .table__sort:hover {
+    color: var(--accent);
+  }
+  /* Al apuntar, la flecha se insinúa: dice que esa columna se puede ordenar
+     sin llegar a afirmar que ya lo está. */
+  .table__sort:hover svg {
+    opacity: 0.45;
+  }
+  .table__sort.is-on:hover svg {
+    opacity: 1;
+  }
+}
+
 /* ── Etiqueta de tipología ──────────────────────────────────────────
    Una letra. El literal completo ('FUND. OBLIGATORIA (B)') vive en el
    title: en una lista de 700 filas la letra es lo que se compara, y el

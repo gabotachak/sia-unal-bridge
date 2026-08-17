@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { Check, Clock, Eraser, RefreshCw, Ticket, Trash2, User } from 'lucide-react';
 import { ApiError, FETCH_COOLDOWN, get, routes } from '../api/client';
@@ -13,6 +13,10 @@ import { useConfirm } from '../components/Confirm';
 import { IconButton } from '../components/IconButton';
 import { Empty } from '../components/States';
 import { SeatsFigure } from '../components/Seats';
+import { TableHead } from '../components/TableHead';
+import type { TableCol } from '../lib/table';
+import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
+import { useTableSort } from '../hooks/useTableSort';
 import './Semester.css';
 
 /** El pool del back son 4 sesiones ADF. Pedir de a más no acelera nada. */
@@ -223,6 +227,20 @@ export function Semester() {
     plan.clear();
   }
 
+  /**
+   * El orden es SOLO de pantalla: `rows` sigue el de `plan.items`, que es el
+   * que manda a la hora de medir y de guardar. Reordenar la fuente haría que
+   * pulsar una cabecera cambiara el orden de las peticiones al SIA, que no
+   * tiene nada que ver con lo que se pidió.
+   *
+   * `null` = el orden en que se fueron agregando, que es el de partida.
+   */
+  const { sort, onSort } = useTableSort('semester');
+  const shownRows = useMemo(
+    () => (sort ? sortBy(rows, (r) => sortKeyOf(r, sort.col), sort.dir) : rows),
+    [rows, sort],
+  );
+
   const totals = summarize(rows);
   const empty = plan.items.length === 0;
 
@@ -398,16 +416,9 @@ export function Semester() {
           </div>
 
           <div className="table sem__table">
-            <div className="table__head" aria-hidden="true">
-              <span className="col-code">código</span>
-              <span>asignatura</span>
-              <span className="col-typ">tip</span>
-              <span className="col-cr">cr</span>
-              <span className="col-seats">cupos</span>
-              <span />
-            </div>
+            <TableHead sort={sort} onSort={onSort} />
             <ul className="sem">
-              {rows.map((r) => (
+              {shownRows.map((r) => (
                 <CourseCard
                   key={itemId(r.item)}
                   row={r}
@@ -591,6 +602,26 @@ function CourseCard({
       )}
     </li>
   );
+}
+
+/** Misma escala de cupos que el catálogo: los cuatro estados en una recta. */
+function sortKeyOf(r: Row, col: TableCol): SortKey {
+  switch (col) {
+    case 'code':
+      return r.item.code;
+    case 'name':
+      return r.item.name;
+    case 'typology':
+      return r.item.typology;
+    case 'credits':
+      return r.item.credits;
+    case 'seats': {
+      if (!r.detail) return SEATS_RANK.unknown;
+      if (r.detail.sections.length === 0) return SEATS_RANK.noOffer;
+      const n = r.detail.sections.reduce((sum, sec) => sum + (sec.seats?.available ?? 0), 0);
+      return n === 0 ? SEATS_RANK.full : n;
+    }
+  }
 }
 
 function summarize(rows: Row[]) {

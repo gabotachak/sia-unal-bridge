@@ -534,7 +534,7 @@ Al cerrar esta fase hay que tocar, y conviene hacerlo en el mismo PR que el cód
 
 ---
 
-## Resultado (2026-08-17)
+## Resultado (2026-08-17/18)
 
 Medido contra producción, no estimado.
 
@@ -549,6 +549,9 @@ Medido contra producción, no estimado.
 | `FetchDetails` por lote | 24 POSTs contra **28** de llamadas sueltas intercaladas (6 asignaturas, 2 planes) | "menos POSTs" ✔ |
 | `seats --scope=hot` | 5 asignaturas en 24 s; segundo barrido: **0 filas nuevas** en `seat_snapshot`, `seats_checked_at` refrescado en las 244 secciones | criterio del paso 6 ✔ |
 | Bogotá, `detail` a mitad | **201 de 505 planes saltados** porque otro plan ya había traído sus asignaturas | la aritmética de las 3 h ✔ |
+| `catalog` en toda la UNAL (2026-08-17, 1 h 46 min) | 1306 planes OK, 23 fallidos, 60 saltados, 224 750 asignaturas, 16 246 POSTs, 3.4 GB | ~2 760 POSTs, ~2.7 h, ~0.7 GB |
+| Los 23 fallidos, ya arreglados (§37) | **18 planes reales** de Amazonia, Caribe, Orinoquía y 2 sueltos; los otros 5 eran los tests escribiendo en la base de producción | — |
+| `catalog` sobre esas 5 sedes tras el arreglo (2026-08-18) | 18 planes OK, **0 fallidos**, 206 POSTs, 21 MB | cobertura **1380/1380** |
 
 `-race` limpio con W=4 sobre programas concurrentes. `REFRESH_ENABLED=false` sale con
 código 0 y un log **sin abrir una conexión al SIA**. Dos corridas del mismo modo: la
@@ -556,11 +559,18 @@ segunda sale con código 0 por el `pg_try_advisory_lock`.
 
 ### Lo que el Job destapó (y era de la API también)
 
-Tres trampas nuevas, las tres en rutas que la API podía recorrer y nunca había recorrido:
-[GOTCHAS §34](GOTCHAS.md) (`it11` se queda en el formulario y recorta el siguiente
-listado), [§35](GOTCHAS.md) (**en doctorado no existe el comodín de sede**, así que el
-catálogo de ~82 planes era `502`) y [§36](GOTCHAS.md) (el nombre del listado venía pegado
-a la insignia `ASIGNATURA SIN PROGRAMAR`, y ese texto llegaba a `course.name`).
+Cuatro trampas nuevas, las cuatro en rutas que la API podía recorrer y nunca había
+recorrido: [GOTCHAS §34](GOTCHAS.md) (`it11` se queda en el formulario y recorta el
+siguiente listado), [§35](GOTCHAS.md) (**en doctorado no existe el comodín de sede**, así
+que el catálogo de ~82 planes era `502`), [§36](GOTCHAS.md) (el nombre del listado venía
+pegado a la insignia `ASIGNATURA SIN PROGRAMAR`, y ese texto llegaba a `course.name`) y
+[§37](GOTCHAS.md) (el rebote del §30 sobre `soc6` es innecesario **e imposible** en las
+sedes de una sola facultad, así que 14 planes de Amazonia y Caribe no tenían catálogo).
+
+El §37 salió del barrido completo, no de una prueba: 23 planes fallidos en el log de
+`/var/log/sia-refresher.log`, agrupados por error, y 14 de ellos con el mismo
+`soc6 has 1 options, need at least 2`. Sin `refresh_run` y sin el log por unidad, ese
+número se habría visto como "1362 de 1380, casi todo".
 
 Era la predicción explícita de este documento: *"cualquier bug de persistencia que el job
 destape es un bug que la API también tenía. Eso es una feature."*

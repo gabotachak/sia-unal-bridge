@@ -8,7 +8,7 @@ justificación de cada decisión vive en los otros documentos; aquí solo está 
 
 | Documento | Para qué lo abres |
 |---|---|
-| [`GOTCHAS.md`](GOTCHAS.md) | **antes de escribir la primera línea.** 36 trampas |
+| [`GOTCHAS.md`](GOTCHAS.md) | **antes de escribir la primera línea.** 37 trampas |
 | [`PROTOCOL.md`](PROTOCOL.md) | cuerpos de petición reales |
 | [`FIELDS.md`](FIELDS.md) | ids de componente, opciones, formatos del detalle |
 | [`DATA-MODEL.md`](DATA-MODEL.md) | esquema y las nueve decisiones no obvias |
@@ -249,7 +249,7 @@ Medido el 2026-08-17 contra producción:
 | `it11` en el listado | 232 KB → **17.8 KB** (13×) |
 | `seats --scope=hot` | 5 asignaturas en 24 s; segundo barrido: **0 filas nuevas** en `seat_snapshot` |
 
-Y destapó tres trampas que la API también tenía: [GOTCHAS §34–§36](GOTCHAS.md).
+Y destapó cuatro trampas que la API también tenía: [GOTCHAS §34–§37](GOTCHAS.md).
 
 Después: alertas de cupo (el historial ya las soporta), prerrequisitos y componentes.
 

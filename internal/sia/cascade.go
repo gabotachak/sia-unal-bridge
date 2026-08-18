@@ -363,10 +363,12 @@ func (c *SIAConn) postValueChangeFresh(ctx context.Context, id string, cur *stri
 // the API, and failing programs in the sweep. The wildcard is an optimisation,
 // not the mechanism.
 //
-// soc4 and soc5 post the same value on every call, and soc10/soc6 repeat
-// whenever two consecutive requests target the same sede — so the second
-// time a pooled connection is reused they would repost unchanged and noop
-// (GOTCHAS §30) without postValueChangeFresh's bounce.
+// soc4, soc5 and soc10 post the same value on every call whenever two
+// consecutive requests target the same sede — so the second time a pooled
+// connection is reused they would repost unchanged and noop (GOTCHAS §30)
+// without postValueChangeFresh's bounce. soc6 is the exception and needs no
+// bounce: the soc10 above re-renders it and clears its selection server-side
+// (GOTCHAS §37).
 func (c *SIAConn) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([][]byte, error) {
 	// soc4=7 is a value CHANGE on top of an already-parked program: run the
 	// regular cascade first so soc1..soc3 are populated, then switch soc4.
@@ -405,9 +407,17 @@ func (c *SIAConn) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([
 	bodies := make([][]byte, 0, len(targets))
 	var lastNoop error
 	for _, t := range targets {
-		if _, _, err := c.postValueChangeFresh(ctx, "pt1:r1:0:soc6", &c.navFacElect,
-			t.value, t.alt, func(v string) { c.form.FacElect = v }); err != nil {
+		// Plain post, no bounce: the soc10 above ALWAYS runs and its
+		// re-render clears the server's soc6 selection, so reposting the
+		// value this connection used last time is a genuine change again
+		// (measured 2026-08-18, GOTCHAS §37). Bouncing here needed a second
+		// option to bounce through, which a single-faculty sede does not
+		// have — that is what left Amazonia and Caribe without a catalog.
+		c.form.FacElect = t
+		if body, _, err := c.postValueChange(ctx, "pt1:r1:0:soc6"); err != nil {
 			return nil, err
+		} else if isNoop(body) {
+			return nil, newNoopError(body)
 		}
 		body, _, err := c.postAction(ctx, "pt1:r1:0:cb1", "")
 		if err != nil {
@@ -436,15 +446,15 @@ func (c *SIAConn) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([
 	return bodies, nil
 }
 
-// electivesTarget is one soc6 search to run: the position to post, plus a
-// different position to bounce through when the connection already sits on it
-// (GOTCHAS §30). Both are positions in THIS sede's list at THIS level.
-type electivesTarget struct{ value, alt string }
-
 // electivesTargets decides which soc6 searches cover the sede's libre
-// elección: the wildcard alone when the sede offers one at this level, every
-// faculty otherwise. See FetchElectives for why the second case exists.
-func electivesTargets(env map[string]string) ([]electivesTarget, error) {
+// elección, as positions in THIS sede's list at THIS level: the wildcard
+// alone when the sede offers one, every faculty otherwise. See FetchElectives
+// for why the second case exists.
+//
+// A single option is normal, not a protocol break: the small sedes
+// (Amazonia 6000, Caribe 8000) list nothing but their own campus-wide entry.
+// Requiring two options here is what left their 14 plans without a catalog.
+func electivesTargets(env map[string]string) ([]string, error) {
 	html, ok := env["pt1:r1:0:soc6"]
 	if !ok {
 		return nil, fmt.Errorf("sia: FetchElectives: no update id=%q in the soc10 response", "pt1:r1:0:soc6")
@@ -453,29 +463,22 @@ func electivesTargets(env map[string]string) ([]electivesTarget, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(opts) < 2 {
-		// One option means there is nothing to bounce through, so a repeated
-		// request could not be told apart from a dead session.
-		return nil, fmt.Errorf("sia: FetchElectives: soc6 has %d options, need at least 2", len(opts))
+	// Zero IS a break: every sede lists at least its own campus-wide entry,
+	// so an empty dropdown means the soc10 before it did not take effect.
+	// Answering "this plan has no libre elección" would be a silent lie.
+	if len(opts) == 0 {
+		return nil, fmt.Errorf("sia: FetchElectives: soc6 came back with no options")
 	}
 
-	alt := func(idx int) string {
-		for _, o := range opts {
-			if o.Index != idx {
-				return strconv.Itoa(o.Index)
-			}
-		}
-		return "" // unreachable: len(opts) >= 2
-	}
 	for _, o := range opts {
 		if strings.HasPrefix(o.Name, campusWildcardPrefix) {
-			return []electivesTarget{{value: strconv.Itoa(o.Index), alt: alt(o.Index)}}, nil
+			return []string{strconv.Itoa(o.Index)}, nil
 		}
 	}
 
-	targets := make([]electivesTarget, 0, len(opts))
+	targets := make([]string, 0, len(opts))
 	for _, o := range opts {
-		targets = append(targets, electivesTarget{value: strconv.Itoa(o.Index), alt: alt(o.Index)})
+		targets = append(targets, strconv.Itoa(o.Index))
 	}
 	return targets, nil
 }

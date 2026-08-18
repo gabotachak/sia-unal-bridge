@@ -287,3 +287,49 @@ func TestLive_FetchElectives_LevelWithoutSedeWildcard(t *testing.T) {
 		t.Fatalf("ParseList regular: %v", err)
 	}
 }
+
+// TestLive_FetchElectives_SingleFacultySede is the regression for the second
+// bug the fase 2 sweep uncovered: the small sedes list a single soc6 option
+// (their own "6000 SEDE AMAZONIA"), and the old code demanded two — one to
+// post and one to bounce through. That left 14 plans of Amazonia and Caribe
+// with no catalog at all.
+//
+// It runs the SAME sede twice on ONE connection, which is the case the bounce
+// existed for: reposting soc6 unchanged used to no-op. It does not, because
+// the soc10 in between re-renders the dropdown and clears its selection
+// server-side (measured 2026-08-18, GOTCHAS §37). Skipped unless SIA_LIVE=1.
+func TestLive_FetchElectives_SingleFacultySede(t *testing.T) {
+	if os.Getenv("SIA_LIVE") != "1" {
+		t.Skip("set SIA_LIVE=1 to run against the real SIA server")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	c, err := NewConn("https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Bootstrap(ctx); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+
+	// Amazonia, posgrado: soc6 has exactly one option. Two DIFFERENT plans of
+	// the same sede, so the second call repeats every electives value.
+	for _, key := range []catalog.ProgramKey{
+		{Level: 2, Campus: 1, Faculty: 0, Program: 1, CampusCode: "1125"},
+		{Level: 2, Campus: 1, Faculty: 0, Program: 4, CampusCode: "1125"},
+	} {
+		bodies, err := c.FetchElectives(ctx, key)
+		if err != nil {
+			t.Fatalf("FetchElectives %s: %v", key, err)
+		}
+		rows, err := electiveRows(bodies)
+		if err != nil {
+			t.Fatalf("electiveRows %s: %v", key, err)
+		}
+		if len(rows) == 0 {
+			t.Fatalf("%s: got no elective rows", key)
+		}
+		t.Logf("%s: %d bodies, %d rows", key, len(bodies), len(rows))
+	}
+}

@@ -1,13 +1,13 @@
 # Trampas verificadas
 
-Cada punto fue comprobado contra el servidor de producción el **2026-08-15**, y las tres
-últimas (§34–§36) el **2026-08-17**, implementando la fase 2.
+Cada punto fue comprobado contra el servidor de producción el **2026-08-15**, y las cuatro
+últimas (§34–§37) el **2026-08-17/18**, implementando la fase 2.
 Varios contradicen lo que asumía el proyecto anterior (`BetterCampus/sia-scraper`).
 
 Léelo antes de escribir código.
 
-> §34-§36 las destapó el `Refresher` al recorrer sedes y niveles que la API nunca había
-> tocado. Las tres eran bugs de la API tambien, no del Job.
+> §34-§37 las destapó el `Refresher` al recorrer sedes y niveles que la API nunca había
+> tocado. Las cuatro eran bugs de la API tambien, no del Job.
 >
 > §20-§28 salen de la segunda ronda de experimentos (2026-08-15, tarde). Las dos caras
 > de descubrir por tu cuenta son la §20 —se disfraza de sesión colgada— y la §27, que
@@ -705,6 +705,11 @@ veces.
 > conexión, reenvía `soc1=0, soc9=2` sin saberlo → mismo no-op del §30. Ver detalle
 > completo en §31.
 
+> **Excepción, 2026-08-18:** `soc6` no la sufre. El `soc10` que va justo antes lo
+> re-renderiza y le borra la selección en el servidor, así que reenviarle el mismo valor
+> vuelve a ser un cambio real. Rebotar ahí no solo sobra: es imposible en las sedes de
+> una sola facultad. Medido en §37.
+
 ---
 
 ## 31. El §30 es un problema del *pool*, no solo de un bucle mal escrito
@@ -924,3 +929,45 @@ si eso no existe.
 
 `sia/parse_list.go`: `ParseList`. Verificado con
 `TestParseList_NameExcludesTheUnscheduledBadge` sobre el fixture del 2026-08-15.
+
+---
+
+## 37. `soc10` borra la selección de `soc6`, así que el rebote del §30 sobra ahí
+
+El §30 dice que reenviar a un dropdown el valor que ya tiene produce un no-op
+indistinguible de una sesión muerta, y que por eso hay que **rebotar** por otro valor
+antes. Es cierto para `soc1`/`soc9`/`soc2`/`soc3`/`soc10`. Para `soc6` **no**, y esa
+excepción importa porque el rebote necesita una segunda opción por la que rebotar.
+
+Medido 2026-08-18, una sola conexión sobre Amazonia posgrado:
+
+| POST | Bytes | ¿no-op? |
+|---|---|---|
+| `soc10=1` | 6 515 | no |
+| `soc6=0` | 1 174 714 | no |
+| `soc6=0` otra vez | **1 036** | **sí** |
+| `soc10=2`, `soc10=1` (rebote de sede) | 7 875 / 21 721 | no |
+| `soc6=0` **después del re-render** | **21 042** | **no** |
+
+Repetir `soc6` sin más sí es no-op. Pero `FetchElectives` **siempre** postea `soc10`
+antes, y ese POST **vuelve a pintar el dropdown de `soc6` y le borra la selección en el
+servidor**. Después de eso, el mismo valor de siempre vuelve a ser un cambio real.
+
+Por qué importa: el código rastreaba `soc6` en `navFacElect` y rebotaba por otra opción
+cuando coincidía. Las sedes chicas listan **una sola opción** —`6000 SEDE AMAZONIA`,
+`8000 SEDE CARIBE`— así que no había por dónde rebotar, y el guardia `len(opts) < 2`
+devolvía `soc6 has 1 options, need at least 2`. Resultado: **14 planes de Amazonia y
+Caribe sin catálogo**, otra vez destapado por el barrido de la fase 2, no por la API.
+
+**Cómo se resuelve:** `soc6` no se rastrea. Se postea siempre, tal cual, y un no-op ahí
+vuelve a ser lo que dice el §7 —un error de verdad—. `electivesTargets` acepta una sola
+opción; lo que sigue siendo error es **cero** opciones, porque toda sede lista al menos
+su propia entrada de sede y un dropdown vacío significa que el `soc10` anterior no cuajó.
+
+Ojo con la tentación de contarlo al revés: la opción única de Amazonia **es** el comodín
+`SEDE …` del §32, así que ese caso cae en la rama del comodín y hace **una** búsqueda,
+no una por facultad.
+
+`sia/cascade.go`: `FetchElectives`, `electivesTargets`. Verificado con
+`TestElectivesTargets` y `TestLive_FetchElectives_SingleFacultySede` (dos planes de la
+misma sede sobre una misma conexión, que es el caso para el que existía el rebote).

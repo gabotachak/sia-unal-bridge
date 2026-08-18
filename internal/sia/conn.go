@@ -49,13 +49,17 @@ type SIAConn struct {
 	// connection (see Bootstrap, which resets these).
 	navLevel, navCampus, navFaculty int
 
-	// navTipologia/navModo/navSedeElect/navFacElect are the electives
-	// cascade's equivalent tracking (soc4, soc5, soc10, soc6). soc4 and soc5
-	// are constant across every call, and soc10/soc6 repeat whenever two
-	// consecutive requests hit the same sede — so the SECOND time a pooled
-	// connection is reused, those would repost unchanged and noop without
-	// this guard. "" = unset (matches formState's zero value).
-	navTipologia, navModo, navSedeElect, navFacElect string
+	// navTipologia/navModo/navSedeElect are the electives cascade's
+	// equivalent tracking (soc4, soc5, soc10). soc4 and soc5 are constant
+	// across every call, and soc10 repeats whenever two consecutive requests
+	// hit the same sede — so the SECOND time a pooled connection is reused,
+	// those would repost unchanged and noop without this guard. "" = unset
+	// (matches formState's zero value).
+	//
+	// soc6 is deliberately NOT tracked: the soc10 post that precedes it
+	// re-renders the dropdown and clears its selection server-side, so every
+	// soc6 post is a genuine change (GOTCHAS §37).
+	navTipologia, navModo, navSedeElect string
 
 	// DetailRegion: 0 = in the search region; >0 = an open detail region.
 	// Back is pt1:r1:<DetailRegion>:cb4 and the number grows with every
@@ -125,7 +129,7 @@ func (c *SIAConn) Bootstrap(ctx context.Context) ([]byte, error) {
 	c.ParkedAt = catalog.ProgramKey{}
 	c.parked = false
 	c.navLevel, c.navCampus, c.navFaculty = -1, -1, -1
-	c.navTipologia, c.navModo, c.navSedeElect, c.navFacElect = "", "", "", ""
+	c.navTipologia, c.navModo, c.navSedeElect = "", "", ""
 	c.DetailRegion = 0
 	c.LastUsed = time.Now()
 	return body, nil

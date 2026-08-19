@@ -45,6 +45,8 @@ func NewRouter(svc *catalog.Service, cooldown int, version, commit string) *gin.
 		// The contract, embedded in the binary, plus a Swagger UI over it.
 		v1.GET("/openapi.yaml", a.openapi)
 		v1.GET("/docs", a.swaggerUI)
+		v1.GET("/docs/swagger-ui.css", a.swaggerUICSS)
+		v1.GET("/docs/swagger-ui-bundle.js", a.swaggerUIBundleJS)
 
 		// Not campus-scoped: these two ARE the list of campuses and the
 		// list of levels.

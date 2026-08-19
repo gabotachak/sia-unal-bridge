@@ -18,9 +18,23 @@ func (a *api) openapi(c *gin.Context) {
 	c.Data(http.StatusOK, "application/yaml; charset=utf-8", openapiSpec)
 }
 
-// swaggerUI serves Swagger UI from a CDN against the embedded spec. The page
-// is a convenience for humans; the spec at /v1/openapi.yaml is the artifact
-// tooling should consume.
+// swaggerUICSS and swaggerUIBundleJS are swagger-ui-dist@5.32.14, vendored
+// instead of pulled from a CDN: secureHeaders() sets a strict
+// Content-Security-Policy (default-src 'self') on every response, which a
+// <script src="https://unpkg.com/..."> silently fails under — the page loads
+// (200) but stays blank, CSP violation only visible in the browser console.
+// Serving the assets from this origin keeps the CSP as-is and drops the
+// runtime dependency on unpkg's uptime.
+//
+//go:embed swaggerui/swagger-ui.css
+var swaggerUICSS []byte
+
+//go:embed swaggerui/swagger-ui-bundle.js
+var swaggerUIBundleJS []byte
+
+// swaggerUI serves Swagger UI (vendored, see swaggerUICSS) against the
+// embedded spec. The page is a convenience for humans; the spec at
+// /v1/openapi.yaml is the artifact tooling should consume.
 //
 // "Try it out" is left enabled on purpose: half the point of the page is
 // that a reader can fire a real request and watch a cold miss take seconds
@@ -29,13 +43,21 @@ func (a *api) swaggerUI(c *gin.Context) {
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(swaggerHTML))
 }
 
+func (a *api) swaggerUICSS(c *gin.Context) {
+	c.Data(http.StatusOK, "text/css; charset=utf-8", swaggerUICSS)
+}
+
+func (a *api) swaggerUIBundleJS(c *gin.Context) {
+	c.Data(http.StatusOK, "application/javascript; charset=utf-8", swaggerUIBundleJS)
+}
+
 const swaggerHTML = `<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>sia-unal-bridge · API</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  <link rel="stylesheet" href="/v1/docs/swagger-ui.css">
   <style>
     body { margin: 0; background: #fafafa; }
     .topbar { display: none; }
@@ -43,7 +65,7 @@ const swaggerHTML = `<!doctype html>
 </head>
 <body>
   <div id="ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script src="/v1/docs/swagger-ui-bundle.js"></script>
   <script>
     window.ui = SwaggerUIBundle({
       // Absolute: relative would resolve against /v1/docs's own base and

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <!--
+    Tarjeta de vista previa (og:image). Mismos tokens que web/src/styles/tokens.css
+    tema claro — no se regenera desde ahí porque esto se rasteriza a PNG en build
+    time, pero si los colores cambian allá, cámbialos acá también.
+  -->
+  <rect width="1200" height="630" fill="#f6f2ea"/>
+
+  <!-- El Puente de Boyacá, mismo trazo que web/public/favicon.svg, escalado. -->
+  <g transform="translate(120 80)" fill="none" stroke="#1e1813" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 130 115 55l100 75"/>
+    <path d="M43 220a72 72 0 0 1 144 0"/>
+    <path d="M5 130v60M215 130v60"/>
+  </g>
+
+  <text x="120" y="430" font-family="Instrument Serif, Georgia, serif" font-style="italic" font-size="108" fill="#1e1813">SIA Bridge</text>
+
+  <text x="122" y="478" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="30" fill="#5f5346">Catálogo de asignaturas de la Universidad Nacional de Colombia</text>
+
+  <text x="122" y="520" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="30" fill="#5f5346">con la hora exacta en que se consultaron los cupos.</text>
+
+  <rect x="122" y="548" width="64" height="6" rx="3" fill="#1a6b5a"/>
+</svg>

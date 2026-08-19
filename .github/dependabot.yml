@@ -1,0 +1,35 @@
+version: 2
+updates:
+  # go.mod, raíz del módulo.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore"
+
+  # web/package.json — el frontend React.
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore"
+
+  # Imágenes base del Dockerfile (golang:*-alpine, alpine).
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore"
+
+  # Versiones de las Actions en .github/workflows/*.yml — esto hubiera
+  # avisado de actions/checkout@v4 etc. antes de que apareciera como warning
+  # en un run de deploy.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore"

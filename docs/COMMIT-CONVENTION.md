@@ -1,10 +1,18 @@
-# Convención de commits
+# Convención de commits y PRs
 
-**Toda IA que haga commits en este repo debe leer esto antes de escribir el mensaje.**
-No es estilo — `semantic-release` (ver [`PLAN-CI-CD.md`](PLAN-CI-CD.md), Fase 2) lee el
-mensaje del commit de merge a `main` para decidir la versión (`vX.Y.Z`). Un mensaje
-fuera de formato no rompe el build, simplemente **no genera Release**: el deploy
-corre igual, pero queda sin versión ni changelog asociado.
+**Toda IA que haga commits o abra PRs en este repo debe leer esto antes de escribir
+el mensaje.** No es estilo — `semantic-release` (ver [`PLAN-CI-CD.md`](PLAN-CI-CD.md),
+Fase 2) lee el mensaje que queda en `main` para decidir la versión (`vX.Y.Z`). Un
+mensaje fuera de formato no rompe el build, simplemente **no genera Release**: el
+deploy corre igual, pero queda sin versión ni changelog asociado.
+
+**El título del PR sigue el mismo formato que un commit.** Si el merge es por
+squash (habilitado en este repo), GitHub aplasta todos los commits del PR en uno
+solo y usa **el título del PR** como mensaje final en `main` — ahí es lo único que
+`semantic-release` va a leer, los commits individuales del PR desaparecen. Con
+merge-commit o rebase sí sobreviven los commits individuales, pero el título igual
+se chequea siempre (ver "Filtro automático" abajo), así que hacerlo bien una vez
+cubre los tres métodos.
 
 ## Formato
 
@@ -58,3 +66,16 @@ refactor: centralize table styles, implement countdown timer, and fix layout ove
 Nota: estos ejemplos están en inglés en el resumen (código en inglés, ver
 [`CLAUDE.md`](../CLAUDE.md) § Convención de idioma) — ambos idiomas en el resumen son
 válidos para `semantic-release`, lo único que importa es el prefijo `tipo:`.
+
+## Filtro automático
+
+`main` está protegida — un PR no mergea si no pasan estos dos checks
+(`.github/workflows/`):
+
+- **`commitlint`** — cada commit del PR sigue el formato de este documento.
+- **`pr-title-lint`** — el título del PR también, cubre el caso squash-merge.
+
+Ambos rechazan (no solo avisan) — el botón de merge queda bloqueado hasta que el
+mensaje esté bien. No hay bypass salvo que seas admin del repo y fuerces el merge
+igual (`enforce_admins: false` en la branch protection, a propósito, para no
+trabar un merge de emergencia).

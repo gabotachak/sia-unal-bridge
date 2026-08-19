@@ -6,14 +6,17 @@
   -->
   <rect width="1200" height="630" fill="#f6f2ea"/>
 
-  <!-- El Puente de Boyacá: mismo path que web/public/favicon.svg y
-       web/src/components/Topbar.tsx, escalado ×8 desde el viewBox 32×32
-       original (no redibujado a mano, para no perder la silueta real). -->
-  <g transform="translate(105 60)" fill="none" stroke="#1e1813" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M16 144 128 88l112 56"/>
-    <path d="M64 192a64 64 0 0 1 128 0"/>
-    <path d="M16 144v48M240 144v48"/>
-  </g>
+  <!-- El Puente de Boyacá: el mismo elemento <svg viewBox="0 0 32 32"> de
+       web/public/favicon.svg y web/src/components/Topbar.tsx, sin tocar un
+       solo número — que el propio visor lo escale evita transcribir mal
+       las coordenadas al ampliarlo a mano. -->
+  <svg x="105" y="60" width="220" height="220" viewBox="0 0 32 32">
+    <g fill="none" stroke="#1e1813" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 18 16 11l14 7"/>
+      <path d="M8 24a8 8 0 0 1 16 0"/>
+      <path d="M2 18v6M30 18v6"/>
+    </g>
+  </svg>
 
   <!-- Instrument Serif recta, no cursiva: la itálica en este proyecto solo
        vive dentro de un <em>, y el logotipo (Topbar.css .brand__word) es

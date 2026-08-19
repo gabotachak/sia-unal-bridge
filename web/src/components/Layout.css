@@ -48,6 +48,14 @@
   color: var(--text-dim);
   font-weight: 500;
 }
+.colophon p.colophon__credit {
+  margin-top: var(--gap-sm);
+  font-size: 0.85em;
+  opacity: 0.6;
+}
+.colophon__credit a {
+  color: inherit;
+}
 
 /* ── Cabecera de pantalla ───────────────────────────────────────────
    La usan el catálogo, la asignatura y el semestre. Vive acá y no en cada

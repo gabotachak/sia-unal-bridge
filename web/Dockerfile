@@ -11,12 +11,15 @@ COPY . .
 # front use el mismo cooldown que aplica la API. Ver web/vite.config.ts.
 ARG FETCH_COOLDOWN=60
 ENV FETCH_COOLDOWN=$FETCH_COOLDOWN
+# Mismo mecanismo: horneado en el bundle para el colofón (Layout.tsx), no solo
+# en el LABEL de la imagen — un sitio estático no tiene proceso que lo sirva
+# en caliente. Ver web/vite.config.ts.
+ARG GIT_TAG=dev
+ENV VITE_APP_VERSION=$GIT_TAG
 RUN npm run build
 
 # ── Runtime: nginx sirve los estáticos y proxea /v1 al backend ───────
 FROM nginxinc/nginx-unprivileged:stable-alpine
-# Sitio estático, no hay proceso Go que exponga /version — el LABEL es la
-# única forma de saber qué versión corre acá (docker inspect, ver COMMANDS.md).
 ARG GIT_TAG=dev
 ARG GIT_SHA=unknown
 LABEL org.opencontainers.image.version=$GIT_TAG

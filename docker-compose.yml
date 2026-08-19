@@ -40,11 +40,16 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SIA_TERM: ${SIA_TERM:-2026-2}
       FETCH_COOLDOWN: ${FETCH_COOLDOWN:-300}
+      RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-5}
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-20}
       # Para que los logs cuadren con el reloj del host y con el cron. Necesita
       # tzdata en la imagen (ver Dockerfile), o Go se queda en UTC en silencio.
       TZ: ${TZ:-America/Bogota}
     # PORT es fijo dentro del contenedor; API_PORT sólo mueve el puerto del host.
-    ports: ["${API_PORT:-18080}:8080"]
+    # Atado a 127.0.0.1 igual que db (ver su comentario): sin el prefijo,
+    # cualquiera se salta Caddy pegándole directo al contenedor, incluido para
+    # falsificar X-Forwarded-For y evadir el rate limit por IP.
+    ports: ["127.0.0.1:${API_PORT:-18080}:8080"]
     restart: unless-stopped
     depends_on:
       db:
@@ -101,7 +106,8 @@ services:
         FETCH_COOLDOWN: ${FETCH_COOLDOWN:-300}
         GIT_TAG: ${GIT_TAG:-dev}
         GIT_SHA: ${GIT_SHA:-unknown}
-    ports: ["${WEB_PORT:-13000}:8080"]
+    # Atado a 127.0.0.1: mismo motivo que api arriba.
+    ports: ["127.0.0.1:${WEB_PORT:-13000}:8080"]
     restart: unless-stopped
     depends_on:
       - api

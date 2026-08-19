@@ -1,6 +1,8 @@
 <div align="center">
 
-# sia-unal-bridge
+<h1>
+  <img src="docs/assets/wordmark.png" alt="SIA Bridge" width="300">
+</h1>
 
 **El catálogo de asignaturas de la Universidad Nacional de Colombia, en JSON.**
 

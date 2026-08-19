@@ -21,7 +21,12 @@
   width: 100%;
   max-width: var(--measure);
   margin: 0 auto;
-  padding: var(--gap-lg) var(--gap) var(--gap-xl);
+  /* El margen lateral no puede ser un `--gap` fijo: por debajo de
+     `--measure` + ese padding (~86rem) el auto-margin todavía no centra
+     nada, así que una ventana de escritorio normal —ni angosta ni tan
+     ancha como para centrar— caía en una tierra de nadie con 1rem pegado
+     al borde. El `clamp` crece con el viewport y cierra ese hueco. */
+  padding: var(--gap-lg) clamp(var(--gap), 4vw, 3.5rem) var(--gap-xl);
   /* Sin esto, una tabla ancha estira al contenedor y aparece scroll
      horizontal en toda la página. */
   min-width: 0;

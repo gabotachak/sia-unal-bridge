@@ -619,3 +619,32 @@ Alertas de cupo (el historial ya las soporta, pero son producto, no crawler) ·
 prerrequisitos y componentes (se siguen parseando sin guardar) · paginación del SIA (no
 existe, [§14](GOTCHAS.md)) · autenticación · descubrimiento de semestres pasados (el SIA
 solo expone el actual) · cualquier optimización que implique **cachear un `_afrRK`**.
+
+---
+
+## Pendiente de verificar (al 2026-08-18)
+
+Todo lo de arriba está medido. Esto **no**, y es lo que queda por mirar:
+
+| Cuándo | Qué | Cómo se ve que salió bien |
+|---|---|---|
+| **2026-08-19, ~05:05** | Primera corrida de `detail --scope=global` con los arreglos de §38/§39 dentro de la imagen (el rebuild se hizo el 18/08 por la noche) | `posts / courses_ok` cerca de **3.7**, no de 47; `errors_dropped` bajo o ausente |
+| **2026-08-23, ~05:00** | Primer `catalog` semanal que lanza el cron solo (domingo 02:00). Los anteriores fueron manuales | `reason=done`, no `circuit_breaker`; `programs_failed=0` |
+| **2026-08-27** | Descomentar la línea de `seats` en `deploy/cron.d/sia-refresher` y reinstalarla. La cadencia de 15 min es **provisional**: el número real lo fija el muestreo de ese día ([OPEN-QUESTIONS §2](OPEN-QUESTIONS.md)) | filas nuevas en `seat_snapshot` durante el día, no solo `seats_checked_at` |
+
+La métrica a vigilar es **`posts / courses_ok`**, no `programs_failed`: el §38 pasó
+inadvertido cuatro horas porque 38 programas "OK" tapaban 1795 asignaturas fallidas.
+
+```sql
+SELECT id, mode, scope, courses_ok, posts,
+       round(posts::numeric / nullif(courses_ok, 0), 1) AS posts_por_asignatura,
+       ended_reason
+FROM refresh_run ORDER BY id DESC LIMIT 5;
+```
+
+Dos cosas que ya se sabe que **no** son bugs y no hay que volver a investigar:
+
+- **3 planes con catálogo vacío de verdad**: `1102/3CLE`, `1103/4336`, `1103/4620`. No
+  ofertan nada este semestre; `catalog_fetched_at` está puesto y la lista es vacía.
+- **2 asignaturas que tumban al SIA**: `2011302` y `2018602` (Bogotá). Es el §39, es del
+  servidor, y falla igual en una conexión recién creada. Se reportan y se sigue.

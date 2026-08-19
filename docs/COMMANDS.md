@@ -6,6 +6,10 @@ dónde, y cómo tirar todo abajo si hace falta. Para el *por qué* de cada pieza
 Todo asume que estás parado en la raíz del repo, en el server (o en local con
 `docker compose` — es el mismo compose para los dos).
 
+**El checkout del server siempre tiene que estar en `main`** — el deploy hace
+`git pull` a secas, sin especificar rama. Si necesitás mirar otra rama ahí, usar
+`git worktree add ../otra-carpeta esa-rama`, nunca `git checkout` sobre este path.
+
 ---
 
 ## Qué versión está corriendo en cada contenedor

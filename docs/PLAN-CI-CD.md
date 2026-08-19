@@ -146,3 +146,11 @@ mano.
 - **Key comprometida.** Con acceso a `docker compose` sin sudo, el radio de daño es
   los contenedores de este proyecto, no el server entero — pero igual revocarla
   (borrar la línea de `authorized_keys`) si el repo o el secret se filtra.
+- **El checkout del server tiene que estar siempre parado en `main`.** El script
+  del workflow hace `git pull` a secas, sin `git checkout main` antes — tira de la
+  rama que esté activa en ese momento, no de `main` por nombre. Si alguien cambia
+  de rama ahí para debuggear (`git checkout otra-cosa`) y se olvida de volver, el
+  próximo deploy hace pull de la rama equivocada **sin error visible** — mismo
+  no-op silencioso que las otras trampas de este proyecto. Para tocar otra rama en
+  ese server, usar `git worktree add` en otra carpeta, nunca `git checkout` sobre
+  este mismo path.

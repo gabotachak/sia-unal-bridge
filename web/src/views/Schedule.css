@@ -1,9 +1,15 @@
 /* ── Split view: lista de materias + calendario ─────────────────────
    La lista fija un ancho —no es una tabla que quiera todo el espacio,
    es la que sobra después del calendario, que es el protagonista— y el
-   calendario toma el resto. Bajo los 860px no caben lado a lado sin
-   apretar ninguno de los dos, así que se apilan: lista arriba, calendario
-   abajo con su propio scroll horizontal (ver WeekCalendar.css). */
+   calendario toma el resto.
+
+   Bajo los 860px no caben lado a lado sin apretar ninguno de los dos, y
+   apilados la lista sería Mi semestre por segunda vez: mismas tarjetas,
+   mismos radios, mismo estado. Así que ahí no se apila, se va —
+   Schedule.tsx directamente no la monta (`isMobile`)— y el calendario se
+   queda con la pantalla entera. Mi semestre está a un toque en `.tabbar`.
+
+   De lo de abajo, entonces, en mobile solo vive `.sched__calendar`. */
 
 .sched__body {
   display: flex;
@@ -137,91 +143,18 @@
   margin-top: var(--gap);
 }
 
-/* El atajo flotante "ver horario" / "seleccionar grupos". Oculto acá —en
-   escritorio las dos secciones ya están lado a lado, no hay nada que
-   saltar— y flotando solo apilado, ver el media query de abajo. */
-.sched__fab {
-  display: none;
-}
+/* ── Mobile (< STACK_BREAKPOINT_PX) ───────────────────────────────────
+   Casi nada que decir: sin `.sched__list` en el DOM, el flex de
+   `.sched__body` tiene un solo hijo y el calendario ya ocupa la fila
+   entera. Lo único es soltarle el `min-width: 0` de la fila compartida.
 
-/* ── Apilado (< STACK_BREAKPOINT_PX) ──────────────────────────────────
-   Un solo scroll, el de la página — no dos paneles con scroll propio uno
-   sobre otro. `useViewportFit` ya deja de topear el alto por su cuenta acá
-   abajo (`disableBelowPx`, ver el hook), así que esto es solo layout: una
-   columna, calendario primero.
-
-   Calendario arriba, lista abajo: lo que casi siempre se abre a mirar en
-   el teléfono es el horario ya armado —no hace falta scrollear para
-   verlo—, y armarlo de cero es la tarea ocasional que puede pedir bajar un
-   poco. Es el mismo orden que un mapa con resultados debajo. */
+   Sin padding-bottom: el calendario descuenta el alto de `.tabbar` de su
+   propio `useViewportFit` (`MOBILE_NAV_CLEARANCE_PX`, ver breakpoints.ts),
+   así que ya termina antes de donde arranca la barra. Un padding acá
+   encima solo agregaría un scroll de página vacío que no debería existir
+   — la pantalla entera, barra incluida, ya cabe sin scrollear. */
 @media (max-width: 860px) {
-  .sched__body {
-    flex-direction: column;
-  }
-  .sched__list {
-    order: 2;
-    flex-basis: auto;
-    width: 100%;
-  }
   .sched__calendar {
-    order: 1;
     width: 100%;
-  }
-
-  /* Colapsar existe para ganarle ancho al calendario cuando los dos
-     comparten fila. Apilados no hay ancho que repartir —la lista ya usa
-     el 100% igual— así que el botón no tiene nada que hacer acá; Schedule
-     .tsx además fuerza `listOpen` en este ancho, esto es el reflejo en
-     CSS de esa misma decisión. */
-  .sched__list-head .iconbtn {
-    display: none;
-  }
-  /* Sin el botón de ocultar al lado, "medir cupos" se quedaba solo a la
-     izquierda de una fila pensada para dos — un chip chico flotando con
-     medio ancho de aire vacío a la derecha. Estirado a todo el ancho de
-     la cabecera se lee como lo que es: la acción principal de este panel
-     en el teléfono, no un resto mal ubicado. */
-  .sched__list-head .chip {
-    flex: 1;
-    justify-content: center;
-  }
-
-  /* El aire para la barra de scroll (arriba, `.sched__list-scroll`) es
-     para el mouse: en el teléfono la barra es una franja translúcida que
-     se dibuja ENCIMA del contenido y no ocupa espacio propio, así que ese
-     padding se veía como un margen sin motivo, angosto y disparejo, al
-     borde de las tarjetas. Apilado no hay scroll propio de todos modos
-     (ver `useViewportFit`, apagado bajo STACK_BREAKPOINT_PX) — nada que
-     reservarle sitio. */
-  .sched__list-scroll {
-    padding-right: 0;
-    scrollbar-gutter: auto;
-  }
-
-  /* Flotando y no al final de cada sección: un botón al fondo de una
-     lista larga nunca se ve MIENTRAS se scrollea, que es justo cuando
-     hace falta. Este queda a mano todo el tiempo y cambia de sentido
-     solo, según qué mitad de la pantalla ocupe cada sección
-     (`viewingList` en Schedule.tsx) — apunta siempre hacia la que NO se
-     está viendo. */
-  .sched__fab {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    position: fixed;
-    z-index: 40;
-    left: 50%;
-    bottom: 1.1rem;
-    transform: translateX(-50%);
-    padding: 0.65rem 1.1rem;
-    border-radius: 999px;
-    border: 1px solid var(--rule-strong);
-    background: var(--surface);
-    color: var(--text);
-    font-size: var(--t-small);
-    box-shadow: var(--shadow-lg);
-  }
-  .sched__fab:active {
-    transform: translateX(-50%) scale(0.96);
   }
 }

@@ -6,16 +6,12 @@ export type ViewportFitOptions = {
   /** Aire entre el elemento y el borde de abajo de la ventana. */
   bottomMarginPx?: number;
   /**
-   * Por debajo de este ancho, no topea nada: devuelve `Infinity` y el
-   * elemento vuelve a su alto natural.
-   *
-   * Es apilado y no lado a lado (ver `STACK_BREAKPOINT_PX`): ahí abajo no
-   * hay un hermano con el que compartir la página, así que topear el alto
-   * solo agrega un scroll propio adentro de otro scroll — la app entera
-   * pasa a tener un único scroll, el de la página, como cualquier sitio en
-   * el teléfono.
+   * Por debajo de este ancho, usa `mobileBottomMarginPx` en vez de
+   * `bottomMarginPx` — para un elemento que en mobile queda detrás de algo
+   * fijo (una barra de pestañas, por ejemplo) que en escritorio no existe.
    */
-  disableBelowPx?: number;
+  mobileBreakpointPx?: number;
+  mobileBottomMarginPx?: number;
 };
 
 /**
@@ -32,26 +28,28 @@ export type ViewportFitOptions = {
 export function useViewportFit<T extends HTMLElement>(
   options: ViewportFitOptions = {},
 ): [RefObject<T | null>, number] {
-  const { bottomMarginPx = DEFAULT_BOTTOM_MARGIN_PX, disableBelowPx } = options;
+  const { bottomMarginPx = DEFAULT_BOTTOM_MARGIN_PX, mobileBreakpointPx, mobileBottomMarginPx } = options;
   const ref = useRef<T>(null);
   const [maxHeightRem, setMaxHeightRem] = useState(Infinity);
 
   useLayoutEffect(() => {
     function measure() {
-      if (disableBelowPx !== undefined && window.innerWidth < disableBelowPx) {
-        setMaxHeightRem(Infinity);
-        return;
-      }
       const el = ref.current;
       if (!el) return;
+      const margin =
+        mobileBreakpointPx !== undefined &&
+        mobileBottomMarginPx !== undefined &&
+        window.innerWidth < mobileBreakpointPx
+          ? mobileBottomMarginPx
+          : bottomMarginPx;
       const top = el.getBoundingClientRect().top;
       const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-      setMaxHeightRem((window.innerHeight - top - bottomMarginPx) / rootPx);
+      setMaxHeightRem((window.innerHeight - top - margin) / rootPx);
     }
     measure();
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
-  }, [bottomMarginPx, disableBelowPx]);
+  }, [bottomMarginPx, mobileBreakpointPx, mobileBottomMarginPx]);
 
   return [ref, maxHeightRem];
 }

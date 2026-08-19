@@ -1,0 +1,109 @@
+/* La barra de navegación del teléfono. Oculta en escritorio —allá los tres
+   destinos viven en la barra de arriba, ver `.iconbtn--dest` en Topbar.css—
+   y fija abajo por debajo de STACK_BREAKPOINT_PX. */
+.tabbar {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  /* Franja translúcida como `.bar` (Topbar.css), y por el mismo motivo: el
+     contenido se ve pasar por debajo al scrollear en vez de que una franja
+     opaca corte la pantalla en dos. Las dos barras —la de arriba y esta—
+     son la misma superficie, y tienen que verse igual.
+
+     `z-index: 45` la deja por debajo de `.bar` (50) y por encima de todo lo
+     demás: las dos nunca se solapan, pero un `<dialog>` modal —el de
+     "empezar de nuevo"— se pinta en la capa superior del documento y sigue
+     tapándolas a las dos. */
+  .tabbar {
+    display: flex;
+    position: fixed;
+    z-index: 45;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-top: 1px solid var(--rule-strong);
+    background: var(--chrome);
+    backdrop-filter: blur(14px) saturate(160%);
+    /* Mismo `clamp` lateral que `.bar__inner` y `.content`: las tres cosas
+       respiran al mismo ritmo. Abajo, el aire del home indicator. */
+    padding: 0.3rem clamp(var(--gap), 4vw, 3.5rem) calc(0.3rem + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 860px) and (prefers-reduced-transparency: reduce) {
+  .tabbar {
+    background: var(--bg);
+    backdrop-filter: none;
+  }
+}
+
+/* Cada pestaña se reparte el ancho por igual. El área tocable es la celda
+   entera, no el icono: en el pulgar, apuntar a 20px es apuntar a nada. */
+.tabbar__tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.35rem 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  text-decoration: none;
+  transition:
+    color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
+}
+
+.tabbar__tab.is-active {
+  color: var(--accent);
+}
+
+/* La confirmación llega al presionar, no al soltar — igual que `.iconbtn`. */
+.tabbar__tab:active {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabbar__tab {
+    transition: color var(--fast) var(--ease-out);
+  }
+  .tabbar__tab:active {
+    transform: none;
+  }
+}
+
+/* El ancla del contador: sin esto el badge se posiciona contra la pestaña
+   entera y queda flotando en una esquina, lejos del icono al que cuenta. */
+.tabbar__glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+  line-height: 0;
+}
+
+/* Mismo contador que `.iconbtn__badge`, en el mismo sitio respecto a su
+   icono: es el mismo dato —cuántas materias hay en Mi semestre— y cambiar
+   de barra no debería cambiar cómo se lee. */
+.tabbar__badge {
+  position: absolute;
+  top: -0.3rem;
+  right: -0.55rem;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  padding: 0 0.2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  border: 2px solid var(--bg);
+}

@@ -26,6 +26,10 @@ type AsLink = Common & {
   /** Si la pantalla actual es esta. Ya no hay ruta de la que deducirlo —lo
    *  dice quien llama, que es quien tiene el `screen` a mano. */
   active?: boolean;
+  /** Sin plan elegido, por ejemplo: la pantalla existe pero no hay nada que
+   *  mostrar en ella todavía. Renderiza un `<button disabled>` en vez de un
+   *  `AppLink` —`:disabled` no existe en un `<a>`— así que no navega. */
+  disabled?: boolean;
 };
 
 /**
@@ -58,6 +62,20 @@ export function IconButton(props: AsButton | AsLink) {
   );
 
   if ('to' in props && props.to !== undefined) {
+    if (props.disabled) {
+      return (
+        <button
+          type="button"
+          className={cls}
+          disabled
+          aria-label={label}
+          data-tip={label}
+          data-tip-side={tip}
+        >
+          {inner}
+        </button>
+      );
+    }
     return (
       <AppLink
         to={props.to}

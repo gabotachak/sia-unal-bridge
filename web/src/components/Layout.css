@@ -38,6 +38,43 @@
   }
 }
 
+/* Mi horario en mobile (`data-hide-footer`, Schedule.tsx): ahí el calendario
+   ya está calculado —`useViewportFit` + `MOBILE_NAV_CLEARANCE_PX`— para
+   llenar EXACTO lo que hay entre la barra de arriba y `.tabbar`, así que el
+   colofón debajo no cabe sin forzar un scroll que no revela nada nuevo. Se
+   esconde en esa pantalla y solo en esa. */
+html[data-hide-footer] .colophon {
+  display: none;
+}
+
+/* El cerrojo de esa cuenta: si algún redondeo la corriera unos px, el `auto`
+   por defecto convertía eso en la barra de scroll de la PÁGINA —del todo
+   fuera de lugar en una pantalla que ya se lee como una sola vista fija—,
+   en vez de quedarse contenido donde nadie lo nota. Lo que sí necesita
+   scroll propio (el calendario, cuando la jornada no entra ni al alto de
+   hora mínimo) lo sigue teniendo: es el `overflow: auto` de `.week`, ajeno
+   a este. */
+html[data-hide-footer] body {
+  overflow: hidden;
+  height: 100dvh;
+}
+
+/* Debajo de STACK_BREAKPOINT_PX la navegación es `.tabbar`, fija abajo
+   (TabBar.css). Está fuera del flujo, así que no empuja nada: sin este aire
+   se posa encima de lo último de la página, y lo último de la página es el
+   colofón. El número es el alto de la barra (~3.6rem) más el home
+   indicator, lo mismo que descuenta `MOBILE_NAV_CLEARANCE_PX`.
+
+   Va en el colofón y no en `.content` porque el colofón está SIEMPRE al
+   final; ponerlo en el contenido dejaría el hueco en mitad de la página en
+   cuanto algo se dibujara debajo. En Mi horario, donde el colofón no
+   existe, la cuenta del calendario ya reserva ese mismo espacio. */
+@media (max-width: 860px) {
+  .colophon {
+    padding-bottom: calc(var(--gap-lg) + 3.6rem + env(safe-area-inset-bottom));
+  }
+}
+
 .colophon {
   border-top: 1px solid var(--rule);
   padding: var(--gap-lg) var(--gap);

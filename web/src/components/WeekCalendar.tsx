@@ -1,7 +1,7 @@
 import { TriangleAlert } from 'lucide-react';
 import type { ClassSession } from '../api/types';
 import { useViewportFit } from '../hooks/useViewportFit';
-import { STACK_BREAKPOINT_PX } from '../lib/breakpoints';
+import { MOBILE_NAV_CLEARANCE_PX, STACK_BREAKPOINT_PX } from '../lib/breakpoints';
 import { WEEKDAYS_SHORT, formatClockTime } from '../lib/format';
 import './WeekCalendar.css';
 
@@ -29,10 +29,6 @@ const MIN_HOUR_REM = 2.15;
 const MAX_HOUR_REM = 4;
 /** Alto de `.week__header`, para descontarlo del alto disponible. */
 const HEADER_REM = 3.2;
-/** Apilado (`useViewportFit` apagado, ver abajo) no hay a qué ajustarse:
- *  un rango típico a MAX_HOUR_REM son 60rem de alto, más grande que la
- *  pantalla entera. Este es el tamaño que se ve bien en un teléfono. */
-const MOBILE_HOUR_REM = 2.5;
 
 function toMinutes(t: string): number {
   const [h, m] = t.split(':').map(Number);
@@ -44,22 +40,26 @@ function toMinutes(t: string): number {
  * scrollear — como Google Calendar, que comprime las filas al alto
  * disponible en vez de forzar siempre el mismo tamaño. Sale de
  * `useViewportFit`, el mismo cálculo que usa el panel de materias al lado
- * (`Schedule.tsx`) — los dos arrancan a la misma altura, así que el mismo
- * hook les da a los dos el mismo disponible sin coordinarse entre sí.
+ * en escritorio (`Schedule.tsx`) — los dos arrancan a la misma altura, así
+ * que el mismo hook les da a los dos el mismo disponible sin coordinarse
+ * entre sí.
  *
  * Con `MIN_HOUR_REM` como piso: si ni así entra, el contenedor scrollea en
  * vez de volverse ilegible (ver `.week` en WeekCalendar.css).
  *
- * Por debajo de `STACK_BREAKPOINT_PX` no se topea nada: Mi horario apila la
- * lista y el calendario, y ahí el scroll de la página alcanza — un scroll
- * propio adentro sería un segundo scroll dentro del primero.
+ * Debajo de `STACK_BREAKPOINT_PX`, Mi horario es solo el calendario (ver
+ * Schedule.tsx): sin lista al lado, ocupa la pantalla entera y sigue topando
+ * su alto igual que en escritorio, solo que con más margen abajo para no
+ * quedar tapado por `.tabbar`, la barra de navegación fija.
  */
 function useFitHourHeight(totalHours: number) {
-  const [ref, maxHeightRem] = useViewportFit<HTMLDivElement>({ disableBelowPx: STACK_BREAKPOINT_PX });
+  const [ref, maxHeightRem] = useViewportFit<HTMLDivElement>({
+    mobileBreakpointPx: STACK_BREAKPOINT_PX,
+    mobileBottomMarginPx: MOBILE_NAV_CLEARANCE_PX,
+  });
   const perHour = (maxHeightRem - HEADER_REM) / totalHours;
-  const hourRem = !Number.isFinite(maxHeightRem)
-    ? MOBILE_HOUR_REM // apagado por STACK_BREAKPOINT_PX: tamaño fijo, no "quepa sin scrollear"
-    : totalHours > 0 && Number.isFinite(perHour)
+  const hourRem =
+    totalHours > 0 && Number.isFinite(perHour)
       ? Math.min(MAX_HOUR_REM, Math.max(MIN_HOUR_REM, perHour))
       : MAX_HOUR_REM;
   return { ref, hourRem, maxHeightRem };
@@ -97,7 +97,16 @@ function layoutDay(blocks: CalendarBlock[]): Array<CalendarBlock & { lane: numbe
  * No sabe nada de plan.items, de la API ni de localStorage — eso vive en
  * Schedule.tsx, que es quien arma esta lista.
  */
-export function WeekCalendar({ blocks }: { blocks: CalendarBlock[] }) {
+export function WeekCalendar({
+  blocks,
+  emptyNote,
+}: {
+  blocks: CalendarBlock[];
+  /** Qué decir cuando no hay ni un bloque. Es una prop y no un texto fijo
+   *  porque dónde se marca un grupo depende del ancho: en escritorio, en la
+   *  lista de al lado; en mobile, en Mi semestre. */
+  emptyNote?: React.ReactNode;
+}) {
   const days = [1, 2, 3, 4, 5, 6, ...(blocks.some((b) => b.session.weekday === 7) ? [7] : [])];
 
   let startMin = DEFAULT_START_MIN;
@@ -129,7 +138,17 @@ export function WeekCalendar({ blocks }: { blocks: CalendarBlock[] }) {
           la rejilla un renglón hacia abajo. Como overlay ocupa cero alto
           propio — el calendario no se mueve nunca, con o sin nota. */}
       {blocks.length === 0 && (
-        <p className="week__empty">Marca un grupo por materia en la lista para verlo aquí.</p>
+        <p className="week__empty">
+          {/* En un `<span>` y no suelto: `.week__empty` es un flex —es lo que
+              centra el aviso en los dos ejes— y ahí cada trozo de texto
+              alrededor del enlace sería un ítem propio, que se parte en
+              líneas por su cuenta. El aviso salía repartido en tres
+              columnas con huecos en el medio. Un solo hijo, un solo
+              párrafo. */}
+          <span className="week__empty-text">
+            {emptyNote ?? 'Marca un grupo por materia en la lista para verlo aquí.'}
+          </span>
+        </p>
       )}
 
       <div className="week__header">

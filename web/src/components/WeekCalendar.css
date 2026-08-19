@@ -8,7 +8,9 @@
    Calendar—, pero un rango de horas muy largo en una ventana muy baja
    puede no entrar ni al piso legible (`MIN_HOUR_REM`); ahí scrollea en vez
    de volverse ilegible. El mismo `auto` cubre el caso angosto de abajo
-   (menos de 720px), que necesita scroll horizontal. */
+   (menos de 720px), que necesita scroll horizontal — ahí es donde importa
+   que `.week__header` y `.week__gutter` (abajo) sean sticky: sin eso, los
+   nombres de los días y la columna de horas se van con el scroll. */
 .week {
   position: relative;
   border: 1px solid var(--rule);
@@ -37,14 +39,47 @@
   align-items: center;
   justify-content: center;
   padding: 0 var(--gap-lg);
-  text-align: center;
-  text-wrap: balance;
   font-size: var(--t-small);
   color: var(--text-faint);
+  /* El aviso flota sobre la rejilla: sin esto se come los clics de las
+     celdas que tiene debajo. */
   pointer-events: none;
 }
 
+/* El único hijo del flex de arriba (ver WeekCalendar.tsx). Acá vive todo lo
+   que es del TEXTO —cómo se corta, hasta dónde llega— y no del contenedor
+   que lo centra. El tope de ancho es para que en el teléfono el aviso se
+   lea como dos o tres renglones cortos y no como una línea que roza los dos
+   bordes de la rejilla. */
+.week__empty-text {
+  max-width: 20rem;
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* La excepción al `pointer-events: none`: en mobile el aviso lleva un
+   enlace a Mi semestre —que es donde se marcan los grupos cuando no hay
+   lista al lado (ver `emptyNote` en WeekCalendar.tsx)—, y un enlace que no
+   se puede tocar no es un enlace. Se le devuelven los clics solo a él. */
+.week__empty a {
+  pointer-events: auto;
+  color: var(--accent);
+  /* `nowrap` para que "Mi semestre" no se parta a mitad del enlace: dos
+     palabras subrayadas en dos renglones distintos se leen como dos
+     enlaces. */
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+/* Sticky respecto al scroll de `.week` (arriba): sea la fila de días la que
+   se queda arriba cuando hay más horas de las que caben, sea la columna de
+   horas la que se queda a la izquierda cuando hay más días de los que caben
+   (< 720px, scroll horizontal). Mismo gesto que `.sched__list-head`. */
 .week__header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: flex;
   border-bottom: 1px solid var(--rule-strong);
   background: var(--surface-2);
@@ -53,6 +88,15 @@
 .week__gutter {
   flex: none;
   width: 3.4rem;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+.week__header .week__gutter {
+  background: var(--surface-2);
+}
+.week__body .week__gutter {
+  background: var(--surface);
 }
 
 .week__day-label {

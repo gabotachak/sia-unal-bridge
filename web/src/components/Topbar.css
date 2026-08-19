@@ -169,11 +169,21 @@
 /* ── Cómo se encoge ─────────────────────────────────────────────────
    El orden en que se van las cosas está pensado: primero la palabra de
    la marca (el logo ya identifica), después la sede (el código de plan
-   ya identifica), y el nombre del plan se recorta pero nunca se va. Los
-   iconos no se tocan nunca: son la navegación. */
+   ya identifica), y el nombre del plan se recorta pero nunca se va. */
 
 @media (max-width: 860px) {
   .planchip__campus {
+    display: none;
+  }
+
+  /* Los tres destinos no se encogen: se MUDAN. A este ancho la navegación
+     pasa a `.tabbar`, fija abajo (TabBar.css), con el rótulo escrito
+     debajo de cada icono — que es lo que hace falta en una pantalla sin
+     hover, donde el globito de `.iconbtn` no tiene a quién mostrarse.
+     Acá arriba se esconden para no ser los mismos tres botones dos veces.
+
+     Lo que queda en `.bar__nav` es el tema, que no es un destino. */
+  .iconbtn--dest {
     display: none;
   }
 }

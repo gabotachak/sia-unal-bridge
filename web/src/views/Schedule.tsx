@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { AppLink } from '../components/AppLink';
 import { CourseCard } from '../components/CourseCard';
@@ -37,69 +37,37 @@ export function Schedule() {
   // Mismo cálculo que usa el calendario al lado (`WeekCalendar.tsx`): los
   // dos arrancan a la misma altura de página, así que miden el mismo alto
   // disponible sin coordinarse entre sí — es lo que hace que ninguno de los
-  // dos sobrepase al otro. Se apaga bajo STACK_BREAKPOINT_PX por la misma
-  // razón que en WeekCalendar: apilados, el scroll de la página alcanza.
-  const [listRef, listMaxHeightRem] = useViewportFit<HTMLDivElement>({
-    disableBelowPx: STACK_BREAKPOINT_PX,
-  });
+  // dos sobrepase al otro. Sin opciones de mobile porque este panel no
+  // existe en mobile: ver `isMobile` abajo.
+  const [listRef, listMaxHeightRem] = useViewportFit<HTMLDivElement>();
 
   /**
-   * Colapsar la lista es un gesto de "gano ancho para el calendario" — en
-   * una pantalla angosta, apilados, no hay ancho que ganar: la lista ya
-   * ocupa el mismo 100% colapsada o abierta, y lo único que lograba antes
-   * era un riel vacío tan alto como el calendario, empujándolo fuera de
-   * vista. Se fuerza abierta ahí, y el botón para colapsar se esconde por
-   * CSS (`.sched__list-head .iconbtn` bajo el breakpoint) para que no
-   * quede una acción que no hace nada visible.
+   * Debajo de STACK_BREAKPOINT_PX, Mi horario es SOLO el calendario.
+   *
+   * La lista de materias de al lado —tarjetas con sus grupos y un radio por
+   * grupo— es Mi semestre otra vez: mismas tarjetas, mismo estado
+   * (`useScheduleSelection` es un Context compartido), misma acción. En
+   * escritorio se justifica porque está al lado del calendario y se ve el
+   * efecto de marcar un grupo sin cambiar de pantalla. En el teléfono no
+   * puede estar al lado de nada: sería una segunda pantalla completa que
+   * clona a la vecina, y con `.tabbar` fija abajo la vecina de verdad está
+   * a un toque. Así que no se dibuja.
+   *
+   * Se desmonta, no se esconde con `display: none`: el panel mide su alto
+   * con `getBoundingClientRect` en `useViewportFit`, y oculto por CSS esa
+   * medida da cero — al volver a escritorio se quedaría con un alto
+   * guardado incorrecto. Desmontado, al remontarse mide de cero.
    */
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < STACK_BREAKPOINT_PX);
+
   useEffect(() => {
     function sync() {
-      if (window.innerWidth < STACK_BREAKPOINT_PX) setListOpen(true);
+      setIsMobile(window.innerWidth < STACK_BREAKPOINT_PX);
     }
     sync();
     window.addEventListener('resize', sync);
     return () => window.removeEventListener('resize', sync);
   }, []);
-
-  /**
-   * El atajo flotante de "saltar a la otra sección" — solo tiene sentido
-   * apilado (`.sched__fab`, escondido por CSS en escritorio: ahí las dos
-   * secciones ya están una al lado de la otra). Uno solo, no dos botones
-   * fijos al final de cada sección: uno al final de una lista larga nunca
-   * se ve mientras se scrollea, que es justo cuando hace falta. Flotando
-   * queda a mano todo el tiempo, y cambia de sentido solo — apunta hacia
-   * la sección que NO se está viendo — según cuál cruzó la mitad de la
-   * pantalla. `listRef` ya existe para medir el alto del panel; sirve
-   * igual de bien como blanco del scroll y como límite para saber cuál se
-   * está viendo.
-   */
-  const calendarRef = useRef<HTMLDivElement>(null);
-  const [viewingList, setViewingList] = useState(false);
-
-  useEffect(() => {
-    let raf = 0;
-    function onScroll() {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        const listTop = listRef.current?.getBoundingClientRect().top ?? Infinity;
-        setViewingList(listTop <= window.innerHeight / 2);
-      });
-    }
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [listRef]);
-
-  function jumpToList() {
-    listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-  function jumpToCalendar() {
-    calendarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
 
   const colorOf = (id: string) => {
     const idx = plan.items.findIndex((it) => itemId(it) === id);
@@ -132,6 +100,26 @@ export function Schedule() {
   const pickedCount = Object.keys(selection).filter((id) =>
     plan.items.some((it) => itemId(it) === id),
   ).length;
+
+  /**
+   * En mobile con materias, el calendario ya está calculado para llenar
+   * exactamente lo que hay entre la barra de arriba y `.tabbar` — el
+   * colofón del sitio debajo no cabe sin forzar la página a un scroll que
+   * no revela nada nuevo. Se esconde con un atributo en `<html>`, mismo
+   * patrón que el tema (`lib/theme.ts`) — más simple que colar una prop de
+   * Layout.tsx hasta acá solo para esta pantalla.
+   *
+   * Vacía (`empty`) sí lleva colofón: ahí no hay calendario que llene la
+   * pantalla, solo un aviso corto, y una página que se corta en la nada a
+   * media altura se lee como rota.
+   */
+  useEffect(() => {
+    const root = document.documentElement;
+    const hide = isMobile && !empty;
+    if (hide) root.setAttribute('data-hide-footer', '');
+    else root.removeAttribute('data-hide-footer');
+    return () => root.removeAttribute('data-hide-footer');
+  }, [isMobile, empty]);
 
   return (
     <Layout>
@@ -167,83 +155,111 @@ export function Schedule() {
         // —es una acción sobre la lista, no sobre la pantalla— y eso deja al
         // calendario empezar justo debajo del título, en vez de correrlo una
         // fila entera hacia abajo por un botón que no le pertenece.
+        //
+        // En mobile, sin panel, esta pantalla se queda sin "medir cupos": es
+        // el mismo razonamiento llevado hasta el final. Medir es una acción
+        // sobre la lista de materias, y esa lista es Mi semestre, que tiene
+        // el chip en su barra de siempre. Acá el alto que ocuparía es lo
+        // único escaso que hay.
         <div className="sched__body">
-          {/* El ref y el alto van en `.sched__list`, no en lo de adentro:
-              esto NUNCA se desmonta —solo lo que hay dentro cambia entre
-              la lista y el riel—, así que es lo único que puede medir su
-              propio `top` una sola vez y quedarse fijo mientras se
-              colapsa y se vuelve a abrir. Puesto en el hijo condicional,
-              el riel colapsado se quedaba sin alto propio: medía lo que
-              su contenido —un ícono— pedía, un botón chico flotando en
-              vez de un carril del mismo alto que el calendario. */}
-          <aside
-            className={`sched__list ${listOpen ? '' : 'is-collapsed'}`}
-            ref={listRef}
-            style={Number.isFinite(listMaxHeightRem) ? { height: `${listMaxHeightRem}rem` } : undefined}
-          >
-            {listOpen ? (
-              <div className="sched__list-scroll">
-                <div className="sched__list-head">
-                  <MeasureChip
-                    measure={measure}
-                    running={running}
-                    disabled={running || ready.length === 0}
-                    onClick={() => void fetchAll(true, ready)}
-                  />
-                  <IconButton
-                    onClick={() => setListOpen(false)}
-                    label="Ocultar lista de materias"
-                    className="iconbtn--row"
-                  >
-                    <PanelLeftClose size={16} strokeWidth={1.75} />
-                  </IconButton>
+          {/* El ref y el alto van en `.sched__list`, no en lo de adentro: al
+              colapsar/abrir (`listOpen`) esto no se desmonta —solo lo que
+              hay dentro cambia entre la lista y el riel—, así que es lo
+              único que puede medir su propio `top` una sola vez y quedarse
+              fijo entre esos dos estados. Puesto en el hijo condicional, el
+              riel colapsado se quedaba sin alto propio: medía lo que su
+              contenido —un ícono— pedía, un botón chico flotando en vez de
+              un carril del mismo alto que el calendario.
+
+              En mobile no se dibuja del todo (`isMobile` arriba): esa lista
+              es Mi semestre otra vez, y ahora Mi semestre está a un toque
+              en la barra de abajo. */}
+          {!isMobile && (
+            <aside
+              className={`sched__list ${listOpen ? '' : 'is-collapsed'}`}
+              ref={listRef}
+              style={Number.isFinite(listMaxHeightRem) ? { height: `${listMaxHeightRem}rem` } : undefined}
+            >
+              {listOpen ? (
+                <div className="sched__list-scroll">
+                  <div className="sched__list-head">
+                    <MeasureChip
+                      measure={measure}
+                      running={running}
+                      disabled={running || ready.length === 0}
+                      onClick={() => void fetchAll(true, ready)}
+                    />
+                    <IconButton
+                      onClick={() => setListOpen(false)}
+                      label="Ocultar lista de materias"
+                      className="iconbtn--row"
+                    >
+                      <PanelLeftClose size={16} strokeWidth={1.75} />
+                    </IconButton>
+                  </div>
+
+                  <MeasureProgress running={running} done={done} total={total} />
+
+                  <ul className="sched__cards">
+                    {rows.map((r) => {
+                      const id = itemId(r.item);
+                      return (
+                        <CourseCard
+                          key={id}
+                          row={r}
+                          onlyOpen={false}
+                          compact
+                          linkFrom="schedule"
+                          selection={{
+                            pickedKey: selection[id] ?? null,
+                            onPick: (key) => pick(id, key),
+                            conflictKeys:
+                              selection[id] && conflicts.conflictItems.has(id)
+                                ? new Set([selection[id]])
+                                : new Set(),
+                          }}
+                        />
+                      );
+                    })}
+                  </ul>
                 </div>
+              ) : (
+                // Con la lista oculta el calendario se queda con todo el
+                // ancho —útil en la semana con más materias amontonadas—,
+                // pero el control para volver a abrirla no puede irse con
+                // ella: queda este riel angosto, no un botón flotante que
+                // aparece de la nada.
+                <button
+                  type="button"
+                  className="sched__rail"
+                  onClick={() => setListOpen(true)}
+                  title="Mostrar lista de materias"
+                  aria-label="Mostrar lista de materias"
+                >
+                  <PanelLeftOpen size={16} strokeWidth={1.75} aria-hidden="true" />
+                </button>
+              )}
+            </aside>
+          )}
 
-                <MeasureProgress running={running} done={done} total={total} />
-
-                <ul className="sched__cards">
-                  {rows.map((r) => {
-                    const id = itemId(r.item);
-                    return (
-                      <CourseCard
-                        key={id}
-                        row={r}
-                        onlyOpen={false}
-                        compact
-                        linkFrom="schedule"
-                        selection={{
-                          pickedKey: selection[id] ?? null,
-                          onPick: (key) => pick(id, key),
-                          conflictKeys:
-                            selection[id] && conflicts.conflictItems.has(id)
-                              ? new Set([selection[id]])
-                              : new Set(),
-                        }}
-                      />
-                    );
-                  })}
-                </ul>
-              </div>
-            ) : (
-              // Con la lista oculta el calendario se queda con todo el
-              // ancho —útil en la semana con más materias amontonadas—,
-              // pero el control para volver a abrirla no puede irse con
-              // ella: queda este riel angosto, no un botón flotante que
-              // aparece de la nada.
-              <button
-                type="button"
-                className="sched__rail"
-                onClick={() => setListOpen(true)}
-                title="Mostrar lista de materias"
-                aria-label="Mostrar lista de materias"
-              >
-                <PanelLeftOpen size={16} strokeWidth={1.75} aria-hidden="true" />
-              </button>
-            )}
-          </aside>
-
-          <div className="sched__calendar" ref={calendarRef}>
-            <WeekCalendar blocks={calendarBlocks} />
+          <div className="sched__calendar">
+            {/* El aviso de calendario vacío cambia con el ancho porque
+                cambia dónde se marca un grupo: en escritorio, en la lista
+                de al lado; en mobile, en Mi semestre, que ya no está a la
+                vista. Mandarlo "a la lista" en un teléfono donde no hay
+                lista es mandarlo a ninguna parte, así que ahí el aviso
+                lleva el enlace. */}
+            <WeekCalendar
+              blocks={calendarBlocks}
+              emptyNote={
+                isMobile ? (
+                  <>
+                    Elige un grupo por materia en{' '}
+                    <AppLink to={{ name: 'semester' }}>Mi semestre</AppLink> para verlo aquí.
+                  </>
+                ) : undefined
+              }
+            />
 
             {withoutSchedule.length > 0 && (
               <div className="sched__noschedule">
@@ -258,15 +274,6 @@ export function Schedule() {
               </div>
             )}
           </div>
-
-          <button type="button" className="sched__fab" onClick={viewingList ? jumpToCalendar : jumpToList}>
-            {viewingList ? (
-              <ChevronUp size={16} strokeWidth={1.75} aria-hidden="true" />
-            ) : (
-              <ChevronDown size={16} strokeWidth={1.75} aria-hidden="true" />
-            )}
-            {viewingList ? 'ver horario' : 'seleccionar grupos'}
-          </button>
         </div>
       )}
     </Layout>

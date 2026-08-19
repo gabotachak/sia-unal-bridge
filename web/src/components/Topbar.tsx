@@ -111,12 +111,19 @@ export function Topbar() {
           </button>
         )}
 
+        {/* Los tres destinos llevan `iconbtn--dest`: es lo que los esconde
+            por debajo de STACK_BREAKPOINT_PX, donde la navegación se muda a
+            `.tabbar` (TabBar.tsx) y tenerlos acá arriba también sería
+            dibujar los mismos tres botones dos veces. El tema no lleva la
+            marca y se queda: no es un destino, es un ajuste — la barra de
+            abajo es "a dónde voy", no "qué configuro". */}
         <nav className="bar__nav" aria-label="Secciones">
           {sel && (
             <IconButton
               to={{ name: 'program', selection: sel }}
               active={screen.name === 'program'}
               label="Catálogo del plan"
+              className="iconbtn--dest"
             >
               <LayoutList size={ICON} strokeWidth={STROKE} />
             </IconButton>
@@ -127,6 +134,8 @@ export function Topbar() {
             active={screen.name === 'semester'}
             label="Mi semestre"
             badge={plan.items.length}
+            disabled={!sel}
+            className="iconbtn--dest"
           >
             <ListChecks size={ICON} strokeWidth={STROKE} />
           </IconButton>
@@ -135,6 +144,8 @@ export function Topbar() {
             to={{ name: 'schedule' }}
             active={screen.name === 'schedule'}
             label="Mi horario"
+            disabled={!sel}
+            className="iconbtn--dest"
           >
             <CalendarDays size={ICON} strokeWidth={STROKE} />
           </IconButton>

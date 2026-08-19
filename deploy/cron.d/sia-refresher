@@ -48,9 +48,9 @@ LOG=/var/log/sia-refresher.log
 # Cupos: calentador del hot set, SOLO en temporada de inscripciones. Fuera de
 # ella los cupos no se mueven (0 cambios en 347 grupos en 35 min) y correrlo
 # todo el año es gastar el ancho de banda de la UNAL para reescribir el mismo
-# número. **Va comentada a propósito**: descomentar el 27/08 cuando abran
-# inscripciones, y volver a comentarla al cerrar.
-#*/15 6-22 * * *  root  cd $PROJECT_DIR && docker compose --profile jobs run --rm refresher --mode=seats --scope=hot --workers=1 --max-duration=10m >> $LOG 2>&1
+# número. Prendida desde 2026-08-19 (inscripciones abiertas antes del
+# 27/08 previsto) — volver a comentarla al cerrar inscripciones.
+*/15 6-22 * * *  root  cd $PROJECT_DIR && docker compose --profile jobs run --rm refresher --mode=seats --scope=hot --workers=1 --max-duration=10m >> $LOG 2>&1
 
 # Detalle por plan: la visibilidad de cada plan, ~38 h en serie, ~10 h con 4
 # workers. NO va en cron: es un disparo manual en ventana de mantenimiento,

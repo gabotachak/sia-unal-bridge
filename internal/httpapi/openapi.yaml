@@ -38,8 +38,8 @@ info:
     url: https://github.com/gabotachak/sia-unal-bridge
 
 servers:
-  - url: http://localhost:8080/v1
-    description: Local (docker compose)
+  - url: https://sia-api.gabotachak.dev/v1
+    description: Producción
 
 tags:
   - name: Operación

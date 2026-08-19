@@ -1,0 +1,227 @@
+/* ── Split view: lista de materias + calendario ─────────────────────
+   La lista fija un ancho —no es una tabla que quiera todo el espacio,
+   es la que sobra después del calendario, que es el protagonista— y el
+   calendario toma el resto. Bajo los 860px no caben lado a lado sin
+   apretar ninguno de los dos, así que se apilan: lista arriba, calendario
+   abajo con su propio scroll horizontal (ver WeekCalendar.css). */
+
+.sched__body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-lg);
+}
+
+/* El panel de materias. Alto fijo —el que calcula `useViewportFit`, medido
+   desde ESTE elemento— en vez de dejar que lo decida su contenido: es lo
+   que hace que el panel mida SIEMPRE lo mismo que el calendario, esté la
+   lista abierta o el riel colapsado. Sin esto, colapsado se encogía al
+   alto de su único hijo —un botón— y quedaba flotando arriba en vez de
+   ocupar un carril del alto del calendario.
+
+   Arranca a la misma altura que `.week` (Mi horario no tiene nada más
+   arriba de ninguno de los dos), así que el mismo hook les da a los dos el
+   mismo disponible sin coordinarse entre sí — ninguno sobrepasa al otro.
+
+   El ancho sí anima (`.is-collapsed`), con `overflow: hidden` propio para
+   recortar el contenido mientras se achica. */
+.sched__list {
+  flex: 0 0 22rem;
+  min-width: 0;
+  overflow: hidden;
+  transition: flex-basis var(--slow) var(--ease-out);
+}
+.sched__list.is-collapsed {
+  flex: 0 0 2.75rem;
+}
+
+/* `scrollbar-gutter: stable` más el padding a la derecha son la respuesta
+   a "la barra de scroll queda pegada a las tarjetas": sin aire, la barra
+   nativa cae encima del borde redondeado y toca el contenido. */
+.sched__list-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  padding-right: 0.4rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
+}
+.sched__list-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.sched__list-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sched__list-scroll::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+}
+
+/* La cabecera del panel: "medir cupos" y el botón de ocultar, pegados
+   arriba mientras las tarjetas scrollean debajo — mismo gesto que
+   `.week__header`, para que las dos columnas se lean como el mismo tipo
+   de superficie. */
+.sched__list-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-sm);
+  padding-bottom: var(--gap-sm);
+  margin-bottom: var(--gap-sm);
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* El riel de la lista colapsada. No es un botón flotante que aparece de la
+   nada: ocupa el mismo carril que el panel completo, angosto, con el
+   icono para volver a abrirlo centrado en su alto. */
+.sched__rail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--text-faint);
+  transition:
+    color var(--fast) var(--ease-out),
+    background-color var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .sched__rail:hover {
+    color: var(--accent);
+    background: var(--surface-2);
+  }
+}
+
+.sched__cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+}
+
+.sched__calendar {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.sched__noschedule {
+  margin-top: var(--gap);
+  padding: var(--gap-sm) var(--gap);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.sched__noschedule-title {
+  margin: 0 0 0.3rem;
+  font-size: var(--t-small);
+  color: var(--text-dim);
+}
+.sched__noschedule ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: var(--t-small);
+  color: var(--text-faint);
+}
+
+.sched__back {
+  margin-top: var(--gap);
+}
+
+/* El atajo flotante "ver horario" / "seleccionar grupos". Oculto acá —en
+   escritorio las dos secciones ya están lado a lado, no hay nada que
+   saltar— y flotando solo apilado, ver el media query de abajo. */
+.sched__fab {
+  display: none;
+}
+
+/* ── Apilado (< STACK_BREAKPOINT_PX) ──────────────────────────────────
+   Un solo scroll, el de la página — no dos paneles con scroll propio uno
+   sobre otro. `useViewportFit` ya deja de topear el alto por su cuenta acá
+   abajo (`disableBelowPx`, ver el hook), así que esto es solo layout: una
+   columna, calendario primero.
+
+   Calendario arriba, lista abajo: lo que casi siempre se abre a mirar en
+   el teléfono es el horario ya armado —no hace falta scrollear para
+   verlo—, y armarlo de cero es la tarea ocasional que puede pedir bajar un
+   poco. Es el mismo orden que un mapa con resultados debajo. */
+@media (max-width: 860px) {
+  .sched__body {
+    flex-direction: column;
+  }
+  .sched__list {
+    order: 2;
+    flex-basis: auto;
+    width: 100%;
+  }
+  .sched__calendar {
+    order: 1;
+    width: 100%;
+  }
+
+  /* Colapsar existe para ganarle ancho al calendario cuando los dos
+     comparten fila. Apilados no hay ancho que repartir —la lista ya usa
+     el 100% igual— así que el botón no tiene nada que hacer acá; Schedule
+     .tsx además fuerza `listOpen` en este ancho, esto es el reflejo en
+     CSS de esa misma decisión. */
+  .sched__list-head .iconbtn {
+    display: none;
+  }
+  /* Sin el botón de ocultar al lado, "medir cupos" se quedaba solo a la
+     izquierda de una fila pensada para dos — un chip chico flotando con
+     medio ancho de aire vacío a la derecha. Estirado a todo el ancho de
+     la cabecera se lee como lo que es: la acción principal de este panel
+     en el teléfono, no un resto mal ubicado. */
+  .sched__list-head .chip {
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* El aire para la barra de scroll (arriba, `.sched__list-scroll`) es
+     para el mouse: en el teléfono la barra es una franja translúcida que
+     se dibuja ENCIMA del contenido y no ocupa espacio propio, así que ese
+     padding se veía como un margen sin motivo, angosto y disparejo, al
+     borde de las tarjetas. Apilado no hay scroll propio de todos modos
+     (ver `useViewportFit`, apagado bajo STACK_BREAKPOINT_PX) — nada que
+     reservarle sitio. */
+  .sched__list-scroll {
+    padding-right: 0;
+    scrollbar-gutter: auto;
+  }
+
+  /* Flotando y no al final de cada sección: un botón al fondo de una
+     lista larga nunca se ve MIENTRAS se scrollea, que es justo cuando
+     hace falta. Este queda a mano todo el tiempo y cambia de sentido
+     solo, según qué mitad de la pantalla ocupe cada sección
+     (`viewingList` en Schedule.tsx) — apunta siempre hacia la que NO se
+     está viendo. */
+  .sched__fab {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    position: fixed;
+    z-index: 40;
+    left: 50%;
+    bottom: 1.1rem;
+    transform: translateX(-50%);
+    padding: 0.65rem 1.1rem;
+    border-radius: 999px;
+    border: 1px solid var(--rule-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-size: var(--t-small);
+    box-shadow: var(--shadow-lg);
+  }
+  .sched__fab:active {
+    transform: translateX(-50%) scale(0.96);
+  }
+}

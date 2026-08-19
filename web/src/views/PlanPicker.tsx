@@ -1,13 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  ArrowLeft,
-  Building2,
-  Check,
-  GraduationCap,
-  Layers,
-  Search,
-  TriangleAlert,
-} from 'lucide-react';
+import { ArrowLeft, Building2, Check, GraduationCap, Layers, TriangleAlert } from 'lucide-react';
 import { routes } from '../api/client';
 import type {
   CampusesResponse,
@@ -18,6 +10,7 @@ import type {
 import { useApi } from '../hooks/useApi';
 import { usePlan } from '../hooks/usePlan';
 import { Layout } from '../components/Layout';
+import { SearchInput } from '../components/SearchInput';
 import { useConfirm } from '../components/Confirm';
 import { Empty, Fault, Loading } from '../components/States';
 import { fold, sentence } from '../lib/format';
@@ -267,16 +260,12 @@ export function PlanPicker() {
           <p className="step__hint">Elige una sede para ver sus planes.</p>
         ) : (
           <>
-            <label className="search">
-              <Search size={16} strokeWidth={1.75} aria-hidden="true" />
-              <span className="sr-only">Buscar plan</span>
-              <input
-                type="search"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder={`Buscar entre los planes de ${campusName}…`}
-              />
-            </label>
+            <SearchInput
+              value={q}
+              onChange={setQ}
+              placeholder={`Buscar entre los planes de ${campusName}…`}
+              label="Buscar plan"
+            />
 
             {programs.loading && !programs.data && (
               <Loading

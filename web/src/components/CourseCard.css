@@ -1,0 +1,389 @@
+/* Una materia con sus grupos. Caja porque contiene: es la misma regla que
+   sigue `.group` en la ficha —caja envuelve algo compuesto, fila es un dato
+   atómico—.
+
+   Sin sombra a propósito: nada más en la app flota. */
+.card {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+  transition: opacity var(--mid) var(--ease-out);
+}
+.card.is-loading {
+  opacity: 0.55;
+}
+
+.card__head {
+  padding: 0.6rem 0.6rem;
+  border-bottom: 1px solid var(--rule);
+  transition: background-color var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .card__head:hover {
+    background: var(--surface-2);
+  }
+}
+
+.card__code {
+  font-size: var(--t-micro);
+  color: var(--text-faint);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (hover: hover) and (pointer: fine) {
+  .card__head:hover .card__code {
+    color: var(--accent);
+  }
+}
+
+.card__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-body);
+  color: var(--text);
+  transition: color var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .card__name:hover {
+    color: var(--accent);
+  }
+}
+
+.card__credits {
+  text-align: right;
+  font-size: var(--t-small);
+  color: var(--text-dim);
+}
+
+.card__tally {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+  text-align: right;
+}
+
+.card__tallyLabel {
+  font-size: var(--t-nano);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.card__error {
+  margin: 0;
+  padding: var(--gap-sm) var(--gap);
+  font-size: var(--t-small);
+  color: var(--bad);
+  background: var(--bad-soft);
+}
+.card__error--soft {
+  color: var(--text-faint);
+  background: transparent;
+}
+
+/* ── Grupos de una materia ───────────────────────────────────────────
+   Rejilla propia de 5 columnas, no la de la cabecera: las del medio se
+   reparten en dos mitades iguales para que instructor y horario queden
+   alineados entre filas. Lo que sí toma prestado son los tres anchos
+   fijos de .table —código a la izquierda, cupos y botón a la derecha—,
+   que es lo que ancla la clave del grupo bajo CÓDIGO y su número de
+   cupos bajo CUPOS sin repetir ninguna medida.                     */
+
+.slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  --slot-cols: var(--col-code) minmax(0, 1fr) minmax(0, 1fr) var(--col-seats) var(--col-act);
+}
+
+.slot {
+  display: grid;
+  grid-template-columns: var(--slot-cols);
+  align-items: center;
+  gap: var(--gap-sm);
+  padding: 0.4rem 0.6rem;
+  font-size: var(--t-small);
+  border-top: 1px solid var(--rule);
+  cursor: pointer;
+}
+.slot:first-child {
+  border-top: 0;
+}
+
+.slot__key {
+  font-size: var(--t-micro);
+  color: var(--accent);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot__who,
+.slot__when {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.slot__who {
+  color: var(--text);
+}
+.slot__when {
+  color: var(--text-faint);
+}
+.slot__who svg,
+.slot__when svg {
+  flex: none;
+  opacity: 0.55;
+}
+
+.slot__seats {
+  display: flex;
+  justify-content: flex-end;
+  line-height: 1.1;
+}
+
+.slot.is-zero .slot__who,
+.slot.is-zero .slot__key {
+  color: var(--text-faint);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .slot:hover,
+  .slotc:hover {
+    background: var(--surface-2);
+  }
+}
+
+/* Grupo que choca en horario con otro ya elegido en Horario. El fondo
+   rayado en óxido es la alarma; no se toca el color de --slot__key para que
+   la materia se siga reconociendo por su color de categoría en el
+   calendario mientras acá adentro basta con el óxido, que ya significa
+   "conflicto/error" en toda la app. */
+.slot.is-conflict {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--bad-soft),
+    var(--bad-soft) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+
+/* Mismo ancho que .iconbtn--row (2rem) y NO 100% de la celda: un grid item
+   sin ancho propio se estira a rellenar su columna, y con `justify-content:
+   flex-end` quedaba pegado al borde derecho de --col-act mientras el botón
+   de borrar de la cabecera —que sí tiene ancho fijo— se queda al principio
+   de esa misma columna. Con el mismo ancho fijo los dos caen en el mismo
+   sitio: ninguno se estira, los dos arrancan en el borde izquierdo de la
+   columna, y el radio queda centrado en su propia caja como el icono. */
+.slot__radio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  width: 2rem;
+}
+.slot__conflict-icon {
+  color: var(--bad);
+  flex: none;
+}
+.slot__radio input[type='radio'] {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex: none;
+}
+
+/* Óxido al apuntar un radio YA marcado: es la pista de que ese clic lo
+   desmarca, no de que lo confirma otra vez. Solo el marcado cambia de
+   color — uno sin marcar apuntado sigue en jade, porque ESE clic sí
+   selecciona. */
+@media (hover: hover) and (pointer: fine) {
+  .slot__radio input[type='radio']:checked:hover,
+  .slotc__radio input[type='radio']:checked:hover {
+    accent-color: var(--bad);
+  }
+}
+
+.slots__more {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border-top: 1px solid var(--rule);
+  font-size: var(--t-small);
+  color: var(--accent);
+  text-align: center;
+}
+@media (hover: hover) and (pointer: fine) {
+  .slots__more:hover {
+    color: var(--accent-hover);
+    background: var(--accent-soft);
+  }
+}
+
+/* ── Vista reducida (Mi horario) ──────────────────────────────────────
+   Mismos datos que la tarjeta completa, otra rejilla: acá nadie reconoce
+   una materia por su código, y la tipología o los créditos no ayudan a
+   elegir un horario. Lo único que importa es el nombre entero y, por
+   grupo, quién dicta y a qué hora — así que en vez de la rejilla fija de
+   .table (pensada para una página entera) esto es flexbox, que le da al
+   nombre y al horario todo el ancho que la barra lateral pueda ofrecer. */
+
+.card__head--compact {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--gap-sm);
+}
+.card__head--compact .card__name {
+  white-space: normal;
+  line-height: 1.25;
+}
+.card__head--compact .card__tally {
+  flex: none;
+}
+
+.slotsc {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* `align-items: flex-start`, no `center`: un horario de seis sesiones
+   envuelve a tres líneas, y centrado contra ESE bloque entero el radio
+   quedaba a la altura del horario en vez de junto al nombre del grupo —
+   arriba se queda fijo ahí sin importar cuánto crezca el texto de al
+   lado. */
+.slotc {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border-top: 1px solid var(--rule);
+  cursor: pointer;
+}
+.slotc:first-child {
+  border-top: 0;
+}
+.slotc.is-conflict {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--bad-soft),
+    var(--bad-soft) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+
+.slotc__radio {
+  flex: none;
+  display: flex;
+}
+.slotc__radio input[type='radio'] {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.slotc__body {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.slotc__line1 {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: var(--t-small);
+  color: var(--text);
+}
+.slotc__key {
+  font-size: var(--t-micro);
+  color: var(--accent);
+  font-weight: 600;
+  flex: none;
+}
+.slotc__line2 {
+  font-size: var(--t-micro);
+  color: var(--text-faint);
+}
+.slotc__conflict-icon {
+  color: var(--bad);
+  flex: none;
+}
+
+.slotc__seats {
+  flex: none;
+  align-self: center;
+  line-height: 1.1;
+}
+
+/* ── Responsivo ─────────────────────────────────────────────────────
+   De grande a chico, en ese orden: cada bloque puede pisar al anterior.
+
+   Qué columnas pierde la cabecera lo decide styles/table.css. Acá solo
+   lo propio: el margen de la tarjeta y qué hacen los grupos cuando la
+   fila de cinco columnas deja de caber.
+
+   Hasta 520px no hace falta tocar --slot-cols: sus tres anchos fijos
+   salen de las variables de .table, que ya se ajustaron solas.      */
+
+@media (max-width: 640px) {
+  .card__head,
+  .slot {
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+  }
+}
+
+/* En el teléfono el grupo se apila en vez de perder columnas.
+
+   Esta pantalla existe para comparar grupos entre sí, y lo que los
+   distingue es justo lo que no cabe en una línea: la clave, quién dicta
+   y a qué hora. Recortando, dos grupos del mismo profesor quedaban
+   idénticos en pantalla. Los cupos y el radio se quedan a la derecha,
+   centrados sobre las dos líneas, para que la columna de números siga
+   leyéndose de un vistazo de arriba abajo. */
+@media (max-width: 520px) {
+  .slot {
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) var(--col-seats) var(--col-act);
+    grid-template-areas:
+      'key  who  seats radio'
+      'when when seats radio';
+    row-gap: 0.15rem;
+  }
+  .slot__key {
+    grid-area: key;
+  }
+  .slot__who {
+    grid-area: who;
+  }
+  .slot__when {
+    grid-area: when;
+    font-size: var(--t-micro);
+  }
+  .slot__seats {
+    grid-area: seats;
+  }
+  .slot__radio {
+    grid-area: radio;
+  }
+
+  .card__age {
+    display: none;
+  }
+}

@@ -76,6 +76,16 @@
   margin-bottom: var(--gap-lg);
 }
 
+/* Variante en columna: el botón siempre debajo del título, nunca al lado.
+   La usa la ficha de una asignatura (Course.tsx), donde el título puede ser
+   una frase entera — con el `.head` de lado a lado, el botón saltaba de
+   "junto al título" a "abajo a la izquierda" según cupiera o no en la misma
+   línea. */
+.head--stack {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 .head__title {
   font-size: var(--t-title);
   margin: 0.1rem 0 0;

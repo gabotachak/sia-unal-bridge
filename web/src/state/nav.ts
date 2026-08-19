@@ -17,16 +17,18 @@ import type { Selection } from '../lib/storage';
  *  - 'course' los lleva para poder volver al catálogo de ESE plan con sus
  *    nombres ya puestos, sin ir a buscarlos nunca.
  *
- * Cuando se llega desde Mi semestre (`from: 'semester'`) no hay nombres a
- * mano —PlanItem solo guarda códigos— y no hace falta: la flecha de volver
- * apunta a 'semester', no a 'program', así que esos nombres de relleno nunca
- * se leen. Ver el comentario en Semester.tsx donde se arma esa Selection.
+ * Cuando se llega desde Mi semestre u Horario (`from: 'semester' |
+ * 'schedule'`) no hay nombres a mano —PlanItem solo guarda códigos— y no hace
+ * falta: la flecha de volver apunta a esa pantalla, no a 'program', así que
+ * esos nombres de relleno nunca se leen. Ver CourseCard.tsx, que es quien
+ * arma esa Selection para las dos.
  */
 export type Screen =
   | { name: 'plan-picker' }
   | { name: 'program'; selection: Selection }
-  | { name: 'course'; selection: Selection; code: string; from?: 'semester' }
-  | { name: 'semester' };
+  | { name: 'course'; selection: Selection; code: string; from?: 'semester' | 'schedule' }
+  | { name: 'semester' }
+  | { name: 'schedule' };
 
 export type NavApi = {
   screen: Screen;

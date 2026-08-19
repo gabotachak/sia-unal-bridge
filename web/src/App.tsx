@@ -1,10 +1,13 @@
 import { useNav } from './state/nav';
+import { CatalogFiltersProvider } from './state/CatalogFiltersProvider';
 import { NavProvider } from './state/NavProvider';
 import { PlanProvider } from './state/PlanProvider';
+import { ScheduleProvider } from './state/ScheduleProvider';
 import { PlanPicker } from './views/PlanPicker';
 import { Program } from './views/Program';
 import { Course } from './views/Course';
 import { Semester } from './views/Semester';
+import { Schedule } from './views/Schedule';
 
 /**
  * El árbol de pantallas.
@@ -25,17 +28,28 @@ function Screens() {
       return <Course screen={screen} />;
     case 'semester':
       return <Semester />;
+    case 'schedule':
+      return <Schedule />;
   }
 }
 
 export function App() {
   return (
     <PlanProvider>
-      {/* NavProvider adentro de PlanProvider a propósito: la pantalla inicial
-          depende del plan ya elegido, así que necesita leerlo. */}
-      <NavProvider>
-        <Screens />
-      </NavProvider>
+      {/* ScheduleProvider adentro de PlanProvider: poda su selección leyendo
+          `plan.items`, así que necesita que ya exista. NavProvider adentro de
+          los dos por la misma razón que antes — la pantalla inicial depende
+          del plan ya elegido. */}
+      <ScheduleProvider>
+        {/* CatalogFiltersProvider no depende de nada de los otros dos —
+            entra donde sea, va acá por quedar junto a su hermano de
+            propósito similar. */}
+        <CatalogFiltersProvider>
+          <NavProvider>
+            <Screens />
+          </NavProvider>
+        </CatalogFiltersProvider>
+      </ScheduleProvider>
     </PlanProvider>
   );
 }

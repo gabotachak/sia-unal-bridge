@@ -45,8 +45,7 @@ export function Loading({
 
       {slow && (
         <p className="state__note">
-          Esta es la primera vez que se pide, así que hay que ir hasta el SIA. La próxima
-          vez abre al instante.
+          Actualizando información con el SIA. La próxima vez abre al instante.
         </p>
       )}
       <p className="state__clock tnum">

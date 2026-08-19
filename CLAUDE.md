@@ -83,7 +83,8 @@ Hexagonal. Dos puertos driving (`API` y `Refresher`) y dos driven (`Store` Postg
 El `Refresher` **no escribe en la base**: entra por los mismos casos de uso que `httpapi`
 (`catalog.Service`), así que hay un solo upsert de catálogo y no dos que se
 desincronicen. Levanta **su propio pool** de conexiones, y la invariante que no se negocia
-es `conexiones(api) + conexiones(refresher) ≤ 8`. Su checkpoint son los marcadores de
+es `conexiones(api) + conexiones(refresher) ≤ 80` (techo medido, `docs/OPEN-QUESTIONS.md`
+§5). Su checkpoint son los marcadores de
 frescura, no un cursor: reanudar es volver a correr, y dos corridas seguidas no hacen ni
 un POST.
 
@@ -116,8 +117,10 @@ Es un **pool de conexiones ADF con estado**. Cada conexión:
   cuesta 1 POST al id correcto (`pt1:r1:<N>:cb4`, `N` creciente)
 
 N requests concurrentes ⇒ N conexiones. Fase 1: pool de 4 con mutex por conexión
-**sobre la operación lógica** (§28); medido, el SIA
-aguanta 8 en paralelo sin errores ni throttling.
+**sobre la operación lógica** (§28); medido contra producción (2026-08-19), el SIA
+aguanta hasta **80** en paralelo sin errores ni throttling — en 88 ya aparece ~4.5% de
+fallas (`docs/OPEN-QUESTIONS.md` §5). El pool por defecto se queda en 4 porque el
+tráfico real no pide más, no porque el servidor imponga un techo bajo.
 
 Los campos de estado (`parkedAt`, `detailRegion`) son lo que ahorra POSTs: si la
 conexión ya está donde toca, son 2 POSTs en vez de 6 (~1.3 s en vez de ~10 s).

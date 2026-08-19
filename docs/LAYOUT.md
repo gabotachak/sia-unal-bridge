@@ -131,7 +131,7 @@ técnica, para que cada trampa tenga un archivo obvio donde vivir y donde buscar
 | Archivo | Trampas que le tocan |
 |---|---|
 | `conn.go` | §1 User-Agent · §2 `winnoloop` · §3 ViewState no rota · §7 timeout ~4.2 min · §8 cookie+ViewState · §10 región 0 vs detalle · **§20 región de detalle numerada** · §22 bootstrap con tabla ajena · §25 coste variable del bootstrap |
-| `pool.go` | §7 expiración y keepalive ≤3 min · **§28 mutex por conexión envolviendo la operación lógica** · 8 conexiones en paralelo van bien |
+| `pool.go` | §7 expiración y keepalive ≤3 min · **§28 mutex por conexión envolviendo la operación lógica** · hasta 80 conexiones en paralelo van bien |
 | `form.go` | §9 `selection` innecesario · §11 `DELTAS` opcional · §12 headers no validados |
 | `cascade.go` | §6 la cascada no se puede saltar · §21 `soc4=0` excluye libre elección → la de electivas no es opcional · §5 de `PROTOCOL.md`: `soc10` antes de `soc6` o sale basura |
 | `parse_list.go` | §4 `_afrRK` se renumera y no empieza en 0 · §5 `_rowCount` no fiable · §13 dedupe · §14 tope de 1000 · §21 `soc4=0` excluye libre elección · §23 `<tr>` ×5 en la página completa |

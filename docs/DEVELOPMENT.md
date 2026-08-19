@@ -177,9 +177,11 @@ Es un catálogo público de una universidad, sin `robots.txt`. Aun así:
   pegado en el formulario y recorta la siguiente búsqueda ([GOTCHAS §34](GOTCHAS.md)).
 - El crawl completo con detalle son **30-40 h** (una carrera de 98 asignaturas = 201
   POSTs / 99 s / 31 MB). Ya es resumible: el `Refresher` usa los marcadores de frescura
-  como checkpoint. El SIA aguantó 8 conexiones en paralelo sin errores ni throttling, así
-  que se puede paralelizar con moderación ([OPEN-QUESTIONS.md](OPEN-QUESTIONS.md)) —
-  respetando `conexiones(api) + conexiones(refresher) ≤ 8`.
+  como checkpoint. El SIA aguantó hasta 80 conexiones en paralelo sin errores ni
+  throttling (88 ya degrada, [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md) §5), así que se
+  puede paralelizar con moderación — respetando
+  `conexiones(api) + conexiones(refresher) ≤ 80`. Los valores por defecto se quedan
+  muy por debajo de eso; el tráfico real no lo pide.
 - `REFRESH_RATE_POSTS_PER_SEC` es el presupuesto de cortesía del Job, y la ventana
   nocturna es para el barrido pesado, no para los cupos.
 

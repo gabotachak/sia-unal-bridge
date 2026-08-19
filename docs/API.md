@@ -416,6 +416,8 @@ listado y guarda el crudo aparte.
 | Sesión caducada tras N reintentos | `502` | `sia_session_lost` |
 | Pool ocupado / timeout | `503` + `Retry-After` | `busy` |
 | `max_age` inválido | `400` | `bad_request` |
+| Refresh forzado antes del cooldown (mismo curso) | `429` + `Retry-After` | `rate_limit` |
+| Límite de requests por IP superado (cualquier endpoint) | `429` + `Retry-After` | `rate_limit` |
 
 **El `404` y el `200` con `sections: []` son casos distintos y no se pueden colapsar.**
 `2027641` existe en el catálogo y no tiene oferta este periodo

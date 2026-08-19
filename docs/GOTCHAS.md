@@ -612,9 +612,9 @@ El mutex tiene que envolver la **operación lógica completa**:
 Las operaciones lógicas son: *cascada + `cb1`*, y *detalle + `Volver`*. Partirlas es
 exactamente el bug.
 
-Entre conexiones distintas no hay problema: 8 sesiones en paralelo dan 0 errores y 0
-contaminación (§ concurrencia en [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md)). El paralelismo
-va **entre** conexiones, nunca dentro de una.
+Entre conexiones distintas no hay problema hasta 80 en paralelo: 0 errores, 0
+contaminación (§ concurrencia en [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md)). En 88 empieza
+a degradar. El paralelismo va **entre** conexiones, nunca dentro de una.
 
 ---
 

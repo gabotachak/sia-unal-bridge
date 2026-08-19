@@ -69,10 +69,14 @@ diferencia entre un fetch del job y uno de un cliente es **quién lo pidió**
 
 `cmd/refresher` levanta **su propio pool**. Compartirlo sería servir `503 busy` —el error
 que [API.md](API.md) reserva para picos— durante las horas que dura un barrido de detalle.
-La invariante que no se negocia es el techo medido de 8 sesiones concurrentes:
+La invariante que no se negocia es el techo medido: 80 conexiones concurrentes limpias,
+88 ya degrada (~4.5% de fallas — [OPEN-QUESTIONS.md §5](OPEN-QUESTIONS.md), medido
+2026-08-19). Los valores por defecto de `api` y `refresher` se quedan muy por debajo de
+eso a propósito — el tráfico real no lo pide, esto solo fija cuánto margen hay antes del
+borde:
 
 ```
-conexiones(api) + conexiones(refresher) ≤ 8
+conexiones(api) + conexiones(refresher) ≤ 80
    4 (api, por defecto)  +  2 (refresher)  =  6   ← operación normal
    4                     +  4              =  8   ← ventana de mantenimiento
 ```
@@ -170,10 +174,11 @@ solo atasco.
 Esos campos de estado son los que ahorran POSTs: si la conexión ya está en el programa
 pedido y no está en detalle, son 2 POSTs en vez de 6.
 
-**Fase 1:** pool de **4** conexiones, cada una con su mutex. Medido: 8 sesiones
+**Fase 1:** pool de **4** conexiones, cada una con su mutex. Medido: hasta 80 sesiones
 concurrentes dan 0 errores, 0 throttling y latencia plana (la búsqueda tarda lo mismo
-con N=1 que con N=8). Con 1-2 el `503 busy` salta con dos pestañas abiertas; crecer más
-allá de 4-8 es decisión de cortesía, no restricción del servidor. Ver *Concurrencia*.
+con N=1 que con N=80); en 88 ya aparece ~4.5% de fallas (OPEN-QUESTIONS.md §5). Con 1-2
+el `503 busy` salta con dos pestañas abiertas. El pool por defecto se queda en 4 porque
+el tráfico real no pide más, no porque el servidor lo exija. Ver *Concurrencia*.
 
 ### Concurrencia: entre conexiones, nunca dentro de una
 

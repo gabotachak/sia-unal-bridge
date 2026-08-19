@@ -49,7 +49,7 @@ Léelo antes de asumir algo. Varias afirmaciones "obvias" resultaron falsas al m
 | **La tipología SÍ depende del programa** | 8 códigos divergentes entre planes — ver abajo |
 | **La región de detalle se numera y crece** | 98 detalles seguidos: `pt1:r1:1` … `pt1:r1:98` |
 | **`soc4=0` significa "todas menos libre elección"** | los 7 subfiltros suman exactamente las 98 filas |
-| **El SIA aguanta 8 conexiones concurrentes** | 8 flujos completos en paralelo, 0 errores, 0 contaminación |
+| **El SIA aguanta 80 conexiones concurrentes** | rampa 8→80 limpia; 88 ya falla ~4.5% (ver §5, medido 2026-08-19) |
 | **La sesión muere a los ~4.2 min de inactividad** | ocioso 250 s vive, 270 s muere; ping ≤3 min la mantiene 30 min |
 | **1380 entradas de programa en toda la UNAL** | recorrido de `soc1 × soc9 × soc2 × soc3`, 142 POSTs |
 | **`program.code` NO es único entre sedes** | 136 códigos repetidos de 852; ver abajo |
@@ -172,10 +172,10 @@ Las ~3.7 POSTs por asignatura son más que las ~2 que este documento estimaba: f
 contar el `soc3` de reparqueo, el `Volver`, y —para las de libre elección— la cascada de
 electivas entera, que con los rebotes del §30 son 8 POSTs.
 
-### 5. Concurrencia — al menos 8 conexiones, sin fricción
+### 5. Concurrencia — techo probado: 80
 
-N = 1, 2, 4 y 8 sesiones haciendo el flujo completo a la vez (bootstrap + cascada +
-búsqueda + detalle):
+Primera ronda (2026-08-15): N = 1, 2, 4 y 8 sesiones haciendo el flujo completo a la vez
+(bootstrap + cascada + búsqueda + detalle):
 
 ```
 N=8   8/8 ok   0 errores   0 throttling   8 listados distintos (sin contaminación)
@@ -183,7 +183,31 @@ N=8   8/8 ok   0 errores   0 throttling   8 listados distintos (sin contaminaci�
       el reloj lo domina el bootstrap, no la concurrencia
 ```
 
-El pool puede pasar de 2 sin problema. El límite real es la cortesía, no el servidor.
+En ese momento 8 quedó como techo por no haberse probado más alto, no porque fallara —
+de ahí que el pool de fase 1 se describiera como "cortesía, no restricción del servidor".
+Eso ya no es una suposición: se probó.
+
+**Segunda ronda (2026-08-19)**, rampa contra producción vía la propia API dockerizada
+(`SIA_POOL_SIZE` recreado por nivel, N fetches de detalle concurrentes, uno por conexión
+del pool, cursos reales distintos por corrida para evitar cualquier cache):
+
+```
+N=8,12,16,24,32,46,64,80   100% ok en cada nivel   latencia p50 plana (~7-9.6 s)
+N=88                        84/88 ok (4 fallas, ~4.5%)
+N=96                        90/96 ok (6 fallas, ~6.25%)
+```
+
+Las fallas en 88 y 96 no son timeouts ni 503 — son la cascada de electivas
+rompiéndose bajo carga (`soc6 came back with no options`, respuesta sin región de
+detalle) más algún `sia_noop`. Se confirmó que no es un bug de esos códigos en
+particular: los mismos cursos que fallaron en paralelo responden 200 limpio en
+solitario (N=1). Es degradación real de concurrencia, no ruido de datos.
+
+**Techo probado: 80 conexiones concurrentes, limpio. 88 ya degrada.** El número no
+es cortesía — es el borde medido. `SIA_POOL_SIZE` de producción sigue en un valor muy
+por debajo de esto (el tráfico actual no lo necesita); lo que cambia es que ahora hay
+~10× de margen medido antes de tocar el borde real, no una regla de buena educación
+inventada.
 
 ---
 

@@ -10,7 +10,7 @@ ARG GIT_TAG=dev
 ARG GIT_SHA=unknown
 RUN CGO_ENABLED=0 go build -ldflags "-X main.version=$GIT_TAG -X main.commit=$GIT_SHA" -o /out/bridge ./cmd/bridge
 
-FROM alpine:3.20
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates && \
     adduser -D -u 1000 appuser
 ARG GIT_TAG=dev

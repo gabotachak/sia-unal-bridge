@@ -169,6 +169,14 @@ func (c *SIAConn) post(ctx context.Context, values url.Values) ([]byte, map[stri
 	}
 	c.LastUsed = time.Now()
 
+	// Order matters: a DEAD session also answers with this redirect, but
+	// short (412–877 B). Classifying that as the server choking on one page
+	// would rob it of the retry a noop gets, and one expired session would
+	// then take the rest of the batch with it.
+	if !isNoop(body) && isSIAErrorPage(body) {
+		return nil, nil, fmt.Errorf("%w (%d bytes)", errSIAErrorPage, len(body))
+	}
+
 	env, err := ParseEnvelope(body)
 	if err == nil {
 		if vs, ok := env["javax.faces.ViewState"]; ok && vs != "" {

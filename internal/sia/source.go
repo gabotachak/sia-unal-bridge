@@ -2,6 +2,7 @@ package sia
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -116,6 +117,11 @@ func (s *Source) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([]
 // doctorado level most faculties have no libre elección at all. The parse
 // error is only returned when nothing at all could be read, which is a real
 // protocol problem.
+//
+// The RowKey of these rows MUST NOT be clicked. Every body restarts _afrRK at
+// 0, so in the union a key means nothing — use FindElectiveRow, which stops on
+// the listing that has the code and leaves it live (GOTCHAS §38). This union
+// exists for the catalog, which only reads codes, names and credits.
 func electiveRows(bodies [][]byte) ([]Row, error) {
 	var rows []Row
 	var firstErr error
@@ -157,7 +163,18 @@ func (s *Source) FetchDetails(ctx context.Context, key catalog.ProgramKey, refs 
 				return struct{}{}, err
 			}
 			off, ferr := fetchDetail(ctx, conn, key, ref, term)
-			if ferr != nil && isRecoverable(ferr) {
+			switch {
+			case ferr == nil:
+			case errors.Is(ferr, errSIAErrorPage):
+				// The SIA killed its own session rendering this course, so
+				// the connection is dead but the course is hopeless: retrying
+				// it walks into the same broken page. Re-bootstrap so the
+				// REST of the batch survives — without this, one bad course
+				// takes the program's other 40 with it — and keep ferr.
+				rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rebootstrapTimeout)
+				_, _ = conn.Bootstrap(rctx)
+				cancel()
+			case isRecoverable(ferr):
 				rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rebootstrapTimeout)
 				_, berr := conn.Bootstrap(rctx)
 				cancel()
@@ -264,18 +281,14 @@ func findRowInListings(ctx context.Context, conn *SIAConn, key catalog.ProgramKe
 		}
 	}
 
-	bodies, err := conn.FetchElectives(ctx, key)
-	if err != nil {
-		return Row{}, err
-	}
-	rows, err := electiveRows(bodies)
-	if err != nil {
-		return Row{}, err
-	}
-	if r, ok := rowWithCode(rows, code); ok {
-		return r, nil
-	}
-	return Row{}, catalog.ErrNotFound
+	// FindElectiveRow, not FetchElectives + electiveRows: the row is about to
+	// be CLICKED, and an _afrRK only means anything while its own listing is
+	// the live render. Where the sede has no wildcard the electives listing is
+	// one search per faculty and every body restarts the keys at 0, so a key
+	// picked out of the union clicks a row of whichever search ran last —
+	// which is how every doctorado course reachable only through libre
+	// elección failed with "no detail region id" (GOTCHAS §38).
+	return conn.FindElectiveRow(ctx, key, code)
 }
 
 // checkDetailCode compares the code the detail page printed with the one we

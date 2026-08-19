@@ -552,6 +552,9 @@ Medido contra producción, no estimado.
 | `catalog` en toda la UNAL (2026-08-17, 1 h 46 min) | 1306 planes OK, 23 fallidos, 60 saltados, 224 750 asignaturas, 16 246 POSTs, 3.4 GB | ~2 760 POSTs, ~2.7 h, ~0.7 GB |
 | Los 23 fallidos, ya arreglados (§37) | **18 planes reales** de Amazonia, Caribe, Orinoquía y 2 sueltos; los otros 5 eran los tests escribiendo en la base de producción | — |
 | `catalog` sobre esas 5 sedes tras el arreglo (2026-08-18) | 18 planes OK, **0 fallidos**, 206 POSTs, 21 MB | cobertura **1380/1380** |
+| `detail --scope=global` lanzado por cron (2026-08-18, 01:00) | 1442 asignaturas, **1795 fallos**, 68 861 POSTs = **47 POSTs/asignatura** | ~3.7 POSTs/asignatura |
+| Los 1795 fallos | un solo bug: los `_afrRK` de la unión de electivas (§38), que golpea a **todo doctorado** porque su listado regular está vacío | — |
+| `detail --scope=plan` en Bogotá tras el arreglo | 76 asignaturas, **0 fallos**, 806 POSTs = 10.6 POSTs/asignatura sobre planes 100 % de electivas | 3.7 en planes con listado regular |
 
 `-race` limpio con W=4 sobre programas concurrentes. `REFRESH_ENABLED=false` sale con
 código 0 y un log **sin abrir una conexión al SIA**. Dos corridas del mismo modo: la
@@ -567,10 +570,24 @@ pegado a la insignia `ASIGNATURA SIN PROGRAMAR`, y ese texto llegaba a `course.n
 [§37](GOTCHAS.md) (el rebote del §30 sobre `soc6` es innecesario **e imposible** en las
 sedes de una sola facultad, así que 14 planes de Amazonia y Caribe no tenían catálogo).
 
+Y dos más que solo aparecieron cuando el cron corrió solo de madrugada:
+[§38](GOTCHAS.md) (el `_afrRK` sacado de la **unión** de las búsquedas de electivas
+pertenece a una tabla que el servidor ya reemplazó, así que el detalle de cualquier
+asignatura de doctorado era inalcanzable) y [§39](GOTCHAS.md) (hay asignaturas que
+**tumban al SIA**: CDATA cortado y redirect a `errorNavegacion.jsf`, y sin detectarlo la
+conexión se llevaba por delante las 40 asignaturas siguientes del plan).
+
 El §37 salió del barrido completo, no de una prueba: 23 planes fallidos en el log de
 `/var/log/sia-refresher.log`, agrupados por error, y 14 de ellos con el mismo
 `soc6 has 1 options, need at least 2`. Sin `refresh_run` y sin el log por unidad, ese
 número se habría visto como "1362 de 1380, casi todo".
+
+El §38 es peor de encontrar y vale la pena subrayar por qué: **el circuit breaker no
+saltó**. Cuenta unidades, y una unidad es un programa que se da por bueno con que **una**
+de sus asignaturas pase. 38 programas "OK" tapaban 1795 asignaturas fallidas. Lo que lo
+delató fue la aritmética de `posts` contra `courses_ok`: 47 POSTs por asignatura donde el
+plan decía 3.7. Si algún día hay que elegir una sola métrica para vigilar el Job, es esa
+razón, no `programs_failed`.
 
 Era la predicción explícita de este documento: *"cualquier bug de persistencia que el job
 destape es un bug que la API también tenía. Eso es una feature."*

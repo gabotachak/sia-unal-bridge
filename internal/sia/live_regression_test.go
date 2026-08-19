@@ -333,3 +333,54 @@ func TestLive_FetchElectives_SingleFacultySede(t *testing.T) {
 		t.Logf("%s: %d bodies, %d rows", key, len(bodies), len(rows))
 	}
 }
+
+// TestLive_DetailOfAnElectiveOnlyCourse is the regression for the bug the
+// nightly `detail` cron uncovered: a course reachable ONLY through the
+// electives listing, in a sede+nivel with no soc6 wildcard, was unfetchable.
+//
+// The electives listing is one search per faculty there, and every body
+// restarts _afrRK at 0. findRowInListings used to union the bodies and pick a
+// row out of the union, so the key it clicked belonged to a table the server
+// had already replaced: "no detail region id in ~11960 byte response", 1795
+// times in one run of four hours. GOTCHAS §38.
+//
+// DOCTORADO EN CIENCIAS AGROPECUARIAS has an EMPTY regular listing, so every
+// one of its courses takes the electives path. Skipped unless SIA_LIVE=1.
+func TestLive_DetailOfAnElectiveOnlyCourse(t *testing.T) {
+	if os.Getenv("SIA_LIVE") != "1" {
+		t.Skip("set SIA_LIVE=1 to run against the real SIA server")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	c, err := NewConn("https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Bootstrap(ctx); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+
+	key := catalog.ProgramKey{Level: 1, Campus: 2, Faculty: 0, Program: 2, CampusCode: "1101"}
+	if body, err := c.FetchCatalog(ctx, key); err != nil {
+		t.Fatalf("FetchCatalog: %v", err)
+	} else if rows, err := ParseList(body); err != nil || len(rows) != 0 {
+		// Not a failure of the fix, but the premise no longer holds and the
+		// test would be proving nothing.
+		t.Skipf("the regular listing is no longer empty (%d rows, err=%v): pick another plan", len(rows), err)
+	}
+
+	const code = "2011183" // Intercambio academico internacional
+	off, err := fetchDetail(ctx, c, key, catalog.CourseRef{
+		Code: code, Name: "Intercambio academico internacional",
+	}, "2026-2")
+	if err != nil {
+		t.Fatalf("detail of an elective-only course: %v", err)
+	}
+	if off.Course.Code != code {
+		t.Fatalf("got the detail of %s, asked for %s", off.Course.Code, code)
+	}
+	if len(off.Course.Sections) == 0 {
+		t.Fatalf("%s came back with no groups", code)
+	}
+}

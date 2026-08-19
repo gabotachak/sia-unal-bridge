@@ -1,13 +1,13 @@
 # Trampas verificadas
 
-Cada punto fue comprobado contra el servidor de producción el **2026-08-15**, y las cuatro
-últimas (§34–§37) el **2026-08-17/18**, implementando la fase 2.
+Cada punto fue comprobado contra el servidor de producción el **2026-08-15**, y las seis
+últimas (§34–§39) el **2026-08-17/18**, implementando la fase 2.
 Varios contradicen lo que asumía el proyecto anterior (`BetterCampus/sia-scraper`).
 
 Léelo antes de escribir código.
 
-> §34-§37 las destapó el `Refresher` al recorrer sedes y niveles que la API nunca había
-> tocado. Las cuatro eran bugs de la API tambien, no del Job.
+> §34-§39 las destapó el `Refresher` al recorrer sedes y niveles que la API nunca había
+> tocado. Las seis eran bugs de la API tambien, no del Job.
 >
 > §20-§28 salen de la segunda ronda de experimentos (2026-08-15, tarde). Las dos caras
 > de descubrir por tu cuenta son la §20 —se disfraza de sesión colgada— y la §27, que
@@ -971,3 +971,78 @@ no una por facultad.
 `sia/cascade.go`: `FetchElectives`, `electivesTargets`. Verificado con
 `TestElectivesTargets` y `TestLive_FetchElectives_SingleFacultySede` (dos planes de la
 misma sede sobre una misma conexión, que es el caso para el que existía el rebote).
+
+---
+
+## 38. Los `_afrRK` de la unión de electivas no sirven para hacer clic
+
+El §4 dice que un `_afrRK` solo vale para la respuesta de la que se leyó. El §35 añadió,
+sin querer, una forma nueva de romperlo: donde no hay comodín de sede, el listado de
+electivas es **una búsqueda por facultad**, y **cada cuerpo reinicia las claves en 0**.
+
+Medido en `1101/2572` (DOCTORADO EN CIENCIAS AGROPECUARIAS), Bogotá doctorado:
+
+```
+body 0: 11 063 B    body 4: 73 073 B     rows unidas = 441
+body 1: 64 340 B    body 5: 103 563 B    row 0 -> rk="0"
+body 2: 392 807 B   ...                  row 1 -> rk="1"
+body 3: 11 063 B    body 10: 11 085 B    row 2 -> rk="2"
+```
+
+`findRowInListings` unía los 11 cuerpos y buscaba el código ahí. La fila aparecía, pero su
+clave pertenecía a la tabla de **otra** búsqueda: la única viva en el servidor es la de la
+**última**. El clic caía en la fila que ocupara esa posición en la tabla equivocada, o en
+ninguna, y la respuesta era `no detail region id in ~11960 byte response`.
+
+**Lo que costó:** la corrida de `detail --scope=global` del 2026-08-18 (la primera que
+lanzó el cron sola) hizo **68 861 POSTs para 1442 asignaturas — 47 POSTs por asignatura**
+contra las ~3.7 medidas, con **1795 fallos** y 1340 planes sin visitar en 4 h. Cada
+asignatura pagaba las 11 búsquedas y luego fallaba el clic. Los planes afectados son
+exactamente los que no tienen listado regular: los doctorados, donde **todas** sus
+asignaturas salen por la vía de electivas.
+
+Ojo con el disfraz: el `circuit_breaker` **no** saltó, porque cuenta *unidades*
+(programas) y un programa se da por bueno con que una sola asignatura pase. 38 programas
+"OK" escondían 1795 asignaturas fallidas. `programs_ok` no es una medida de salud.
+
+**Cómo se resuelve:** `eachElectivesSearch` recorre las búsquedas una por una y `FindElectiveRow`
+**se detiene en la que trae el código**, dejando esa tabla como el render vivo. La unión
+(`electiveRows`) sigue existiendo para el catálogo, que solo lee código, nombre y créditos
+y nunca hace clic.
+
+`sia/cascade.go`: `eachElectivesSearch`, `FindElectiveRow`. `sia/source.go`:
+`findRowInListings`. Verificado con `TestLive_DetailOfAnElectiveOnlyCourse`.
+
+---
+
+## 39. El SIA se cae solo: CDATA cortado y redirect a `errorNavegacion.jsf`
+
+Hay asignaturas cuyo detalle **rompe al servidor**. La respuesta llega truncada a media
+sección CDATA y con un redirect pegado al final:
+
+```
+...<span id="pt1:r1:1:pgl3" class="row detass-creditos ...">Cr&eacute;ditos:<?xml version='1.0' encoding='UTF-8'?>
+<partial-response id="j_id1"><redirect url="/Catalogo/facespublico/errorNavegacion.jsf?..."></redirect></partial-response>
+```
+
+Corta justo después de `Créditos:`. Medido 2026-08-18 en `2011302` y `2018602`, ambas de
+Bogotá; **reproducible en una conexión recién creada**, así que es de la asignatura, no de
+la sesión. Sin detectarlo, el síntoma era `XML syntax error: unexpected EOF in CDATA
+section` y —peor— la conexión quedaba marcada en una región de detalle que no existe, con
+lo que **las 40 asignaturas siguientes del mismo plan morían detrás**.
+
+Dos cosas importan al tratarlo:
+
+1. **La sesión queda muerta.** Todo POST posterior responde un re-render vacío. Hay que
+   volver a hacer bootstrap sí o sí.
+2. **Reintentar la asignatura no sirve.** Una sesión nueva entra a la misma página rota.
+   Por eso `errSIAErrorPage` **no** está en `isRecoverable`: `FetchDetails` re-bootstrapea
+   *sin* reintentar, y el resto del lote sobrevive.
+
+Y una trampa dentro de la trampa: **una sesión caducada devuelve ese mismo redirect**,
+pero en 412–877 B. Clasificar eso como "página rota" le quitaría el reintento que sí
+merece (§7), y una sola sesión vencida se llevaría el lote entero. Por eso la detección
+exige que el cuerpo **no** sea de tamaño no-op.
+
+`sia/conn.go`: `post`. `sia/noop.go`: `isSIAErrorPage`, `errSIAErrorPage`.
+`sia/source.go`: `FetchDetails`.

@@ -184,7 +184,7 @@ plausibles y equivocados.
 
 | | |
 |---|---|
-| [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **Las 37 trampas. Léelo antes de tocar el código.** |
+| [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **Las 39 trampas. Léelo antes de tocar el código.** |
 | [`docs/ARCH.md`](docs/ARCH.md) | Puertos, read-through, pool de sesiones, concurrencia |
 | [`docs/API.md`](docs/API.md) | Contrato HTTP: IDs públicos, frescura, errores |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Esquema Postgres y las nueve decisiones no obvias |

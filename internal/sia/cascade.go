@@ -370,20 +370,41 @@ func (c *SIAConn) postValueChangeFresh(ctx context.Context, id string, cur *stri
 // bounce: the soc10 above re-renders it and clears its selection server-side
 // (GOTCHAS §37).
 func (c *SIAConn) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([][]byte, error) {
+	var bodies [][]byte
+	err := c.eachElectivesSearch(ctx, key, func(body []byte) (bool, error) {
+		bodies = append(bodies, body)
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return bodies, nil
+}
+
+// eachElectivesSearch is FetchElectives' engine: it runs the cascade and
+// hands each search's listing body to visit, stopping early when visit says
+// so. The distinction matters for _afrRK: the row keys of a listing are only
+// valid while THAT listing is the connection's live render (GOTCHAS §4), and
+// with one search per faculty every body restarts them at 0. Collecting the
+// bodies first and looking for a row afterwards clicks a key that belongs to
+// a table the server has already replaced — see GOTCHAS §38. A caller that
+// needs to CLICK a row must stop on the body that has it, which is what
+// FindElectiveRow does.
+func (c *SIAConn) eachElectivesSearch(ctx context.Context, key catalog.ProgramKey, visit func([]byte) (bool, error)) error {
 	// soc4=7 is a value CHANGE on top of an already-parked program: run the
 	// regular cascade first so soc1..soc3 are populated, then switch soc4.
 	if err := c.gotoProgram(ctx, key); err != nil {
-		return nil, err
+		return err
 	}
 
 	if _, _, err := c.postValueChangeFresh(ctx, "pt1:r1:0:soc4", &c.navTipologia,
 		TypologyElectives, TypologyAll, func(v string) { c.form.Tipologia = v }); err != nil {
-		return nil, err
+		return err
 	}
 
 	if _, _, err := c.postValueChangeFresh(ctx, "pt1:r1:0:soc5", &c.navModo,
 		"0", "1", func(v string) { c.form.Modo = v }); err != nil {
-		return nil, err
+		return err
 	}
 
 	sedeElect := strconv.Itoa(key.Campus)
@@ -394,17 +415,17 @@ func (c *SIAConn) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([
 	_, env, err := c.postValueChangeFresh(ctx, "pt1:r1:0:soc10", &c.navSedeElect,
 		sedeElect, sedeElectAlt, func(v string) { c.form.SedeElect = v })
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// soc10's response carries the sede's own soc6 list. Every position is
 	// read from it, never assumed — see campusWildcardPrefix.
 	targets, err := electivesTargets(env)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	bodies := make([][]byte, 0, len(targets))
+	visited := 0
 	var lastNoop error
 	for _, t := range targets {
 		// Plain post, no bounce: the soc10 above ALWAYS runs and its
@@ -415,13 +436,13 @@ func (c *SIAConn) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([
 		// have — that is what left Amazonia and Caribe without a catalog.
 		c.form.FacElect = t
 		if body, _, err := c.postValueChange(ctx, "pt1:r1:0:soc6"); err != nil {
-			return nil, err
+			return err
 		} else if isNoop(body) {
-			return nil, newNoopError(body)
+			return newNoopError(body)
 		}
 		body, _, err := c.postAction(ctx, "pt1:r1:0:cb1", "")
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if isNoop(body) {
 			// With the wildcard there is one search and a no-op is the honest
@@ -431,10 +452,17 @@ func (c *SIAConn) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([
 			lastNoop = newNoopError(body)
 			continue
 		}
-		bodies = append(bodies, body)
+		visited++
+		stop, err := visit(body)
+		if err != nil {
+			return err
+		}
+		if stop {
+			return nil
+		}
 	}
-	if len(bodies) == 0 && lastNoop != nil {
-		return nil, lastNoop
+	if visited == 0 && lastNoop != nil {
+		return lastNoop
 	}
 
 	// NOTE: soc4 is deliberately NOT reset here. Writing c.form.Tipologia
@@ -443,7 +471,31 @@ func (c *SIAConn) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([
 	// FetchCatalog no-op. FetchCatalog now posts the real change itself, and
 	// navTipologia keeps saying the truth: this connection is on soc4=7.
 
-	return bodies, nil
+	return nil
+}
+
+// FindElectiveRow searches the sede's libre elección for one code and returns
+// its row WITH the connection still sitting on the listing that row came
+// from, so the _afrRK is live and FetchDetail can click it (GOTCHAS §4/§38).
+// Returns catalog.ErrNotFound when no search has the code.
+func (c *SIAConn) FindElectiveRow(ctx context.Context, key catalog.ProgramKey, code string) (Row, error) {
+	var found Row
+	var ok bool
+	err := c.eachElectivesSearch(ctx, key, func(body []byte) (bool, error) {
+		rows, err := ParseList(body)
+		if err != nil {
+			return false, err
+		}
+		found, ok = rowWithCode(rows, code)
+		return ok, nil
+	})
+	if err != nil {
+		return Row{}, err
+	}
+	if !ok {
+		return Row{}, catalog.ErrNotFound
+	}
+	return found, nil
 }
 
 // electivesTargets decides which soc6 searches cover the sede's libre

@@ -79,4 +79,8 @@ jobs:
 
       - name: Healthcheck
         if: steps.filter.outputs.api == 'true' || steps.filter.outputs.web == 'true' || steps.filter.outputs.job == 'true' || steps.filter.outputs.db == 'true'
-        run: curl -f https://sia-api.gabotachak.dev/v1/healthz
+        # --retry: "Container Started" (paso anterior) es el proceso lanzado,
+        # no el puerto escuchando — el primer curl puede pegarle 0-1s después
+        # de docker compose up y encontrar un 502 mientras el binario Go
+        # todavía arranca. curl reintenta 5xx/timeout por defecto con --retry.
+        run: curl -f --retry 5 --retry-delay 3 --retry-connrefused https://sia-api.gabotachak.dev/v1/healthz

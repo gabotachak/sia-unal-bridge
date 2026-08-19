@@ -401,7 +401,7 @@ export function Semester() {
           {plan.selection && (
             <p className="sem__back">
               <Link className="btn btn--primary" to={selectionPath(plan.selection)}>
-                ir al catálogo de {plan.selection.programName}
+                ir al catálogo
               </Link>
             </p>
           )}

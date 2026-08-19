@@ -19,16 +19,19 @@ type api struct {
 	// cooldown is the floor on how often a client may force a SIA fetch for
 	// one course. Zero disables the throttle entirely. See cooldown.go.
 	cooldown time.Duration
+	// buildVersion/buildCommit come from -ldflags at build time (cmd/bridge/main.go).
+	buildVersion string
+	buildCommit  string
 }
 
 // NewRouter builds the /v1 router. gin.New(), not Default(): the logger is
 // slog via requestLogger, not gin's own stdout writer (docs/LAYOUT.md
 // "Gin: cuatro reglas").
-func NewRouter(svc *catalog.Service, cooldown int) *gin.Engine {
+func NewRouter(svc *catalog.Service, cooldown int, version, commit string) *gin.Engine {
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	a := &api{svc: svc, cooldown: time.Duration(cooldown) * time.Second}
+	a := &api{svc: svc, cooldown: time.Duration(cooldown) * time.Second, buildVersion: version, buildCommit: commit}
 
 	r := gin.New()
 	r.Use(gin.Recovery(), requestID(), requestLogger(), secureHeaders())
@@ -37,10 +40,14 @@ func NewRouter(svc *catalog.Service, cooldown int) *gin.Engine {
 	{
 		v1.GET("/healthz", a.healthz)
 		v1.GET("/status", a.status)
+		v1.GET("/version", a.version)
 
 		// The contract, embedded in the binary, plus a Swagger UI over it.
 		v1.GET("/openapi.yaml", a.openapi)
 		v1.GET("/docs", a.swaggerUI)
+		v1.GET("/docs/swagger-ui.css", a.swaggerUICSS)
+		v1.GET("/docs/swagger-ui-bundle.js", a.swaggerUIBundleJS)
+		v1.GET("/docs/init.js", a.swaggerUIInitJS)
 
 		// Not campus-scoped: these two ARE the list of campuses and the
 		// list of levels.

@@ -193,7 +193,8 @@ elige. Quien no quiera manejarlo, usa la ruta canónica.
 | Método | Ruta | Notas |
 |---|---|---|
 | `GET` | `/v1/healthz` | liveness |
-| `GET` | `/v1/status` | cobertura de la cache + **última corrida de cada modo del `Refresher`** |
+| `GET` | `/v1/status` | cobertura de la cache, estado de conexiones vivas y **última corrida del `Refresher`** |
+| `GET` | `/v1/version` | tag semver y commit del build corriendo (`{"version","commit"}`) — ver `docs/COMMANDS.md` |
 
 ---
 

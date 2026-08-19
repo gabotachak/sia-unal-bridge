@@ -7,7 +7,14 @@ import (
 )
 
 func (a *api) healthz(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "created_by": "gabotachak"})
+}
+
+// version reports the tag (semver, "dev" si no viene de un build con ldflags)
+// y el commit exacto corriendo en este contenedor — ver docs/COMMANDS.md
+// "Qué versión está corriendo".
+func (a *api) version(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"version": a.buildVersion, "commit": a.buildCommit})
 }
 
 // status reports cache coverage plus the last sweep of each Refresher mode:

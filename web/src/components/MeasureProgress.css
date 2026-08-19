@@ -1,0 +1,24 @@
+/* Reserva su franja siempre. Si apareciera y desapareciera, la lista de
+   abajo saltaría unos px cada vez que se aprieta "medir cupos". */
+
+.measure-progress {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--rule);
+  overflow: hidden;
+  margin-bottom: var(--gap);
+  opacity: 0;
+  transition: opacity var(--mid) var(--ease-out);
+}
+.measure-progress.is-on {
+  opacity: 1;
+}
+.measure-progress i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  /* Solo transform: es lo que corre en el compositor, sin recalcular
+     layout en cada materia. */
+  transition: transform var(--slow) var(--ease-out);
+}

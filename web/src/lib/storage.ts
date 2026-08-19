@@ -16,6 +16,9 @@ const PICK_KEY = 'tablero.plan.v1';
 /** El orden de cada tabla. Ver loadSort. */
 const SORT_KEY = 'tablero.orden.v1';
 
+/** El grupo elegido por materia en Horario. Ver loadScheduleSelection. */
+const SCHEDULE_KEY = 'tablero.horario.v1';
+
 export type PlanItem = {
   level: string; // 'pregrado' — el mismo código puede existir en otro nivel
   campus: string; // '1101'
@@ -153,8 +156,43 @@ export function clearStored(): void {
     localStorage.removeItem(KEY);
     localStorage.removeItem(PICK_KEY);
     localStorage.removeItem(SORT_KEY);
+    localStorage.removeItem(SCHEDULE_KEY);
   } catch {
     // Modo privado. Si no se puede escribir, tampoco había nada guardado.
+  }
+}
+
+/* ── El grupo elegido por materia en Horario ────────────────────────
+   itemId() → section.key. Clave aparte de la lista del semestre: son dos
+   preferencias con vidas distintas —qué materias llevo vs. qué grupo elegí
+   de cada una— y agregar una materia no debería tener que tocar esto. */
+
+export type ScheduleSelection = Record<string, string>;
+
+export function loadScheduleSelection(): ScheduleSelection {
+  try {
+    const raw = localStorage.getItem(SCHEDULE_KEY);
+    if (!raw) return {};
+    const parsed = raw ? JSON.parse(raw) : null;
+    // Nunca confiar en lo guardado: puede venir de otra versión o de
+    // alguien jugando con las devtools.
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: ScheduleSelection = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof k === 'string' && typeof v === 'string') out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function saveScheduleSelection(sel: ScheduleSelection): void {
+  try {
+    if (Object.keys(sel).length === 0) localStorage.removeItem(SCHEDULE_KEY);
+    else localStorage.setItem(SCHEDULE_KEY, JSON.stringify(sel));
+  } catch {
+    // Cuota llena o modo privado: no vale la pena romper la app por esto.
   }
 }
 
@@ -210,13 +248,4 @@ export function saveSort(scope: SortScope, sort: StoredSort | null): void {
   } catch {
     // Cuota llena o modo privado: no vale la pena romper la app por esto.
   }
-}
-
-/** La ruta del catálogo de un plan. Un solo sitio la arma, porque la escriben
- *  el raíl, la redirección de la raíz y los avisos de cambio de plan. */
-export function selectionPath(
-  s: Pick<Selection, 'level' | 'campus' | 'faculty' | 'program'>,
-): string {
-  const q = s.faculty ? `?f=${s.faculty}` : '';
-  return `/nivel/${s.level}/sede/${s.campus}/plan/${s.program}${q}`;
 }

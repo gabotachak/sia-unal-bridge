@@ -1,30 +1,32 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeftRight,
   Check,
   CornerUpLeft,
   HelpCircle,
-  Search,
   SlidersHorizontal,
   Ticket,
   X,
 } from 'lucide-react';
 import { routes } from '../api/client';
-import type { CoursesResponse, CourseSummary, ProgramsResponse } from '../api/types';
+import type { CoursesResponse, CourseSummary } from '../api/types';
 import { useApi } from '../hooks/useApi';
+import { useCatalogFilters } from '../hooks/useCatalogFilters';
 import { usePlan } from '../hooks/usePlan';
 import { Layout } from '../components/Layout';
+import { AppLink } from '../components/AppLink';
 import { useConfirm } from '../components/Confirm';
 import { AddButton } from '../components/AddButton';
 import { Empty, Fault, Loading } from '../components/States';
+import { SearchInput } from '../components/SearchInput';
 import { SeatsFigure } from '../components/Seats';
 import { TableHead } from '../components/TableHead';
 import type { TableCol } from '../lib/table';
 import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
 import { useTableSort } from '../hooks/useTableSort';
 import { fold, formatAge, sentence } from '../lib/format';
-import { selectionId, selectionPath } from '../lib/storage';
+import { selectionId } from '../lib/storage';
+import type { Screen } from '../state/nav';
 import './Program.css';
 
 /**
@@ -34,10 +36,9 @@ import './Program.css';
  * misma respuesta, así que filtrar en el servidor costaría otra consulta al
  * SIA para mostrar menos de lo que ya tenemos.
  */
-export function Program() {
-  const { campus = '', program = '', level = 'pregrado' } = useParams();
-  const [params] = useSearchParams();
-  const faculty = params.get('f') ?? '';
+export function Program({ screen }: { screen: Extract<Screen, { name: 'program' }> }) {
+  const sel = screen.selection;
+  const { level, campus, faculty, program } = sel;
 
   const path = routes.courses({ level, campus, faculty }, program);
   const { data, error, loading, elapsed, attempt, reload } =
@@ -51,25 +52,52 @@ export function Program() {
    * una sola opción había que elegir dos veces y comparar de memoria. Los
    * valores son pocos y fijos —siete tipologías, una decena de créditos— así
    * que caben todos a la vista, con cuántas asignaturas hay en cada uno.
+   *
+   * Viven en `useCatalogFilters` (Context), no en `useState` local: ir a la
+   * ficha de una asignatura desmonta esta pantalla, y sin Context los
+   * filtros —y el scroll— se perdían en el viaje de ida y vuelta.
    */
-  const [q, setQ] = useState('');
-  const [typols, setTypols] = useState<ReadonlySet<string>>(new Set());
-  const [creds, setCreds] = useState<ReadonlySet<number>>(new Set());
-  const [onlyOpen, setOnlyOpen] = useState(false);
+  const { q, setQ, typols, setTypols, creds, setCreds, onlyOpen, setOnlyOpen, showFacets, setShowFacets, scrollY, setScrollY } =
+    useCatalogFilters();
 
   /**
-   * Las dos filas de facetas, plegadas en el teléfono.
-   *
-   * Diecisiete chips con nombre largo envuelven en cuatro o cinco líneas: media
-   * pantalla gastada en opciones antes de ver la primera asignatura. En el
-   * escritorio caben en dos filas y ahí se quedan siempre a la vista —esto no
-   * es un desplegable nuevo, es la misma pantalla con menos ancho—, así que el
-   * botón que las pliega solo existe bajo 700px, por CSS.
-   *
-   * Plegadas no son filtros invisibles: el contador del botón dice cuántos hay
-   * puestos, y la cuenta del encabezado ('120 de 694') no cambia de sitio.
+   * Restaura el scroll UNA vez, apenas hay filas que pintar — antes de eso
+   * la página mide menos alto que el que tenía cuando se guardó, y
+   * `scrollTo` cae corto.
    */
-  const [showFacets, setShowFacets] = useState(false);
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || !data || data.courses.length === 0) return;
+    restored.current = true;
+    if (scrollY > 0) window.scrollTo(0, scrollY);
+  }, [data, scrollY]);
+
+  /**
+   * Guarda el scroll EN CADA scroll, no al desmontar.
+   *
+   * Se probó al desmontar primero y no servía: el cleanup de un efecto
+   * corre después de que React ya pintó la pantalla siguiente, y para
+   * cuando por fin se ejecutaba, el navegador ya había reflowado con la
+   * página nueva —más corta— y `window.scrollY` ya no era el de acá, sino
+   * el que el navegador recortó solo. Escuchando el scroll en vivo, el
+   * valor guardado siempre es el último real de ESTA pantalla, tomado
+   * mientras todavía existía.
+   */
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        setScrollY(window.scrollY);
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [setScrollY]);
 
   // Los valores que EXISTEN en este plan, con su cuenta. Nada de listas fijas:
   // Medellín llega a 12 créditos y Bogotá no pasa de 6.
@@ -107,6 +135,45 @@ export function Program() {
   const facetCount = typols.size + creds.size;
   const filtering = !!q || facetCount > 0 || onlyOpen;
 
+  /**
+   * Libre elección aparte del resto, con un atajo al lado.
+   *
+   * Es la tipología más numerosa con diferencia (215 de 694 en este plan) y
+   * la que casi nadie busca junto con las demás: se arma el semestre con las
+   * obligatorias y optativas del plan, y las libres se miran aparte —o se
+   * excluyen de un toque, que es lo que da el chip sintético. No es una
+   * tipología real del SIA: es `nonLibreTypologies` completo, así que
+   * alternarlo compone con el resto de chips igual que cualquier selección
+   * manual.
+   */
+  const libreTypology = facets.typologies.find((t) => t.startsWith('LIBRE'));
+  const nonLibreTypologies = facets.typologies.filter((t) => !t.startsWith('LIBRE'));
+  const notLibreActive =
+    nonLibreTypologies.length > 0 &&
+    typols.size === nonLibreTypologies.length &&
+    nonLibreTypologies.every((t) => typols.has(t));
+  const notLibreCount = nonLibreTypologies.reduce((n, t) => n + (facets.byTypology.get(t) ?? 0), 0);
+  function toggleNotLibre() {
+    pickTypology(notLibreActive ? new Set() : new Set(nonLibreTypologies));
+  }
+
+  /**
+   * Marcar TODAS las tipologías filtra exactamente igual que no marcar
+   * ninguna —`typols.has(c.typology)` no excluye a nadie de cualquiera de
+   * las dos formas— así que dejarlas todas en verde mentía: parecía un
+   * filtro fuerte ("filtros 7") cuando en la lista de abajo no faltaba
+   * nada. Elegir la última que cierra el conjunto completo lo vacía en vez
+   * de completarlo — vuelve al estado real: sin filtro.
+   */
+  function pickTypology(next: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>)) {
+    setTypols((prev) => {
+      const resolved = typeof next === 'function' ? next(prev) : next;
+      return resolved.size === facets.typologies.length && facets.typologies.length > 0
+        ? new Set()
+        : resolved;
+    });
+  }
+
   function clearAll() {
     setQ('');
     setTypols(new Set());
@@ -115,68 +182,20 @@ export function Program() {
   }
 
   /**
-   * El plan de la URL contra el plan elegido.
+   * El plan de esta pantalla contra el plan elegido.
    *
-   * Se puede llegar acá sin haber pasado por /plan: una URL pegada en un chat,
-   * un marcador viejo, el botón de atrás. Dos casos, dos respuestas distintas:
-   *
-   *  - sin plan elegido → este vale como la elección. No hay nada que perder,
-   *    así que no hay nada que preguntar.
-   *  - con otro plan elegido → NO se toca nada por las malas. Se avisa y se
-   *    deja decidir: el cambio borra el semestre y eso no puede pasar por
-   *    haber tocado "atrás".
+   * Casi siempre son el mismo. La excepción es llegar acá desde un candidato
+   * de un 300 ambiguo (ver Fault en States.tsx) sin haber confirmado el
+   * cambio: ahí `sel` es el plan que se está MIRANDO, y `plan.selection` sigue
+   * siendo el de siempre. No se toca nada por las malas — se avisa y se deja
+   * decidir, porque cambiar de verdad borra el semestre.
    */
   const plan = usePlan();
   const [ask, confirmDialog] = useConfirm();
   const { selection, select } = plan;
-  const here = { level, campus, program };
-  const foreign = selection && selectionId(selection) !== selectionId(here);
-
-  useEffect(() => {
-    if (selection) return;
-    select({
-      ...here,
-      // Entrando por URL directa no hay lista de planes a mano de dónde sacar
-      // los nombres. El código alcanza como rótulo hasta que se complete abajo.
-      campusName: campus,
-      faculty,
-      facultyName: '',
-      programName: program,
-    });
-    // Solo importa el plan de la URL: los nombres son decoración.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selection, select, level, campus, faculty, program]);
-
-  /**
-   * Ponerle nombre a un plan adoptado desde una URL pegada.
-   *
-   * Ese camino guarda el código como rótulo, porque ahí no hay de dónde sacar
-   * el nombre — y el chip de la barra terminaría diciendo "2A74 · 2A74". El
-   * directorio de la sede sí lo tiene, así que se pide UNA vez, solo cuando
-   * falta: la condición es que el nombre siga siendo igual al código.
-   */
-  const needsName = !!selection && !foreign && selection.programName === selection.program;
-  const directory = useApi<ProgramsResponse>(
-    needsName ? routes.programs({ level, campus, faculty }) : null,
-  );
-
-  useEffect(() => {
-    if (!needsName || !selection) return;
-    const p = directory.data?.programs.find((x) => x.code === program);
-    if (!p) return;
-    select({
-      level,
-      campus,
-      campusName: p.campus_name,
-      faculty: p.faculty_code,
-      facultyName: p.faculty_name,
-      program: p.code,
-      programName: p.name,
-    });
-  }, [directory.data, needsName, selection, select, level, campus, program]);
+  const foreign = selection && selectionId(selection) !== selectionId(sel);
 
   async function adoptThis() {
-    if (!selection) return;
     const n = plan.items.length;
     if (n > 0) {
       const ok = await ask({
@@ -187,7 +206,7 @@ export function Program() {
           <>
             <p>
               Se va a borrar {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi
-              semestre, porque {n === 1 ? 'es' : 'son'} del plan <b>{selection.programName}</b>.
+              semestre, porque {n === 1 ? 'es' : 'son'} del plan <b>{selection?.programName}</b>.
             </p>
             <p>Sus grupos y su tipología son de ese plan, no de este.</p>
           </>
@@ -195,7 +214,7 @@ export function Program() {
       });
       if (!ok) return;
     }
-    select({ ...here, campusName: campus, faculty, facultyName: '', programName: program });
+    select(sel);
   }
 
   return (
@@ -209,10 +228,10 @@ export function Program() {
             estar en tu plan.
           </p>
           <div className="stray__actions">
-            <Link className="btn" to={selectionPath(selection)}>
+            <AppLink className="btn" to={{ name: 'program', selection }}>
               <CornerUpLeft size={15} strokeWidth={1.75} aria-hidden="true" />
               volver al mío
-            </Link>
+            </AppLink>
             <button className="btn btn--ghost" onClick={adoptThis}>
               <ArrowLeftRight size={15} strokeWidth={1.75} aria-hidden="true" />
               cambiarme a este
@@ -236,21 +255,18 @@ export function Program() {
       {loading && !data && (
         <Loading elapsed={elapsed} attempt={attempt} what="Trayendo el catálogo" />
       )}
-      {error && <Fault error={error} onRetry={() => reload()} />}
+      {error && <Fault error={error} level={level} onRetry={() => reload()} />}
 
       {data && (
         <>
           <div className="toolbar">
-            <label className="search search--flex">
-              <Search size={16} strokeWidth={1.75} aria-hidden="true" />
-              <span className="sr-only">Buscar asignatura</span>
-              <input
-                type="search"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar por nombre o código…"
-              />
-            </label>
+            <SearchInput
+              value={q}
+              onChange={setQ}
+              placeholder="Buscar por nombre o código…"
+              label="Buscar asignatura"
+              className="search--flex"
+            />
 
             {/* El filtro que más se usa va arriba y solo: es una pregunta de
                 sí o no —"¿puedo meterme hoy?"— y no compite con las otras. */}
@@ -298,11 +314,11 @@ export function Program() {
             <div className="filters__row">
               <span className="filters__label">tipología</span>
               <div className="chips">
-                {facets.typologies.map((t) => (
+                {nonLibreTypologies.map((t) => (
                   <button
                     key={t}
                     className={`chip chip--sm ${typols.has(t) ? 'is-on' : ''}`}
-                    onClick={() => setTypols((s) => toggle(s, t))}
+                    onClick={() => pickTypology((s) => toggle(s, t))}
                     aria-pressed={typols.has(t)}
                     title={t}
                   >
@@ -310,6 +326,36 @@ export function Program() {
                     <span className="chip__code tnum">{facets.byTypology.get(t)}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Aparte del resto: no es una tipología más entre siete, es la
+                pregunta "¿libres sí o no?", binaria. */}
+            <div className="filters__row">
+              <span className="filters__label">electivas</span>
+              <div className="chips">
+                {libreTypology && (
+                  <button
+                    className={`chip chip--sm ${typols.has(libreTypology) ? 'is-on' : ''}`}
+                    onClick={() => pickTypology((s) => toggle(s, libreTypology))}
+                    aria-pressed={typols.has(libreTypology)}
+                    title={libreTypology}
+                  >
+                    {sentence(libreTypology.replace(/\s*\([^)]*\)\s*$/, ''))}
+                    <span className="chip__code tnum">{facets.byTypology.get(libreTypology)}</span>
+                  </button>
+                )}
+                {nonLibreTypologies.length > 0 && (
+                  <button
+                    className={`chip chip--sm ${notLibreActive ? 'is-on' : ''}`}
+                    onClick={toggleNotLibre}
+                    aria-pressed={notLibreActive}
+                    title="Todas las tipologías del plan menos libre elección."
+                  >
+                    Todas menos libre elección
+                    <span className="chip__code tnum">{notLibreCount}</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -347,11 +393,9 @@ export function Program() {
               <ul className="rows">
                 {shown.map((c) => (
                   <li key={c.code}>
-                    <Link
+                    <AppLink
                       className="row table__row"
-                      to={`/nivel/${level}/sede/${campus}/plan/${program}/asignatura/${encodeURIComponent(c.code)}${
-                        faculty ? `?f=${faculty}` : ''
-                      }`}
+                      to={{ name: 'course', selection: sel, code: c.code }}
                     >
                       <span className="row__code tnum col-code">{c.code}</span>
                       <span className="row__name">{sentence(c.name)}</span>
@@ -375,7 +419,7 @@ export function Program() {
                           typology: c.typology,
                         }}
                       />
-                    </Link>
+                    </AppLink>
                   </li>
                 ))}
               </ul>

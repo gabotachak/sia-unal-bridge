@@ -20,10 +20,14 @@
   height: 2rem;
 }
 
-/* El de la ficha de la asignatura, donde hay sitio para decirlo con palabras. */
+/* El de la ficha de la asignatura, donde hay sitio para decirlo con
+   palabras. Mismo radio de píldora que `.chip` —es el mismo gesto que
+   "medir cupos" y "con cupos" en las otras pantallas, solo que siempre
+   encendido, porque acá la acción no alterna un filtro. */
 .add--full {
   height: 2.5rem;
   padding: 0 0.9rem;
+  border-radius: 999px;
   border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-ink);
@@ -44,6 +48,35 @@
   }
 }
 
+/* Un icono encima del otro, mismo hueco: la tilde se apaga y la caneca
+   aparece con el mouse encima. Mismo hueco es lo que evita que el botón
+   cambie de tamaño al pasar de uno a otro. */
+.add__icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+}
+.add__icon svg {
+  position: absolute;
+  inset: 0;
+}
+.add__icon--hover {
+  opacity: 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  .add__icon svg {
+    transition: opacity var(--fast) var(--ease-out);
+  }
+  .add.is-added:hover .add__icon--idle {
+    opacity: 0;
+  }
+  .add.is-added:hover .add__icon--hover {
+    opacity: 1;
+  }
+}
+
 .add:active:not(:disabled) {
   transform: scale(0.94);
 }
@@ -57,6 +90,19 @@
 }
 .add--full.is-added {
   border-color: var(--ok);
+}
+
+/* Óxido al apuntar uno YA agregado: misma pista que el radio de grupo —
+   ESE clic quita, no confirma. Va después de `.add.is-added` para ganarle
+   al verde en igualdad de especificidad. */
+@media (hover: hover) and (pointer: fine) {
+  .add.is-added:hover:not(:disabled) {
+    color: var(--bad);
+    background: var(--bad-soft);
+  }
+  .add--full.is-added:hover:not(:disabled) {
+    border-color: var(--bad);
+  }
 }
 
 .add:disabled {

@@ -23,7 +23,13 @@ services:
       retries: 10
 
   api:
-    build: .
+    build:
+      context: .
+      # Sin GIT_TAG/GIT_SHA en el ambiente (build local a mano), el Dockerfile
+      # cae a "dev"/"unknown" — nunca una versión inventada.
+      args:
+        GIT_TAG: ${GIT_TAG:-dev}
+        GIT_SHA: ${GIT_SHA:-unknown}
     environment:
       # Hostname `db` es el nombre del servicio en la red interna de Docker,
       # NO localhost. El DATABASE_URL del .env (sección 4) es para el host.
@@ -89,6 +95,8 @@ services:
       # que el backend va a rechazar con 429.
       args:
         FETCH_COOLDOWN: ${FETCH_COOLDOWN:-300}
+        GIT_TAG: ${GIT_TAG:-dev}
+        GIT_SHA: ${GIT_SHA:-unknown}
     ports: ["${WEB_PORT:-13000}:8080"]
     restart: unless-stopped
     depends_on:

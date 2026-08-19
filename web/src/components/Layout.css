@@ -21,7 +21,12 @@
   width: 100%;
   max-width: var(--measure);
   margin: 0 auto;
-  padding: var(--gap-lg) var(--gap) var(--gap-xl);
+  /* El margen lateral no puede ser un `--gap` fijo: por debajo de
+     `--measure` + ese padding (~86rem) el auto-margin todavía no centra
+     nada, así que una ventana de escritorio normal —ni angosta ni tan
+     ancha como para centrar— caía en una tierra de nadie con 1rem pegado
+     al borde. El `clamp` crece con el viewport y cierra ese hueco. */
+  padding: var(--gap-lg) clamp(var(--gap), 4vw, 3.5rem) var(--gap-xl);
   /* Sin esto, una tabla ancha estira al contenedor y aparece scroll
      horizontal en toda la página. */
   min-width: 0;
@@ -39,6 +44,7 @@
   font-size: var(--t-micro);
   line-height: 1.9;
   color: var(--text-faint);
+  text-align: center;
 }
 .colophon p {
   max-width: 46rem;
@@ -47,6 +53,14 @@
 .colophon strong {
   color: var(--text-dim);
   font-weight: 500;
+}
+.colophon p.colophon__credit {
+  margin-top: var(--gap-sm);
+  font-size: 0.95em;
+  opacity: 0.75;
+}
+.colophon__credit a {
+  color: inherit;
 }
 
 /* ── Cabecera de pantalla ───────────────────────────────────────────
@@ -60,6 +74,16 @@
   gap: var(--gap);
   flex-wrap: wrap;
   margin-bottom: var(--gap-lg);
+}
+
+/* Variante en columna: el botón siempre debajo del título, nunca al lado.
+   La usa la ficha de una asignatura (Course.tsx), donde el título puede ser
+   una frase entera — con el `.head` de lado a lado, el botón saltaba de
+   "junto al título" a "abajo a la izquierda" según cupiera o no en la misma
+   línea. */
+.head--stack {
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .head__title {

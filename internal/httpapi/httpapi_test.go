@@ -353,7 +353,7 @@ func TestCourseDetail_MissThenHit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	router := NewRouter(svc, 0) // cooldown 0: these tests are about caching, not throttling
+	router := NewRouter(svc, 0, "test", "test") // cooldown 0: these tests are about caching, not throttling
 	url := "/v1/campuses/1101/programs/2A74/courses/2016696"
 
 	// ── miss ──
@@ -428,7 +428,7 @@ func TestCourseDetail_UnknownCourseIs404(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := NewRouter(svc, 0) // cooldown 0: these tests are about caching, not throttling
+	router := NewRouter(svc, 0, "test", "test") // cooldown 0: these tests are about caching, not throttling
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/campuses/1101/programs/ZZZZ/courses/2016696", nil)
@@ -446,7 +446,7 @@ func TestCourseDetail_UnknownCourseIs404(t *testing.T) {
 func TestHealthz(t *testing.T) {
 	store := newFakeStore()
 	svc := catalog.NewService(store, &fakeSIA{}, "2026-2")
-	router := NewRouter(svc, 0) // cooldown 0: these tests are about caching, not throttling
+	router := NewRouter(svc, 0, "test", "test") // cooldown 0: these tests are about caching, not throttling
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/healthz", nil)
@@ -465,7 +465,7 @@ func TestMaxAge_InvalidIsBadRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := NewRouter(svc, 0) // cooldown 0: these tests are about caching, not throttling
+	router := NewRouter(svc, 0, "test", "test") // cooldown 0: these tests are about caching, not throttling
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/campuses/1101/programs/2A74/courses/2016696?max_age=-5", nil)
@@ -488,7 +488,7 @@ func cooldownFixture(t *testing.T, cooldown int) (*gin.Engine, *fakeSIA, string)
 	}); err != nil {
 		t.Fatal(err)
 	}
-	return NewRouter(svc, cooldown), sia, "/v1/campuses/1101/programs/2A74/courses/2016696"
+	return NewRouter(svc, cooldown, "test", "test"), sia, "/v1/campuses/1101/programs/2A74/courses/2016696"
 }
 
 func do(router *gin.Engine, url string) *httptest.ResponseRecorder {

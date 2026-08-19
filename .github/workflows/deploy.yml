@@ -1,0 +1,86 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  # @semantic-release/github no solo taggea: por default comenta y etiqueta
+  # el issue/PR que el commit cierra (ver "Closes #N") — sin estos dos,
+  # "Resource not accessible by integration" aunque contents:write esté.
+  issues: write
+  pull-requests: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # semantic-release necesita el historial completo, no solo el último commit
+
+      # Fase 2 del plan (docs/PLAN-CI-CD.md): versión semver automática,
+      # antes del deploy. Requiere Conventional Commits — ver docs/COMMIT-CONVENTION.md.
+      - name: Release semver
+        uses: cycjimmy/semantic-release-action@v6.0.0
+        with:
+          extra_plugins: |
+            @semantic-release/commit-analyzer
+            @semantic-release/release-notes-generator
+            @semantic-release/github
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'internal/**'
+              - 'cmd/bridge/**'
+              - 'Dockerfile'
+            web:
+              - 'web/**'
+            job:
+              - 'cmd/refresher/**'
+              - 'internal/refresher/**'
+            db:
+              - 'migrations/**'
+
+      - name: Deploy por SSH
+        if: steps.filter.outputs.api == 'true' || steps.filter.outputs.web == 'true' || steps.filter.outputs.job == 'true' || steps.filter.outputs.db == 'true'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          # bash -c explícito: el login shell de `robot` en el server es fish
+          # (no bash) — SSH ejecuta el script con el login shell del usuario,
+          # y en fish `set -e` no es errexit, es "borrar variable" sin
+          # argumento: falla su propia línea pero NO frena el resto del
+          # script. Sin este wrapper, un git pull o un make migrate roto
+          # no detiene nada — sigue derecho a buildear y desplegar igual.
+          script: |
+            bash -c '
+            set -e
+            cd /mnt/newhdd/robot/repos/sia-unal-bridge
+            git pull
+            # git pull ya trajo el tag que semantic-release acaba de crear
+            # (apunta al mismo commit) — describe lo resuelve sin fetch extra.
+            export GIT_TAG=$(git describe --tags --always)
+            export GIT_SHA=$(git rev-parse --short HEAD)
+            ${{ steps.filter.outputs.db == 'true' && 'make migrate' || '' }}
+            ${{ steps.filter.outputs.api == 'true' && 'docker compose build api && docker compose up -d --no-deps api' || '' }}
+            ${{ steps.filter.outputs.web == 'true' && 'docker compose build web && docker compose up -d --no-deps web' || '' }}
+            ${{ steps.filter.outputs.job == 'true' && 'docker compose --profile jobs build refresher' || '' }}
+            '
+
+      - name: Healthcheck
+        if: steps.filter.outputs.api == 'true' || steps.filter.outputs.web == 'true' || steps.filter.outputs.job == 'true' || steps.filter.outputs.db == 'true'
+        # --retry: "Container Started" (paso anterior) es el proceso lanzado,
+        # no el puerto escuchando — el primer curl puede pegarle 0-1s después
+        # de docker compose up y encontrar un 502 mientras el binario Go
+        # todavía arranca. curl reintenta 5xx/timeout por defecto con --retry.
+        run: curl -f --retry 5 --retry-delay 3 --retry-connrefused https://sia-api.gabotachak.dev/v1/healthz

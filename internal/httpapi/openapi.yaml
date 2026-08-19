@@ -38,8 +38,8 @@ info:
     url: https://github.com/gabotachak/sia-unal-bridge
 
 servers:
-  - url: http://localhost:8080/v1
-    description: Local (docker compose)
+  - url: https://sia-api.gabotachak.dev/v1
+    description: Producción
 
 tags:
   - name: Operación
@@ -97,6 +97,22 @@ paths:
                       (reference · catalog · detail · seats). Vacío si nunca corrió.
                     additionalProperties:
                       $ref: "#/components/schemas/RefreshRun"
+
+  /version:
+    get:
+      tags: [Operación]
+      summary: Tag semver y commit del build corriendo en este contenedor
+      operationId: version
+      responses:
+        "200":
+          description: Versión
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: { type: string, examples: [v1.2.0] }
+                  commit: { type: string, examples: [a1b2c3d] }
 
   /levels:
     get:
@@ -623,9 +639,7 @@ components:
         campus_code: { type: string, examples: ["1101"] }
         level:
           type: string
-          description: >
-            Slug del nivel. Es identidad: el directorio se cachea y se lee por
-            (sede, nivel).
+          description: "Slug del nivel. Es identidad: el directorio se cachea y se lee por (sede, nivel)."
           examples: ["pregrado"]
         faculty_code: { type: string, examples: ["2055"] }
         code: { type: string, examples: ["2A74"] }

@@ -1,69 +1,55 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
-import { usePlan } from './hooks/usePlan';
-import { selectionPath } from './lib/storage';
+import { useNav } from './state/nav';
+import { CatalogFiltersProvider } from './state/CatalogFiltersProvider';
+import { NavProvider } from './state/NavProvider';
 import { PlanProvider } from './state/PlanProvider';
+import { ScheduleProvider } from './state/ScheduleProvider';
 import { PlanPicker } from './views/PlanPicker';
 import { Program } from './views/Program';
 import { Course } from './views/Course';
 import { Semester } from './views/Semester';
+import { Schedule } from './views/Schedule';
 
 /**
- * El mapa de rutas.
+ * El árbol de pantallas.
  *
- * La URL es estado, no decoración: cualquiera de estas se puede pegar en un
- * chat y abre exactamente donde estabas. Los `:nombre` son huecos que la vista
- * lee con useParams().
- *
- * La forma imita a la de la API a propósito — la sede primero, siempre —
- * porque el código de un plan no identifica sin ella. Por eso las rutas de
- * catálogo y asignatura siguen cargando nivel/sede/plan aunque la interfaz ya
- * no haga navegar por ellos: son lo que hace que un enlace pegado signifique
- * lo mismo para quien lo recibe.
- *
- * Lo que SÍ desapareció son las rutas intermedias (/nivel/x, /nivel/x/sede/y).
- * Existían para recorrer la cascada del SIA a pie, y eso ahora se hace una
- * sola vez en /plan.
- *
- * PlanProvider envuelve todo porque la lista del semestre se toca desde varias
- * pantallas: se agrega en el catálogo y en la ficha, se cuenta en la barra, y
- * se lee en /semestre.
+ * No hay rutas: la pantalla activa es un valor de estado —`useNav().screen`—
+ * y no un segmento de la URL. Ver `state/nav.ts` y `state/NavProvider.tsx`
+ * para el porqué: con un plan elegido en el navegador, no hay nada público
+ * que una URL pudiera identificar o que valiera la pena pegar en un chat.
  */
-
-/**
- * La raíz.
- *
- * Con un plan ya elegido, el tablero ES el catálogo de ese plan. Sin plan, la
- * única pantalla que tiene sentido es la de elegirlo.
- *
- * `replace` en las dos: la redirección no debe quedar en el historial, o el
- * botón de atrás rebotaría contra ella para siempre.
- */
-function Home() {
-  const { selection } = usePlan();
-  return <Navigate to={selection ? selectionPath(selection) : '/plan'} replace />;
+function Screens() {
+  const { screen } = useNav();
+  switch (screen.name) {
+    case 'plan-picker':
+      return <PlanPicker />;
+    case 'program':
+      return <Program screen={screen} />;
+    case 'course':
+      return <Course screen={screen} />;
+    case 'semester':
+      return <Semester />;
+    case 'schedule':
+      return <Schedule />;
+  }
 }
 
 export function App() {
   return (
     <PlanProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />} />
-
-          {/* El único sitio donde se elige plan. Se llega a propósito, desde
-              el chip de la barra, y al terminar devuelve al catálogo. */}
-          <Route path="/plan" element={<PlanPicker />} />
-
-          <Route path="/nivel/:level/sede/:campus/plan/:program" element={<Program />} />
-          <Route
-            path="/nivel/:level/sede/:campus/plan/:program/asignatura/:code"
-            element={<Course />}
-          />
-
-          <Route path="/semestre" element={<Semester />} />
-          <Route path="*" element={<Home />} />
-        </Routes>
-      </BrowserRouter>
+      {/* ScheduleProvider adentro de PlanProvider: poda su selección leyendo
+          `plan.items`, así que necesita que ya exista. NavProvider adentro de
+          los dos por la misma razón que antes — la pantalla inicial depende
+          del plan ya elegido. */}
+      <ScheduleProvider>
+        {/* CatalogFiltersProvider no depende de nada de los otros dos —
+            entra donde sea, va acá por quedar junto a su hermano de
+            propósito similar. */}
+        <CatalogFiltersProvider>
+          <NavProvider>
+            <Screens />
+          </NavProvider>
+        </CatalogFiltersProvider>
+      </ScheduleProvider>
     </PlanProvider>
   );
 }

@@ -1,14 +1,18 @@
 <div align="center">
 
-# sia-unal-bridge
+<h1>
+  <img src="docs/assets/wordmark.png" alt="SIA Bridge" width="300">
+</h1>
 
-**El catálogo de asignaturas de la Universidad Nacional de Colombia, en JSON.**
+**El catálogo de asignaturas de la Universidad Nacional de Colombia — como API y como
+interfaz para armar el semestre.**
 
 El SIA solo lo expone a través de una app Oracle ADF con estado de sesión en servidor,
 navegación por POSTs de formulario encadenados y respuestas en XML con HTML incrustado.
-No hay API pública. Esto la construye.
+No hay API pública. Esto la construye — y encima, la interfaz que se apoya en ella.
 
 [![Go](https://img.shields.io/badge/Go-1.26.6-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
+[![React](https://img.shields.io/badge/React-TypeScript-149ECA?style=flat-square&logo=react&logoColor=white)](web/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18.6-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![Gin](https://img.shields.io/badge/Gin-HTTP-00ACD7?style=flat-square&logo=go&logoColor=white)](https://gin-gonic.com)
 [![pgx](https://img.shields.io/badge/pgx-v5-336791?style=flat-square&logo=postgresql&logoColor=white)](https://github.com/jackc/pgx)
@@ -42,6 +46,13 @@ curl localhost:8080/v1/campuses
 open  localhost:8080/v1/docs      # Swagger UI
 ```
 
+Con la interfaz — el mismo `docker compose`, más el dev server de Vite:
+
+```bash
+docker compose up -d          # db + api
+cd web && npm install && npm run dev   # → localhost:5173
+```
+
 ### Llenar la cache sin esperar a un cliente
 
 El `Refresher` es la misma imagen con otro entrypoint: un modo por corrida, y sale. Su
@@ -59,6 +70,21 @@ docker compose --profile jobs run --rm refresher --mode=seats --scope=hot       
 La cadencia va en [`deploy/cron.d/sia-refresher`](deploy/cron.d/sia-refresher);
 `REFRESH_ENABLED=false` lo apaga todo sin editar cron. `GET /v1/status` cuenta qué hizo la
 última corrida de cada modo. Detalles y números medidos: [`docs/FASE-2.md`](docs/FASE-2.md).
+
+## La interfaz
+
+React + TypeScript, cuatro dependencias directas, sin librería de estado ni de
+componentes — en [`web/`](web/). Arma el semestre: catálogo por plan, ficha de
+asignatura con horario y grupos, y "Mi semestre" para juntar hasta diez materias y
+medir sus cupos con un solo botón.
+
+Su tesis visual es la misma que la de la API: **todo dato declara su edad**. Los cupos
+se muestran en un contador de tablero de estación, con su antigüedad envejeciendo a la
+vista, y un miss frío no se esconde tras un spinner — se explica, con cronómetro.
+
+<div align="center">
+  <img src="docs/assets/catalog.png" alt="Catálogo del plan 2A74 en la interfaz: 313 asignaturas, cupos con cuenta atrás y estado de selección." width="900">
+</div>
 
 ## Arquitectura
 
@@ -149,20 +175,6 @@ cuándo es — y `changed_at`, que es cuándo el número cambió por última vez
 preguntas distintas: medido, 0 cambios en 347 grupos a lo largo de 35 min, así que el
 historial solo crece cuando el cupo se mueve mientras la frescura se actualiza en cada
 medición.
-
-## La interfaz
-
-Una app de lectura sobre esta API, en [`web/`](web/). React + TypeScript, cuatro
-dependencias directas, sin librería de estado ni de componentes.
-
-```bash
-docker compose up -d      # db + api
-cd web && npm install && npm run dev   # → localhost:5173
-```
-
-Su tesis visual es la misma que la de la API: **todo dato declara su edad**. Los cupos
-se muestran en un contador de tablero de estación, con su antigüedad envejeciendo a la
-vista, y un miss frío no se esconde tras un spinner — se explica, con cronómetro.
 
 ## Lo que no es obvio
 

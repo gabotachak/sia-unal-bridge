@@ -3,6 +3,8 @@
 // componentes, porque el recargado en caliente de Vite trabaja por archivo y
 // pierde el hilo si un archivo mezcla ambas cosas.
 
+import type { ClassSession } from '../api/types';
+
 /** Segundos → '45 s', '12 min', '3 h', '2 d'. */
 export function formatAge(seconds: number): string {
   if (seconds < 60) return `${Math.floor(seconds)} s`;
@@ -63,6 +65,65 @@ export function titleCase(s: string): string {
   return s
     .toLocaleLowerCase('es')
     .replace(/(^|[\s\-'’(])(\p{Ll})/gu, (_, sep: string, c: string) => sep + c.toLocaleUpperCase('es'));
+}
+
+/** Días de la semana, 1-indexado como `ClassSession.weekday` (1 = lunes).
+ *  El índice 0 no se usa — queda vacío para que `WEEKDAYS_LONG[weekday]`
+ *  lea directo sin restar uno en cada sitio que lo consulta. */
+export const WEEKDAYS_LONG = [
+  '',
+  'lunes',
+  'martes',
+  'miércoles',
+  'jueves',
+  'viernes',
+  'sábado',
+  'domingo',
+];
+export const WEEKDAYS_SHORT = ['', 'lu', 'ma', 'mi', 'ju', 'vi', 'sa', 'do'];
+
+/** '11:00' → '11', '11:30' → '11:30'. En punto no hace falta escribir el
+ *  minuto — es la misma regla que un reloj análogo, que a las 11 en punto
+ *  no dibuja el minutero apuntando al doce. */
+export function formatClockTime(t: string): string {
+  const [h, m] = t.split(':');
+  const hour = String(Number(h));
+  return m === '00' ? hour : `${hour}:${m}`;
+}
+
+/**
+ * El horario de un grupo, compacto: une los días que caen EXACTAMENTE a la
+ * misma hora en una sola entrada — 'lu 11:00–13:00 · mi 11:00–13:00' se lee
+ * 'lu · mi 11-13' — y recorta los minutos en punto (`formatClockTime`).
+ *
+ * Agrupa por el par (inicio, fin), no por adyacencia en la lista: un
+ * horario lu/mi/vi donde el miércoles cae distinto dos días iguales
+ * separados por uno distinto igual se unen. Un día que no repite el
+ * horario de los demás se queda con el suyo aparte — nunca se fuerza la
+ * agrupación con un horario que no es el mismo.
+ */
+export function formatScheduleSummary(sessions: ClassSession[]): string {
+  const order: string[] = [];
+  const groups = new Map<string, { start: string; end: string; days: number[] }>();
+
+  for (const s of sessions) {
+    const key = `${s.start_time}-${s.end_time}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = { start: s.start_time, end: s.end_time, days: [] };
+      groups.set(key, group);
+      order.push(key);
+    }
+    group.days.push(s.weekday);
+  }
+
+  return order
+    .map((key) => {
+      const g = groups.get(key)!;
+      const days = g.days.map((d) => WEEKDAYS_SHORT[d]).join(' · ');
+      return `${days} ${formatClockTime(g.start)}–${formatClockTime(g.end)}`;
+    })
+    .join(' · ');
 }
 
 /**

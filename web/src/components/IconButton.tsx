@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router';
+import { AppLink } from './AppLink';
+import type { Screen } from '../state/nav';
 import './IconButton.css';
 
 type Common = {
@@ -20,9 +21,11 @@ type AsButton = Common & {
 };
 
 type AsLink = Common & {
-  to: string;
+  to: Screen;
   onClick?: never;
-  end?: boolean;
+  /** Si la pantalla actual es esta. Ya no hay ruta de la que deducirlo —lo
+   *  dice quien llama, que es quien tiene el `screen` a mano. */
+  active?: boolean;
 };
 
 /**
@@ -56,16 +59,15 @@ export function IconButton(props: AsButton | AsLink) {
 
   if ('to' in props && props.to !== undefined) {
     return (
-      <NavLink
+      <AppLink
         to={props.to}
-        end={props.end}
-        className={({ isActive }) => `${cls} ${isActive ? 'is-on' : ''}`}
+        className={`${cls} ${props.active ? 'is-on' : ''}`}
         aria-label={label}
         data-tip={label}
         data-tip-side={tip}
       >
         {inner}
-      </NavLink>
+      </AppLink>
     );
   }
 

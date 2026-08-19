@@ -1,6 +1,6 @@
-import { Link, useParams } from 'react-router';
 import { Inbox, RotateCw, TriangleAlert } from 'lucide-react';
 import type { ApiError } from '../api/client';
+import { AppLink } from './AppLink';
 import './States.css';
 
 /**
@@ -45,8 +45,7 @@ export function Loading({
 
       {slow && (
         <p className="state__note">
-          Esta es la primera vez que se pide, así que hay que ir hasta el SIA. La próxima
-          vez abre al instante.
+          Actualizando información con el SIA. La próxima vez abre al instante.
         </p>
       )}
       <p className="state__clock tnum">
@@ -57,12 +56,18 @@ export function Loading({
   );
 }
 
-export function Fault({ error, onRetry }: { error: ApiError; onRetry?: () => void }) {
-  // El nivel de la ruta actual. Hace falta para armar los enlaces de un 300:
-  // sin él no se puede señalar a un catálogo concreto. En pantallas que no
-  // llevan nivel en la URL —el selector de plan— cae al de siempre.
-  const { level = 'pregrado' } = useParams();
-
+export function Fault({
+  error,
+  level = 'pregrado',
+  onRetry,
+}: {
+  error: ApiError;
+  /** Hace falta para armar los enlaces de un 300: sin él no se puede señalar
+   *  a un catálogo concreto. Lo da quien llama, que es quien sabe en qué
+   *  nivel está — ya no hay URL de la que leerlo. */
+  level?: string;
+  onRetry?: () => void;
+}) {
   // El 300 no es un fallo: es la API diciendo "ese código no identifica solo".
   // Se responde con los candidatos como enlaces, que es lo que resuelve el caso.
   if (error.candidates?.length) {
@@ -77,14 +82,25 @@ export function Fault({ error, onRetry }: { error: ApiError; onRetry?: () => voi
         <ul className="state__options">
           {error.candidates.map((c) => (
             <li key={`${c.campus_code}-${c.faculty_code}-${c.program}`}>
-              <Link
-                to={`/nivel/${level}/sede/${c.campus_code}/plan/${c.program}?f=${c.faculty_code}`}
+              <AppLink
+                to={{
+                  name: 'program',
+                  selection: {
+                    level,
+                    campus: c.campus_code,
+                    campusName: c.campus_name,
+                    faculty: c.faculty_code,
+                    facultyName: c.faculty_name,
+                    program: c.program,
+                    programName: c.name,
+                  },
+                }}
               >
                 <strong>{c.name}</strong>
                 <span>
                   {c.campus_name} · {c.faculty_name}
                 </span>
-              </Link>
+              </AppLink>
             </li>
           ))}
         </ul>

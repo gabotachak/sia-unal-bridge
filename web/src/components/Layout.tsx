@@ -22,6 +22,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
           Colombia. Proyecto <em>no oficial</em>: un puente de lectura, no un sistema de
           inscripción.
         </p>
+        <p className="colophon__credit">
+          Creado con <span aria-hidden="true">&lt;3</span>
+          <span className="sr-only">amor</span> por{' '}
+          <a href="https://gabotachak.dev" target="_blank" rel="noopener noreferrer">
+            gabotachak
+          </a>{' '}
+          · {import.meta.env.VITE_APP_VERSION || 'dev'}
+        </p>
       </footer>
     </div>
   );

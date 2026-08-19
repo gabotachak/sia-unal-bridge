@@ -19,6 +19,14 @@ import (
 	"github.com/gabotachak/sia-unal-bridge/internal/store"
 )
 
+// Set via -ldflags "-X main.version=... -X main.commit=..." at build time
+// (Dockerfile ARGs GIT_TAG/GIT_SHA). "dev"/"unknown" is what a plain `go run`
+// or `go build` without ldflags reports — never a silent lie about prod.
+var (
+	version = "dev"
+	commit  = "unknown"
+)
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -47,7 +55,7 @@ func main() {
 	src := sia.NewSource(pool)
 	svc := catalog.NewService(st, src, cfg.Term)
 
-	router := httpapi.NewRouter(svc, cfg.FetchCooldown)
+	router := httpapi.NewRouter(svc, cfg.FetchCooldown, version, commit)
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: router}
 
 	// signal.NotifyContext intercepts SIGINT/SIGTERM and stops the process
@@ -57,7 +65,7 @@ func main() {
 	// instance survived three SIGTERMs during manual testing).
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("sia-unal-bridge starting", "port", cfg.Port, "sia_pool_size", cfg.SIAPoolSize, "term", cfg.Term)
+		slog.Info("sia-unal-bridge starting", "port", cfg.Port, "sia_pool_size", cfg.SIAPoolSize, "term", cfg.Term, "version", version, "commit", commit)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

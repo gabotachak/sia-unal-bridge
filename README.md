@@ -141,6 +141,10 @@ Su tesis visual es la misma que la de la API: **todo dato declara su edad**. Los
 se muestran en un contador de tablero de estación, con su antigüedad envejeciendo a la
 vista, y un miss frío no se esconde tras un spinner — se explica, con cronómetro.
 
+<div align="center">
+  <img src="docs/assets/catalog.png" alt="Catálogo del plan 2A74 en la interfaz: 313 asignaturas, cupos con cuenta atrás y estado de selección." width="900">
+</div>
+
 ## Lo que no es obvio
 
 Estas cinco salen de medir contra el servidor, no de suponer:

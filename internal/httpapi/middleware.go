@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
@@ -31,6 +32,23 @@ func requestLogger() gin.HandlerFunc {
 			"dur_ms", time.Since(start).Milliseconds(),
 			"request_id", c.GetString("request_id"),
 		)
+	}
+}
+
+// requestTimeout bounds c.Request.Context(), which otherwise has no deadline
+// of its own — a request queued on sia.Pool.Acquire (internal/sia/pool.go)
+// would wait until the CLIENT gives up, not the server. A cache hit finishes
+// in milliseconds regardless of d, so this is safe to apply globally; only a
+// pool-contended or cold-miss request can ever feel it. d<=0 disables it.
+func requestTimeout(d time.Duration) gin.HandlerFunc {
+	if d <= 0 {
+		return func(c *gin.Context) { c.Next() }
+	}
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), d)
+		defer cancel()
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
 	}
 }
 

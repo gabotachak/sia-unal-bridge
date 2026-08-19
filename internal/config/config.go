@@ -29,6 +29,13 @@ type Config struct {
 	FetchCooldown  int     // Seconds to wait before allowing a force refresh
 	RateLimitRPS   float64 // Sustained requests/sec allowed per client IP
 	RateLimitBurst int     // Token bucket size per client IP
+
+	// SIAAcquireTimeout bounds how long a request queues for a pool
+	// connection (internal/sia/pool.go Acquire) before failing 503 busy.
+	// Without it the wait is bounded only by the client's own patience —
+	// c.Request.Context() has no deadline of its own. 0 disables the bound
+	// (the old, unbounded behavior).
+	SIAAcquireTimeout time.Duration
 }
 
 func Load() (Config, error) {
@@ -56,6 +63,18 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("RATE_LIMIT_BURST: must be a positive integer, got %q", os.Getenv("RATE_LIMIT_BURST"))
 	}
 
+	// Default 45s: pool=4, an op costs ~2-10s, so 45s rides out a real burst
+	// (4 x 4.5-22 ops) without leaving a request queued so long a genuinely
+	// wedged pool (SIA down, dead session) piles up goroutines for no
+	// answer. Provisional like FETCH_COOLDOWN — tune with real 27/08 traffic.
+	acquireTimeout, err := strconv.Atoi(getenv("SIA_ACQUIRE_TIMEOUT_SECONDS", "45"))
+	if err != nil {
+		return Config{}, fmt.Errorf("SIA_ACQUIRE_TIMEOUT_SECONDS: %w", err)
+	}
+	if acquireTimeout < 0 {
+		return Config{}, fmt.Errorf("SIA_ACQUIRE_TIMEOUT_SECONDS: must be >= 0, got %d", acquireTimeout)
+	}
+
 	return Config{
 		// sslmode=disable is deliberate: this default only ever applies to a
 		// bare `go run ./cmd/bridge` against the compose Postgres, which
@@ -71,6 +90,8 @@ func Load() (Config, error) {
 		FetchCooldown:  cooldown,
 		RateLimitRPS:   rateRPS,
 		RateLimitBurst: rateBurst,
+
+		SIAAcquireTimeout: time.Duration(acquireTimeout) * time.Second,
 	}, nil
 }
 

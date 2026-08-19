@@ -28,7 +28,7 @@ type api struct {
 // NewRouter builds the /v1 router. gin.New(), not Default(): the logger is
 // slog via requestLogger, not gin's own stdout writer (docs/LAYOUT.md
 // "Gin: cuatro reglas").
-func NewRouter(svc *catalog.Service, cooldown int, rateRPS float64, rateBurst int, version, commit string) *gin.Engine {
+func NewRouter(svc *catalog.Service, cooldown int, rateRPS float64, rateBurst, acquireTimeoutSeconds int, version, commit string) *gin.Engine {
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -45,7 +45,8 @@ func NewRouter(svc *catalog.Service, cooldown int, rateRPS float64, rateBurst in
 	// port-forwarding implementation decides which subnet Caddy appears from.
 	_ = r.SetTrustedProxies([]string{"127.0.0.1", "::1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"})
 	limiter := newRateLimiter(rate.Limit(rateRPS), rateBurst)
-	r.Use(gin.Recovery(), requestID(), requestLogger(), secureHeaders(), limiter.middleware())
+	r.Use(gin.Recovery(), requestID(), requestLogger(), secureHeaders(), limiter.middleware(),
+		requestTimeout(time.Duration(acquireTimeoutSeconds)*time.Second))
 
 	v1 := r.Group("/v1")
 	{

@@ -1,0 +1,65 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # semantic-release necesita el historial completo, no solo el último commit
+
+      # Fase 2 del plan (docs/PLAN-CI-CD.md): versión semver automática,
+      # antes del deploy. Requiere Conventional Commits — ver docs/COMMIT-CONVENTION.md.
+      - name: Release semver
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          extra_plugins: |
+            @semantic-release/commit-analyzer
+            @semantic-release/release-notes-generator
+            @semantic-release/github
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'internal/**'
+              - 'cmd/bridge/**'
+              - 'Dockerfile'
+            web:
+              - 'web/**'
+            job:
+              - 'cmd/refresher/**'
+              - 'internal/refresher/**'
+            db:
+              - 'migrations/**'
+
+      - name: Deploy por SSH
+        if: steps.filter.outputs.api == 'true' || steps.filter.outputs.web == 'true' || steps.filter.outputs.job == 'true' || steps.filter.outputs.db == 'true'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            set -e
+            cd /mnt/newhdd/robot/repos/sia-unal-bridge
+            git pull
+            ${{ steps.filter.outputs.db == 'true' && 'make migrate' || '' }}
+            ${{ steps.filter.outputs.api == 'true' && 'docker compose build api && docker compose up -d --no-deps api' || '' }}
+            ${{ steps.filter.outputs.web == 'true' && 'docker compose build web && docker compose up -d --no-deps web' || '' }}
+            ${{ steps.filter.outputs.job == 'true' && 'docker compose --profile jobs build refresher' || '' }}
+
+      - name: Healthcheck
+        if: steps.filter.outputs.api == 'true' || steps.filter.outputs.web == 'true' || steps.filter.outputs.job == 'true' || steps.filter.outputs.db == 'true'
+        run: curl -f https://sia-api.gabotachak.dev/v1/healthz

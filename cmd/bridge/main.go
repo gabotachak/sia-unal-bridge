@@ -56,7 +56,20 @@ func main() {
 	svc := catalog.NewService(st, src, cfg.Term)
 
 	router := httpapi.NewRouter(svc, cfg.FetchCooldown, cfg.RateLimitRPS, cfg.RateLimitBurst, version, commit)
-	srv := &http.Server{Addr: ":" + cfg.Port, Handler: router}
+	srv := &http.Server{
+		Addr:    ":" + cfg.Port,
+		Handler: router,
+		// No POST bodies today, so read/write are about the client itself
+		// being slow — a held-open connection (Slowloris) rather than large
+		// uploads. MaxHeaderBytes caps a giant header/URL from a single
+		// request; it's Go's default (1 MiB) made explicit rather than left
+		// implicit, since there's no request body ceiling to reason about yet.
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
 
 	// signal.NotifyContext intercepts SIGINT/SIGTERM and stops the process
 	// from dying on its own — the only thing that now honors those signals

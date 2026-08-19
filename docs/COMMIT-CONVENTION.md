@@ -51,6 +51,19 @@ los commits del push. Un solo `feat:` entre diez `fix:` produce minor, no patch.
   bump — si toca código de `internal/` o `web/`, es `fix:`/`feat:`/`refactor:` según
   corresponda, no `chore:`.
 
+## Cadencia: commits por hito, no un solo commit gigante
+
+Al implementar una feature con varios pasos lógicos (p. ej. "agregar rate
+limiting" = middleware + wiring + config + docker-compose + docs), commitear
+**cada hito por separado** a medida que queda funcionando, no acumular todo en
+un commit único al final. Excepción: si la feature en sí es chica (un fix de
+una línea, un solo archivo), un commit está bien.
+
+Esto no es solo estilo — un historial partido por hito es más fácil de
+revisar, de revertir parcialmente, y deja claro qué `tipo:` corresponde a cada
+pedazo (un `refactor:` no debería ir mezclado en el mismo commit que un
+`feat:`, ver "Reglas duras" arriba).
+
 ## Ejemplos de este repo
 
 Los commits recientes ya siguen esto sin que nadie lo forzara — son el estándar de

@@ -6,8 +6,33 @@
     <title>SIA Bridge</title>
     <meta
       name="description"
-      content="Catálogo de asignaturas de la Universidad Nacional de Colombia. Cupos con su edad, siempre."
+      content="Catálogo de asignaturas de la Universidad Nacional de Colombia, con la hora exacta en que se consultaron los cupos."
     />
+
+    <!--
+      Vista previa de enlace (WhatsApp, Slack, Telegram, X…). Sin esto el
+      cliente cae al <title>/description de arriba y no muestra imagen —
+      el chain-link genérico en vez del puente. og:image necesita URL
+      absoluta: la relativa se resuelve contra la página del bot, no la
+      nuestra, y sale rota en la mayoría de clientes.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://sia.gabotachak.dev/" />
+    <meta property="og:title" content="SIA Bridge" />
+    <meta
+      property="og:description"
+      content="Catálogo de asignaturas de la Universidad Nacional de Colombia, con la hora exacta en que se consultaron los cupos."
+    />
+    <meta property="og:image" content="https://sia.gabotachak.dev/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="SIA Bridge" />
+    <meta
+      name="twitter:description"
+      content="Catálogo de asignaturas de la Universidad Nacional de Colombia, con la hora exacta en que se consultaron los cupos."
+    />
+    <meta name="twitter:image" content="https://sia.gabotachak.dev/og-image.png" />
 
     <!-- La barra del navegador acompaña al tema en vez de quedarse blanca. -->
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f2ea" />

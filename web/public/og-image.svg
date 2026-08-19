@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <!--
+    Tarjeta de vista previa (og:image). Mismos tokens que web/src/styles/tokens.css
+    tema claro — no se regenera desde ahí porque esto se rasteriza a PNG en build
+    time, pero si los colores cambian allá, cámbialos acá también.
+
+    El bloque entero (marca + título + tagline + regla) queda centrado
+    verticalmente en los 630px del lienzo — margen arriba ≈ margen abajo —
+    porque apilado contra el borde superior, con todo el resto del cartel
+    vacío debajo, es lo que se veía descentrado.
+  -->
+  <rect width="1200" height="630" fill="#f6f2ea"/>
+
+  <!-- Marca + título en una sola línea, como en la barra real
+       (Topbar.tsx .brand): el ícono al lado del texto, no encima. -->
+  <svg x="120" y="202" width="84" height="84" viewBox="0 0 32 32">
+    <g fill="none" stroke="#1e1813" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 18 16 11l14 7"/>
+      <path d="M8 24a8 8 0 0 1 16 0"/>
+      <path d="M2 18v6M30 18v6"/>
+    </g>
+  </svg>
+
+  <!-- Instrument Serif recta, no cursiva: la itálica en este proyecto solo
+       vive dentro de un <em>, y el logotipo (Topbar.css .brand__word) es
+       peso 400 derecho. Línea base alineada al centro vertical del ícono. -->
+  <text x="232" y="279" font-family="Instrument Serif, Georgia, serif" font-size="100" fill="#1e1813">SIA Bridge</text>
+
+  <text x="120" y="344" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="28" fill="#5f5346">Catálogo de asignaturas de la Universidad Nacional de Colombia</text>
+
+  <text x="120" y="384" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="28" fill="#5f5346">con la hora exacta en que se consultaron los cupos.</text>
+
+  <rect x="120" y="412" width="64" height="6" rx="3" fill="#1a6b5a"/>
+</svg>

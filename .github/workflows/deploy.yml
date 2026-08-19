@@ -6,6 +6,11 @@ on:
 
 permissions:
   contents: write
+  # @semantic-release/github no solo taggea: por default comenta y etiqueta
+  # el issue/PR que el commit cierra (ver "Closes #N") — sin estos dos,
+  # "Resource not accessible by integration" aunque contents:write esté.
+  issues: write
+  pull-requests: write
 
 jobs:
   deploy:

@@ -154,3 +154,10 @@ mano.
   no-op silencioso que las otras trampas de este proyecto. Para tocar otra rama en
   ese server, usar `git worktree add` en otra carpeta, nunca `git checkout` sobre
   este mismo path.
+- **El login shell de `robot` es fish, no bash.** SSH ejecuta el `script:` con el
+  login shell del usuario — en fish, `set -e` no es errexit, se interpreta como
+  `set --erase` sin argumento: esa línea falla pero **el resto del script sigue
+  corriendo igual**, sin fail-fast. Verificado: `ssh ... 'set -e; false; echo
+  esto-se-imprime'` imprime "esto-se-imprime". El fix es forzar `bash -c '...'`
+  como wrapper de todo el script (ver `deploy.yml`) — sin eso, un `git pull` o
+  `make migrate` que falla no frena el `docker compose build` siguiente.

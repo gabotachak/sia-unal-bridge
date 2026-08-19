@@ -67,12 +67,18 @@ func (s *Store) ProgramCourses(ctx context.Context, programID int64) ([]catalog.
 		FROM course_program cp
 		JOIN course c ON c.campus_code = cp.campus_code AND c.code = cp.code
 		LEFT JOIN LATERAL (
-			SELECT sum(cs.available_seats)                            AS total,
-			       min(coalesce(sec.seats_checked_at, cs.measured_at)) AS oldest,
-			       count(*)                                          AS n
+			SELECT sum(latest.available_seats)                             AS total,
+			       min(coalesce(sec.seats_checked_at, latest.measured_at)) AS oldest,
+			       count(*)                                                AS n
 			FROM section sec
 			JOIN section_program sp ON sp.section_id = sec.id AND sp.program_id = cp.program_id
-			JOIN current_seats cs ON cs.section_id = sec.id
+			JOIN LATERAL (
+				SELECT available_seats, measured_at
+				FROM seat_snapshot ss
+				WHERE ss.section_id = sec.id
+				ORDER BY ss.measured_at DESC
+				LIMIT 1
+			) latest ON true
 			WHERE sec.campus_code = cp.campus_code AND sec.code = cp.code
 		) seats ON true
 		WHERE cp.program_id = $1

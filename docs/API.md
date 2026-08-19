@@ -194,6 +194,7 @@ elige. Quien no quiera manejarlo, usa la ruta canónica.
 |---|---|---|
 | `GET` | `/v1/healthz` | liveness |
 | `GET` | `/v1/status` | conexiones vivas, `parkedAt`, `detailRegion`, edad de sesión |
+| `GET` | `/v1/version` | tag semver y commit del build corriendo (`{"version","commit"}`) — ver `docs/COMMANDS.md` |
 
 ---
 

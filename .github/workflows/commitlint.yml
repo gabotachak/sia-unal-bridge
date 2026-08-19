@@ -1,0 +1,20 @@
+name: commitlint
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  commitlint:
+    runs-on: ubuntu-latest
+    # permissions es exclusivo: declarar una entrada resetea las demás a "none",
+    # así que contents:read también hay que pedirlo explícito o actions/checkout falla.
+    permissions:
+      contents: read
+      pull-requests: read # la action lista los commits del PR vía API, sin esto tira "Resource not accessible by integration"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: wagoid/commitlint-github-action@v6

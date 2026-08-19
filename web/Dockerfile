@@ -15,6 +15,12 @@ RUN npm run build
 
 # ── Runtime: nginx sirve los estáticos y proxea /v1 al backend ───────
 FROM nginxinc/nginx-unprivileged:stable-alpine
+# Sitio estático, no hay proceso Go que exponga /version — el LABEL es la
+# única forma de saber qué versión corre acá (docker inspect, ver COMMANDS.md).
+ARG GIT_TAG=dev
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.version=$GIT_TAG
+LABEL org.opencontainers.image.revision=$GIT_SHA
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 8080

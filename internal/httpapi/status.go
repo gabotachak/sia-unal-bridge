@@ -10,6 +10,13 @@ func (a *api) healthz(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
+// version reports the tag (semver, "dev" si no viene de un build con ldflags)
+// y el commit exacto corriendo en este contenedor — ver docs/COMMANDS.md
+// "Qué versión está corriendo".
+func (a *api) version(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"version": a.buildVersion, "commit": a.buildCommit})
+}
+
 // status reports cache coverage. The pool's own live state (parkedAt,
 // detailRegion per connection) isn't wired through yet — that needs
 // sia.Pool to expose an introspection method, left for when Refresher

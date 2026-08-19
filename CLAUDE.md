@@ -25,6 +25,12 @@ cachean como cualquier otra referencia.
 - Los literales del SIA se conservan tal cual (`Cupos disponibles:`,
   `LIBRE ELECCIÓN (L)`, `MIÉRCOLES de 09:00 a 11:00.`) — son datos, no texto nuestro.
 
+## Antes de hacer commit
+
+Lee **`docs/COMMIT-CONVENTION.md`**. `semantic-release` lee el mensaje del commit de
+merge a `main` para versionar (`vX.Y.Z`) — un prefijo (`feat:`, `fix:`, …) fuera de
+formato no rompe nada, pero deja el deploy sin Release ni changelog.
+
 ## Antes de escribir código
 
 Lee **`docs/GOTCHAS.md`** completo. No es opcional. Son 33 trampas verificadas contra
@@ -50,6 +56,9 @@ Las cuatro que más código han roto:
 
 | Ruta | Qué hay |
 |---|---|
+| `docs/PLAN-CI-CD.md` | **Plan de deploy automático y versionado semver** |
+| `docs/COMMANDS.md` | **Chuleta: deploy, migraciones, qué versión corre dónde, cómo borrar todo** |
+| `docs/COMMIT-CONVENTION.md` | **Formato de commits — leer antes de hacer commit** |
 | `docs/PLAN.md` | **Plan de implementación: pasos, criterios de aceptación, fixtures** |
 | `docs/FASE-2.md` | **Plan de la fase 2: el Job que baja todo el SIA, concurrencia y cadencia** |
 | `docs/ARCH.md` | Arquitectura: puertos, read-through, pool de sesiones, concurrencia |

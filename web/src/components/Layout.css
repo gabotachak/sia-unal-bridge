@@ -21,7 +21,12 @@
   width: 100%;
   max-width: var(--measure);
   margin: 0 auto;
-  padding: var(--gap-lg) var(--gap) var(--gap-xl);
+  /* El margen lateral no puede ser un `--gap` fijo: por debajo de
+     `--measure` + ese padding (~86rem) el auto-margin todavía no centra
+     nada, así que una ventana de escritorio normal —ni angosta ni tan
+     ancha como para centrar— caía en una tierra de nadie con 1rem pegado
+     al borde. El `clamp` crece con el viewport y cierra ese hueco. */
+  padding: var(--gap-lg) clamp(var(--gap), 4vw, 3.5rem) var(--gap-xl);
   /* Sin esto, una tabla ancha estira al contenedor y aparece scroll
      horizontal en toda la página. */
   min-width: 0;
@@ -39,6 +44,7 @@
   font-size: var(--t-micro);
   line-height: 1.9;
   color: var(--text-faint);
+  text-align: center;
 }
 .colophon p {
   max-width: 46rem;
@@ -50,8 +56,8 @@
 }
 .colophon p.colophon__credit {
   margin-top: var(--gap-sm);
-  font-size: 0.85em;
-  opacity: 0.6;
+  font-size: 0.95em;
+  opacity: 0.75;
 }
 .colophon__credit a {
   color: inherit;

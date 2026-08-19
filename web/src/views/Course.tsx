@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Clock, MapPin, RefreshCw, User } from 'lucide-react';
 import { FETCH_COOLDOWN, routes } from '../api/client';
@@ -171,73 +171,125 @@ export function Course() {
             />
           </header>
 
-          {data.description && <p className="course__desc">{data.description}</p>}
+          {data.description && <CourseDescription text={data.description} />}
 
-          {data.sections.length === 0 ? (
-            <Empty
-              title="Sin grupos este semestre"
-              note="La asignatura existe en el plan, pero no tiene oferta programada. No es un error: el SIA la devuelve así."
-            />
-          ) : (
-            <section>
-              {/* La barra va acá y no pegada al header como en las listas: en
-                  ellas lo que sigue al header es la tabla, y la barra la
-                  gobierna. Acá en medio hay una descripción, que es
-                  continuación del título y no algo sobre lo que este botón
-                  actúe. Partirla con un control dejaba el botón mandando sobre
-                  un texto con el que no tiene nada que ver. */}
-              <div className="toolbar">
-                {/* El mismo chip de Mi semestre, con la cuenta atrás metida en
-                    el `.chip__code` que el catálogo usa para el número de
-                    filtros puestos. Acá la cuenta atrás SÍ se muestra —a
-                    diferencia de Mi semestre— porque es una sola asignatura y
-                    el número se refresca de verdad cada segundo. */}
-                <button
-                  className="chip"
-                  onClick={measureAll}
-                  disabled={measuring || cooldownLeft > 0}
-                  title={
-                    measuring
-                      ? 'Preguntándole al SIA por los cupos.'
-                      : cooldownLeft > 0
-                        ? 'Se midió hace un momento. El dato que ves es el mismo que traería preguntar otra vez.'
-                        : 'Mide los cupos de todos los grupos a la vez.'
-                  }
-                >
-                  <RefreshCw
-                    size={14}
-                    strokeWidth={1.75}
-                    className={measuring ? 'spin' : undefined}
-                    aria-hidden="true"
-                  />
-                  {measuring ? 'midiendo' : 'medir cupos'}
-                  {cooldownLeft > 0 && !measuring && (
-                    <span className="chip__code tnum">{formatCountdown(cooldownLeft)}</span>
-                  )}
-                </button>
+          <section>
+            {/* La barra va acá y no pegada al header como en las listas: en
+                ellas lo que sigue al header es la tabla, y la barra la
+                gobierna. Acá en medio hay una descripción, que es
+                continuación del título y no algo sobre lo que este botón
+                actúe. Partirla con un control dejaba el botón mandando sobre
+                un texto con el que no tiene nada que ver.
 
-                <p className="toolbar__note">Mide los cupos de todos los grupos a la vez.</p>
-              </div>
+                Vive fuera del `if` de abajo a propósito: una asignatura sin
+                grupos también necesita poder pedirle al SIA que vuelva a
+                mirar, porque la oferta puede aparecer entre una consulta y
+                otra y sin este botón la única forma de enterarse era esperar
+                a que venciera el cache solo (issue #10). */}
+            <div className="toolbar">
+              {/* El mismo chip de Mi semestre, con la cuenta atrás metida en
+                  el `.chip__code` que el catálogo usa para el número de
+                  filtros puestos. Acá la cuenta atrás SÍ se muestra —a
+                  diferencia de Mi semestre— porque es una sola asignatura y
+                  el número se refresca de verdad cada segundo. */}
+              <button
+                className="chip"
+                onClick={measureAll}
+                disabled={measuring || cooldownLeft > 0}
+                title={
+                  measuring
+                    ? 'Preguntándole al SIA por los grupos.'
+                    : cooldownLeft > 0
+                      ? 'Se midió hace un momento. El dato que ves es el mismo que traería preguntar otra vez.'
+                      : 'Vuelve a preguntarle al SIA por los grupos y sus cupos.'
+                }
+              >
+                <RefreshCw
+                  size={14}
+                  strokeWidth={1.75}
+                  className={measuring ? 'spin' : undefined}
+                  aria-hidden="true"
+                />
+                {measuring ? 'actualizando' : 'actualizar grupos'}
+                {cooldownLeft > 0 && !measuring && (
+                  <span className="chip__code tnum">{formatCountdown(cooldownLeft)}</span>
+                )}
+              </button>
+            </div>
 
-              {/* El equivalente de la fila de cabeceras de columna de las dos
-                  listas: versalitas micro sobre un filete. Lo que separa la
-                  tabla de lo que hay encima. */}
-              <div className="groups__bar">
-                <h2 className="groups__head">
-                  {data.sections.length} {data.sections.length === 1 ? 'grupo' : 'grupos'}
-                </h2>
-              </div>
+            {data.sections.length === 0 ? (
+              <Empty
+                title="Sin grupos este semestre"
+                note="La asignatura existe en el plan, pero no tiene oferta programada. No es un error: el SIA la devuelve así."
+              />
+            ) : (
+              <>
+                {/* El equivalente de la fila de cabeceras de columna de las
+                    dos listas: versalitas micro sobre un filete. Lo que
+                    separa la tabla de lo que hay encima. */}
+                <div className="groups__bar">
+                  <h2 className="groups__head">
+                    {data.sections.length} {data.sections.length === 1 ? 'grupo' : 'grupos'}
+                  </h2>
+                </div>
 
-              <ul className={`groups ${measuring ? 'is-measuring' : ''}`}>
-                {data.sections.map((s) => (
-                  <SectionRow key={s.key} section={s} />
-                ))}
-              </ul>
-            </section>
-          )}
+                <ul className={`groups ${measuring ? 'is-measuring' : ''}`}>
+                  {data.sections.map((s) => (
+                    <SectionRow key={s.key} section={s} />
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
         </>
       )}
     </Layout>
+  );
+}
+
+/**
+ * La descripción, recortada.
+ *
+ * El SIA la devuelve como un solo párrafo que mete objetivos, contenido y
+ * prerrequisitos sin separación — puede pasar de 1000 caracteres. Sin
+ * recorte, empuja la lista de grupos varias pantallas hacia abajo antes de
+ * que se vea una sola oferta.
+ *
+ * El recorte es visual (`-webkit-line-clamp`), no un `slice` del texto: así
+ * "ver más" muestra exactamente lo que el SIA escribió, sin puntos
+ * suspensivos a mitad de una palabra. El botón solo aparece si el clamp de
+ * verdad cortó algo — se mide una vez, comparando el alto real contra el alto
+ * recortado, y no se vuelve a medir al expandir/contraer.
+ */
+function CourseDescription({ text }: { text: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    setClamped(el.scrollHeight > el.clientHeight + 1);
+  }, [text]);
+
+  return (
+    <div className="course__desc-wrap">
+      <p
+        ref={ref}
+        className={`course__desc ${!expanded ? 'course__desc--clamped' : ''}`}
+      >
+        {text}
+      </p>
+      {clamped && (
+        <button
+          type="button"
+          className="course__desc-toggle"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? 'ver menos' : 'ver más'}
+        </button>
+      )}
+    </div>
   );
 }
 

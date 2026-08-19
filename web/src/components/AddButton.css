@@ -20,10 +20,14 @@
   height: 2rem;
 }
 
-/* El de la ficha de la asignatura, donde hay sitio para decirlo con palabras. */
+/* El de la ficha de la asignatura, donde hay sitio para decirlo con
+   palabras. Mismo radio de píldora que `.chip` —es el mismo gesto que
+   "medir cupos" y "con cupos" en las otras pantallas, solo que siempre
+   encendido, porque acá la acción no alterna un filtro. */
 .add--full {
   height: 2.5rem;
   padding: 0 0.9rem;
+  border-radius: 999px;
   border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-ink);

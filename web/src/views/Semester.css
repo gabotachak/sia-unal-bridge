@@ -217,6 +217,22 @@
   color: var(--text-faint);
 }
 
+.slots__more {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border-top: 1px solid var(--rule);
+  font-size: var(--t-small);
+  color: var(--accent);
+  text-align: center;
+}
+@media (hover: hover) and (pointer: fine) {
+  .slots__more:hover {
+    color: var(--accent-hover);
+    background: var(--accent-soft);
+  }
+}
+
 /* ── Responsivo ─────────────────────────────────────────────────────
    De grande a chico, en ese orden: cada bloque puede pisar al anterior.
 

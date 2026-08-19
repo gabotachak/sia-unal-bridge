@@ -104,6 +104,11 @@ select {
 
 /* ── Botón ──────────────────────────────────────────────────────── */
 
+/* Misma píldora que `.chip` (999px), no `--radius-sm`: son dos clases para
+   dos matices —`.btn` no alterna estado, `.chip` sí— pero el mismo gesto
+   visual en toda la app. Antes `.btn` era un rectángulo de esquina corta y
+   convivía con las píldoras de `.chip` como si fueran dos sistemas de
+   botones distintos. */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -111,7 +116,7 @@ select {
   font-size: var(--t-small);
   padding: 0.45rem 0.8rem;
   border: 1px solid var(--rule-strong);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   background: var(--surface);
   color: var(--text-dim);
   /* Nunca `all`: solo lo que de verdad cambia, y solo cosas que corren

@@ -24,7 +24,10 @@
   align-items: center;
   gap: var(--gap-sm);
   height: var(--bar-h);
-  padding: 0 var(--gap);
+  /* Mismo `clamp` que `.content` (ver Layout.css): la barra y el contenido
+     tienen que respirar al mismo ritmo, o la marca queda pegada al borde
+     mientras el texto de abajo ya tiene aire. */
+  padding: 0 clamp(var(--gap), 4vw, 3.5rem);
   max-width: var(--measure);
   margin: 0 auto;
 }

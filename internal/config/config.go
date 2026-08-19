@@ -20,13 +20,15 @@ import (
 // into production and left /v1/status reporting 1408 known plans where the
 // real census is 1380. `make migrate-test` migrates it.
 type Config struct {
-	DatabaseURL   string
-	Port          string
-	SIABaseURL    string
-	SIAPoolSize   int
-	LogLevel      string
-	Term          string // SIA exposes only the current term — docs/API.md
-	FetchCooldown int    // Seconds to wait before allowing a force refresh
+	DatabaseURL    string
+	Port           string
+	SIABaseURL     string
+	SIAPoolSize    int
+	LogLevel       string
+	Term           string  // SIA exposes only the current term — docs/API.md
+	FetchCooldown  int     // Seconds to wait before allowing a force refresh
+	RateLimitRPS   float64 // Sustained requests/sec allowed per client IP
+	RateLimitBurst int     // Token bucket size per client IP
 }
 
 func Load() (Config, error) {
@@ -45,19 +47,30 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("FETCH_COOLDOWN: must be >= 0, got %d", cooldown)
 	}
 
+	rateRPS, err := strconv.ParseFloat(getenv("RATE_LIMIT_RPS", "5"), 64)
+	if err != nil || rateRPS <= 0 {
+		return Config{}, fmt.Errorf("RATE_LIMIT_RPS: must be a positive number, got %q", os.Getenv("RATE_LIMIT_RPS"))
+	}
+	rateBurst, err := strconv.Atoi(getenv("RATE_LIMIT_BURST", "20"))
+	if err != nil || rateBurst <= 0 {
+		return Config{}, fmt.Errorf("RATE_LIMIT_BURST: must be a positive integer, got %q", os.Getenv("RATE_LIMIT_BURST"))
+	}
+
 	return Config{
 		// sslmode=disable is deliberate: this default only ever applies to a
 		// bare `go run ./cmd/bridge` against the compose Postgres, which
 		// serves no TLS. Any real deployment sets DATABASE_URL explicitly and
 		// should require TLS there. sslmode=require here would only make
 		// `make run` and `make migrate` fail to connect.
-		DatabaseURL:   getenv("DATABASE_URL", "postgres://sia:sia@localhost:15432/sia_bridge?sslmode=disable"),
-		Port:          getenv("PORT", "8080"),
-		SIABaseURL:    getenv("SIA_BASE_URL", "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf"),
-		SIAPoolSize:   poolSize,
-		LogLevel:      getenv("LOG_LEVEL", "info"),
-		Term:          getenv("SIA_TERM", "2026-2"), // NOT "TERM" — collides with the shell's terminal-type var
-		FetchCooldown: cooldown,
+		DatabaseURL:    getenv("DATABASE_URL", "postgres://sia:sia@localhost:15432/sia_bridge?sslmode=disable"),
+		Port:           getenv("PORT", "8080"),
+		SIABaseURL:     getenv("SIA_BASE_URL", "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf"),
+		SIAPoolSize:    poolSize,
+		LogLevel:       getenv("LOG_LEVEL", "info"),
+		Term:           getenv("SIA_TERM", "2026-2"), // NOT "TERM" — collides with the shell's terminal-type var
+		FetchCooldown:  cooldown,
+		RateLimitRPS:   rateRPS,
+		RateLimitBurst: rateBurst,
 	}, nil
 }
 

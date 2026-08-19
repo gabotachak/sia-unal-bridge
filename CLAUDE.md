@@ -57,6 +57,7 @@ Las cuatro que más código han roto:
 | Ruta | Qué hay |
 |---|---|
 | `docs/PLAN-CI-CD.md` | **Plan de deploy automático y versionado semver** |
+| `docs/COMMANDS.md` | **Chuleta: deploy, migraciones, qué versión corre dónde, cómo borrar todo** |
 | `docs/COMMIT-CONVENTION.md` | **Formato de commits — leer antes de hacer commit** |
 | `docs/PLAN.md` | **Plan de implementación: pasos, criterios de aceptación, fixtures** |
 | `docs/FASE-2.md` | **Plan de la fase 2: el Job que baja todo el SIA, concurrencia y cadencia** |

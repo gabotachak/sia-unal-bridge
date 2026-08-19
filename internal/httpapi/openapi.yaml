@@ -91,6 +91,22 @@ paths:
                     description: De esos, cuántos tienen su lista de asignaturas cacheada.
                     examples: [2]
 
+  /version:
+    get:
+      tags: [Operación]
+      summary: Tag semver y commit del build corriendo en este contenedor
+      operationId: version
+      responses:
+        "200":
+          description: Versión
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: { type: string, examples: [v1.2.0] }
+                  commit: { type: string, examples: [a1b2c3d] }
+
   /levels:
     get:
       tags: [Referencia]

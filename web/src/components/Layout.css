@@ -39,6 +39,7 @@
   font-size: var(--t-micro);
   line-height: 1.9;
   color: var(--text-faint);
+  text-align: center;
 }
 .colophon p {
   max-width: 46rem;
@@ -50,8 +51,8 @@
 }
 .colophon p.colophon__credit {
   margin-top: var(--gap-sm);
-  font-size: 0.85em;
-  opacity: 0.6;
+  font-size: 0.95em;
+  opacity: 0.75;
 }
 .colophon__credit a {
   color: inherit;

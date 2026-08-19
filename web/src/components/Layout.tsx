@@ -23,11 +23,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
           inscripción.
         </p>
         <p className="colophon__credit">
-          Creado por:{' '}
+          Creado con <span aria-hidden="true">&lt;3</span>
+          <span className="sr-only">amor</span> por{' '}
           <a href="https://gabotachak.dev" target="_blank" rel="noopener noreferrer">
             gabotachak
           </a>{' '}
-          · v{import.meta.env.VITE_APP_VERSION || 'dev'}
+          · {import.meta.env.VITE_APP_VERSION || 'dev'}
         </p>
       </footer>
     </div>

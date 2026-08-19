@@ -173,68 +173,76 @@ export function Course() {
 
           {data.description && <p className="course__desc">{data.description}</p>}
 
-          {data.sections.length === 0 ? (
-            <Empty
-              title="Sin grupos este semestre"
-              note="La asignatura existe en el plan, pero no tiene oferta programada. No es un error: el SIA la devuelve así."
-            />
-          ) : (
-            <section>
-              {/* La barra va acá y no pegada al header como en las listas: en
-                  ellas lo que sigue al header es la tabla, y la barra la
-                  gobierna. Acá en medio hay una descripción, que es
-                  continuación del título y no algo sobre lo que este botón
-                  actúe. Partirla con un control dejaba el botón mandando sobre
-                  un texto con el que no tiene nada que ver. */}
-              <div className="toolbar">
-                {/* El mismo chip de Mi semestre, con la cuenta atrás metida en
-                    el `.chip__code` que el catálogo usa para el número de
-                    filtros puestos. Acá la cuenta atrás SÍ se muestra —a
-                    diferencia de Mi semestre— porque es una sola asignatura y
-                    el número se refresca de verdad cada segundo. */}
-                <button
-                  className="chip"
-                  onClick={measureAll}
-                  disabled={measuring || cooldownLeft > 0}
-                  title={
-                    measuring
-                      ? 'Preguntándole al SIA por los cupos.'
-                      : cooldownLeft > 0
-                        ? 'Se midió hace un momento. El dato que ves es el mismo que traería preguntar otra vez.'
-                        : 'Mide los cupos de todos los grupos a la vez.'
-                  }
-                >
-                  <RefreshCw
-                    size={14}
-                    strokeWidth={1.75}
-                    className={measuring ? 'spin' : undefined}
-                    aria-hidden="true"
-                  />
-                  {measuring ? 'midiendo' : 'medir cupos'}
-                  {cooldownLeft > 0 && !measuring && (
-                    <span className="chip__code tnum">{formatCountdown(cooldownLeft)}</span>
-                  )}
-                </button>
+          <section>
+            {/* La barra va acá y no pegada al header como en las listas: en
+                ellas lo que sigue al header es la tabla, y la barra la
+                gobierna. Acá en medio hay una descripción, que es
+                continuación del título y no algo sobre lo que este botón
+                actúe. Partirla con un control dejaba el botón mandando sobre
+                un texto con el que no tiene nada que ver.
 
-                <p className="toolbar__note">Mide los cupos de todos los grupos a la vez.</p>
-              </div>
+                Vive fuera del `if` de abajo a propósito: una asignatura sin
+                grupos también necesita poder pedirle al SIA que vuelva a
+                mirar, porque la oferta puede aparecer entre una consulta y
+                otra y sin este botón la única forma de enterarse era esperar
+                a que venciera el cache solo (issue #10). */}
+            <div className="toolbar">
+              {/* El mismo chip de Mi semestre, con la cuenta atrás metida en
+                  el `.chip__code` que el catálogo usa para el número de
+                  filtros puestos. Acá la cuenta atrás SÍ se muestra —a
+                  diferencia de Mi semestre— porque es una sola asignatura y
+                  el número se refresca de verdad cada segundo. */}
+              <button
+                className="chip"
+                onClick={measureAll}
+                disabled={measuring || cooldownLeft > 0}
+                title={
+                  measuring
+                    ? 'Preguntándole al SIA por los grupos.'
+                    : cooldownLeft > 0
+                      ? 'Se midió hace un momento. El dato que ves es el mismo que traería preguntar otra vez.'
+                      : 'Vuelve a preguntarle al SIA por los grupos y sus cupos.'
+                }
+              >
+                <RefreshCw
+                  size={14}
+                  strokeWidth={1.75}
+                  className={measuring ? 'spin' : undefined}
+                  aria-hidden="true"
+                />
+                {measuring ? 'actualizando' : 'actualizar grupos'}
+                {cooldownLeft > 0 && !measuring && (
+                  <span className="chip__code tnum">{formatCountdown(cooldownLeft)}</span>
+                )}
+              </button>
 
-              {/* El equivalente de la fila de cabeceras de columna de las dos
-                  listas: versalitas micro sobre un filete. Lo que separa la
-                  tabla de lo que hay encima. */}
-              <div className="groups__bar">
-                <h2 className="groups__head">
-                  {data.sections.length} {data.sections.length === 1 ? 'grupo' : 'grupos'}
-                </h2>
-              </div>
+              <p className="toolbar__note">Vuelve a preguntarle al SIA por los grupos y sus cupos.</p>
+            </div>
 
-              <ul className={`groups ${measuring ? 'is-measuring' : ''}`}>
-                {data.sections.map((s) => (
-                  <SectionRow key={s.key} section={s} />
-                ))}
-              </ul>
-            </section>
-          )}
+            {data.sections.length === 0 ? (
+              <Empty
+                title="Sin grupos este semestre"
+                note="La asignatura existe en el plan, pero no tiene oferta programada. No es un error: el SIA la devuelve así."
+              />
+            ) : (
+              <>
+                {/* El equivalente de la fila de cabeceras de columna de las
+                    dos listas: versalitas micro sobre un filete. Lo que
+                    separa la tabla de lo que hay encima. */}
+                <div className="groups__bar">
+                  <h2 className="groups__head">
+                    {data.sections.length} {data.sections.length === 1 ? 'grupo' : 'grupos'}
+                  </h2>
+                </div>
+
+                <ul className={`groups ${measuring ? 'is-measuring' : ''}`}>
+                  {data.sections.map((s) => (
+                    <SectionRow key={s.key} section={s} />
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
         </>
       )}
     </Layout>

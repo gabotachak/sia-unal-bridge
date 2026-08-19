@@ -59,7 +59,11 @@ services:
   #
   #   docker compose run --rm refresher --mode=catalog --workers=2
   refresher:
-    build: .
+    build:
+      context: .
+      args:
+        GIT_TAG: ${GIT_TAG:-dev}
+        GIT_SHA: ${GIT_SHA:-unknown}
     profiles: ["jobs"]
     entrypoint: ["refresher"]
     # Sin --mode no hace nada y sale con 2: la corrida siempre elige uno.

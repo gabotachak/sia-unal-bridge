@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router';
+import { useMemo, useState } from 'react';
 import {
   ArrowLeftRight,
   Check,
@@ -11,10 +10,11 @@ import {
   X,
 } from 'lucide-react';
 import { routes } from '../api/client';
-import type { CoursesResponse, CourseSummary, ProgramsResponse } from '../api/types';
+import type { CoursesResponse, CourseSummary } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { usePlan } from '../hooks/usePlan';
 import { Layout } from '../components/Layout';
+import { AppLink } from '../components/AppLink';
 import { useConfirm } from '../components/Confirm';
 import { AddButton } from '../components/AddButton';
 import { Empty, Fault, Loading } from '../components/States';
@@ -24,7 +24,8 @@ import type { TableCol } from '../lib/table';
 import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
 import { useTableSort } from '../hooks/useTableSort';
 import { fold, formatAge, sentence } from '../lib/format';
-import { selectionId, selectionPath } from '../lib/storage';
+import { selectionId } from '../lib/storage';
+import type { Screen } from '../state/nav';
 import './Program.css';
 
 /**
@@ -34,10 +35,9 @@ import './Program.css';
  * misma respuesta, así que filtrar en el servidor costaría otra consulta al
  * SIA para mostrar menos de lo que ya tenemos.
  */
-export function Program() {
-  const { campus = '', program = '', level = 'pregrado' } = useParams();
-  const [params] = useSearchParams();
-  const faculty = params.get('f') ?? '';
+export function Program({ screen }: { screen: Extract<Screen, { name: 'program' }> }) {
+  const sel = screen.selection;
+  const { level, campus, faculty, program } = sel;
 
   const path = routes.courses({ level, campus, faculty }, program);
   const { data, error, loading, elapsed, attempt, reload } =
@@ -115,68 +115,20 @@ export function Program() {
   }
 
   /**
-   * El plan de la URL contra el plan elegido.
+   * El plan de esta pantalla contra el plan elegido.
    *
-   * Se puede llegar acá sin haber pasado por /plan: una URL pegada en un chat,
-   * un marcador viejo, el botón de atrás. Dos casos, dos respuestas distintas:
-   *
-   *  - sin plan elegido → este vale como la elección. No hay nada que perder,
-   *    así que no hay nada que preguntar.
-   *  - con otro plan elegido → NO se toca nada por las malas. Se avisa y se
-   *    deja decidir: el cambio borra el semestre y eso no puede pasar por
-   *    haber tocado "atrás".
+   * Casi siempre son el mismo. La excepción es llegar acá desde un candidato
+   * de un 300 ambiguo (ver Fault en States.tsx) sin haber confirmado el
+   * cambio: ahí `sel` es el plan que se está MIRANDO, y `plan.selection` sigue
+   * siendo el de siempre. No se toca nada por las malas — se avisa y se deja
+   * decidir, porque cambiar de verdad borra el semestre.
    */
   const plan = usePlan();
   const [ask, confirmDialog] = useConfirm();
   const { selection, select } = plan;
-  const here = { level, campus, program };
-  const foreign = selection && selectionId(selection) !== selectionId(here);
-
-  useEffect(() => {
-    if (selection) return;
-    select({
-      ...here,
-      // Entrando por URL directa no hay lista de planes a mano de dónde sacar
-      // los nombres. El código alcanza como rótulo hasta que se complete abajo.
-      campusName: campus,
-      faculty,
-      facultyName: '',
-      programName: program,
-    });
-    // Solo importa el plan de la URL: los nombres son decoración.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selection, select, level, campus, faculty, program]);
-
-  /**
-   * Ponerle nombre a un plan adoptado desde una URL pegada.
-   *
-   * Ese camino guarda el código como rótulo, porque ahí no hay de dónde sacar
-   * el nombre — y el chip de la barra terminaría diciendo "2A74 · 2A74". El
-   * directorio de la sede sí lo tiene, así que se pide UNA vez, solo cuando
-   * falta: la condición es que el nombre siga siendo igual al código.
-   */
-  const needsName = !!selection && !foreign && selection.programName === selection.program;
-  const directory = useApi<ProgramsResponse>(
-    needsName ? routes.programs({ level, campus, faculty }) : null,
-  );
-
-  useEffect(() => {
-    if (!needsName || !selection) return;
-    const p = directory.data?.programs.find((x) => x.code === program);
-    if (!p) return;
-    select({
-      level,
-      campus,
-      campusName: p.campus_name,
-      faculty: p.faculty_code,
-      facultyName: p.faculty_name,
-      program: p.code,
-      programName: p.name,
-    });
-  }, [directory.data, needsName, selection, select, level, campus, program]);
+  const foreign = selection && selectionId(selection) !== selectionId(sel);
 
   async function adoptThis() {
-    if (!selection) return;
     const n = plan.items.length;
     if (n > 0) {
       const ok = await ask({
@@ -187,7 +139,7 @@ export function Program() {
           <>
             <p>
               Se va a borrar {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi
-              semestre, porque {n === 1 ? 'es' : 'son'} del plan <b>{selection.programName}</b>.
+              semestre, porque {n === 1 ? 'es' : 'son'} del plan <b>{selection?.programName}</b>.
             </p>
             <p>Sus grupos y su tipología son de ese plan, no de este.</p>
           </>
@@ -195,7 +147,7 @@ export function Program() {
       });
       if (!ok) return;
     }
-    select({ ...here, campusName: campus, faculty, facultyName: '', programName: program });
+    select(sel);
   }
 
   return (
@@ -209,10 +161,10 @@ export function Program() {
             estar en tu plan.
           </p>
           <div className="stray__actions">
-            <Link className="btn" to={selectionPath(selection)}>
+            <AppLink className="btn" to={{ name: 'program', selection }}>
               <CornerUpLeft size={15} strokeWidth={1.75} aria-hidden="true" />
               volver al mío
-            </Link>
+            </AppLink>
             <button className="btn btn--ghost" onClick={adoptThis}>
               <ArrowLeftRight size={15} strokeWidth={1.75} aria-hidden="true" />
               cambiarme a este
@@ -236,7 +188,7 @@ export function Program() {
       {loading && !data && (
         <Loading elapsed={elapsed} attempt={attempt} what="Trayendo el catálogo" />
       )}
-      {error && <Fault error={error} onRetry={() => reload()} />}
+      {error && <Fault error={error} level={level} onRetry={() => reload()} />}
 
       {data && (
         <>
@@ -347,11 +299,9 @@ export function Program() {
               <ul className="rows">
                 {shown.map((c) => (
                   <li key={c.code}>
-                    <Link
+                    <AppLink
                       className="row table__row"
-                      to={`/nivel/${level}/sede/${campus}/plan/${program}/asignatura/${encodeURIComponent(c.code)}${
-                        faculty ? `?f=${faculty}` : ''
-                      }`}
+                      to={{ name: 'course', selection: sel, code: c.code }}
                     >
                       <span className="row__code tnum col-code">{c.code}</span>
                       <span className="row__name">{sentence(c.name)}</span>
@@ -375,7 +325,7 @@ export function Program() {
                           typology: c.typology,
                         }}
                       />
-                    </Link>
+                    </AppLink>
                   </li>
                 ))}
               </ul>

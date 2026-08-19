@@ -1,10 +1,11 @@
-import { Link } from 'react-router';
 import { CalendarDays, LayoutList, Monitor, Moon, Sun, Trash2 } from 'lucide-react';
+import { AppLink } from './AppLink';
 import { useConfirm } from './Confirm';
 import { useTheme } from '../hooks/useTheme';
 import { usePlan } from '../hooks/usePlan';
 import { sentence } from '../lib/format';
-import { clearStored, selectionPath } from '../lib/storage';
+import { clearStored } from '../lib/storage';
+import { useNav } from '../state/nav';
 import { IconButton } from './IconButton';
 import './Topbar.css';
 
@@ -28,6 +29,7 @@ export function Topbar() {
   const plan = usePlan();
   const { theme, resolved, cycle } = useTheme();
   const [ask, confirmDialog] = useConfirm();
+  const { screen } = useNav();
   const sel = plan.selection;
 
   /** Empezar de nuevo. Borra el plan y el semestre —todo lo guardado menos el
@@ -58,17 +60,16 @@ export function Topbar() {
 
     // Borrar y RECARGAR, no borrar y navegar.
     //
-    // Navegando quedaba el plan a medio morir: `navigate` de React Router va
-    // en transición —diferido— mientras que limpiar el estado es urgente, así
-    // que React pintaba un cuadro con `selection` en null y la ruta todavía en
-    // /nivel/…/plan/2A74. En ese cuadro se despierta el efecto de Program que
-    // adopta el plan de la URL (existe para las URLs pegadas), y el plan volvía
-    // justo antes de que la navegación llegara.
+    // La pantalla que se está viendo (Program o Course) sigue llevando la
+    // Selection vieja en su propio objeto —eso no lo borra `clearStored`,
+    // vive en memoria— así que navegar sin recargar dejaría la vista
+    // repintándose con datos de un plan que el localStorage ya olvidó.
     //
-    // Una recarga no tiene ese hueco: el estado en memoria no sobrevive, y lo
-    // que se lee al arrancar es el localStorage que se acaba de vaciar.
+    // Una recarga no tiene ese problema: nada en memoria sobrevive, y la
+    // pantalla inicial que arma NavProvider sale del localStorage que se
+    // acaba de vaciar — que es plan-picker, porque ya no hay selección.
     clearStored();
-    window.location.assign('/plan');
+    window.location.assign('/');
   }
 
   const themeLabel =
@@ -77,7 +78,11 @@ export function Topbar() {
   return (
     <header className="bar">
       <div className="bar__inner">
-        <Link className="brand" to="/" aria-label="SIA Bridge — inicio">
+        <AppLink
+          className="brand"
+          to={sel ? { name: 'program', selection: sel } : { name: 'plan-picker' }}
+          aria-label="SIA Bridge — inicio"
+        >
           {/* El Puente de Boyacá, el mismo trazo del favicon: un arco
               semicircular y dos tableros que se juntan en ángulo. La forma
               rara es lo que lo hace ESE puente y no un puente cualquiera. */}
@@ -87,7 +92,7 @@ export function Topbar() {
             <path d="M2 18v6M30 18v6" />
           </svg>
           <span className="brand__word">SIA Bridge</span>
-        </Link>
+        </AppLink>
 
         <div className="bar__spacer" />
 
@@ -108,12 +113,21 @@ export function Topbar() {
 
         <nav className="bar__nav" aria-label="Secciones">
           {sel && (
-            <IconButton to={selectionPath(sel)} label="Catálogo del plan" end>
+            <IconButton
+              to={{ name: 'program', selection: sel }}
+              active={screen.name === 'program'}
+              label="Catálogo del plan"
+            >
               <LayoutList size={ICON} strokeWidth={STROKE} />
             </IconButton>
           )}
 
-          <IconButton to="/semestre" label="Mi semestre" badge={plan.items.length}>
+          <IconButton
+            to={{ name: 'semester' }}
+            active={screen.name === 'semester'}
+            label="Mi semestre"
+            badge={plan.items.length}
+          >
             <CalendarDays size={ICON} strokeWidth={STROKE} />
           </IconButton>
 

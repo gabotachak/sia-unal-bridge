@@ -16,14 +16,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # semantic-release necesita el historial completo, no solo el último commit
 
       # Fase 2 del plan (docs/PLAN-CI-CD.md): versión semver automática,
       # antes del deploy. Requiere Conventional Commits — ver docs/COMMIT-CONVENTION.md.
       - name: Release semver
-        uses: cycjimmy/semantic-release-action@v4
+        uses: cycjimmy/semantic-release-action@v5.0.2
         with:
           extra_plugins: |
             @semantic-release/commit-analyzer
@@ -32,7 +32,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |

@@ -28,12 +28,34 @@
    valores, y ese medio milímetro de diferencia entre pantallas es de lo
    que está hecha la sensación de estar en dos apps distintas. */
 
-.course__desc {
+.course__desc-wrap {
   max-width: 46rem;
   margin: 0 0 var(--gap-lg);
+}
+
+.course__desc {
+  margin: 0;
   font-size: var(--t-small);
   line-height: 1.75;
   color: var(--text-dim);
+}
+
+.course__desc--clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.course__desc-toggle {
+  margin-top: var(--gap-xs);
+  font-size: var(--t-small);
+  color: var(--accent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .course__desc-toggle:hover {
+    color: var(--accent-hover);
+  }
 }
 
 .course__cooldown {

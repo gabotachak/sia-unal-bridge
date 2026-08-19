@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Clock, MapPin, RefreshCw, User } from 'lucide-react';
 import { FETCH_COOLDOWN, routes } from '../api/client';
@@ -171,7 +171,7 @@ export function Course() {
             />
           </header>
 
-          {data.description && <p className="course__desc">{data.description}</p>}
+          {data.description && <CourseDescription text={data.description} />}
 
           <section>
             {/* La barra va acá y no pegada al header como en las listas: en
@@ -215,8 +215,6 @@ export function Course() {
                   <span className="chip__code tnum">{formatCountdown(cooldownLeft)}</span>
                 )}
               </button>
-
-              <p className="toolbar__note">Vuelve a preguntarle al SIA por los grupos y sus cupos.</p>
             </div>
 
             {data.sections.length === 0 ? (
@@ -246,6 +244,52 @@ export function Course() {
         </>
       )}
     </Layout>
+  );
+}
+
+/**
+ * La descripción, recortada.
+ *
+ * El SIA la devuelve como un solo párrafo que mete objetivos, contenido y
+ * prerrequisitos sin separación — puede pasar de 1000 caracteres. Sin
+ * recorte, empuja la lista de grupos varias pantallas hacia abajo antes de
+ * que se vea una sola oferta.
+ *
+ * El recorte es visual (`-webkit-line-clamp`), no un `slice` del texto: así
+ * "ver más" muestra exactamente lo que el SIA escribió, sin puntos
+ * suspensivos a mitad de una palabra. El botón solo aparece si el clamp de
+ * verdad cortó algo — se mide una vez, comparando el alto real contra el alto
+ * recortado, y no se vuelve a medir al expandir/contraer.
+ */
+function CourseDescription({ text }: { text: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    setClamped(el.scrollHeight > el.clientHeight + 1);
+  }, [text]);
+
+  return (
+    <div className="course__desc-wrap">
+      <p
+        ref={ref}
+        className={`course__desc ${!expanded ? 'course__desc--clamped' : ''}`}
+      >
+        {text}
+      </p>
+      {clamped && (
+        <button
+          type="button"
+          className="course__desc-toggle"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? 'ver menos' : 'ver más'}
+        </button>
+      )}
+    </div>
   );
 }
 

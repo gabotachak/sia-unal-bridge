@@ -8,11 +8,9 @@ import { AppLink } from '../components/AppLink';
 import { AddButton } from '../components/AddButton';
 import { Empty, Fault, Loading } from '../components/States';
 import { Seats } from '../components/Seats';
-import { formatCountdown, sentence, titleCase } from '../lib/format';
+import { WEEKDAYS_LONG, formatClockTime, formatCountdown, sentence, titleCase } from '../lib/format';
 import type { Screen } from '../state/nav';
 import './Course.css';
-
-const DAYS = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
 export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }> }) {
   const { selection: sel, code, from } = screen;
@@ -29,18 +27,20 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
    * la que nunca se había estado. No es un atajo roto: es una salida que
    * miente sobre el camino recorrido.
    *
-   * Quién lo dice es quien navegó hasta acá: Mi semestre pone `from: 'semester'`
-   * en la pantalla misma al construirla (ver Semester.tsx). Antes esto vivía
-   * en el `state` de react-router; ahora es un campo más del objeto pantalla,
-   * porque la pantalla ES el estado.
+   * Quién lo dice es quien navegó hasta acá: Mi semestre y Horario ponen
+   * `from: 'semester' | 'schedule'` en la pantalla misma al construirla (ver
+   * CourseCard.tsx). Antes esto vivía en el `state` de react-router; ahora es
+   * un campo más del objeto pantalla, porque la pantalla ES el estado.
    */
   const back =
     from === 'semester'
       ? { to: { name: 'semester' as const }, label: 'mi semestre' }
-      : {
-          to: { name: 'program' as const, selection: sel },
-          label: `catálogo del plan ${program}`,
-        };
+      : from === 'schedule'
+        ? { to: { name: 'schedule' as const }, label: 'mi horario' }
+        : {
+            to: { name: 'program' as const, selection: sel },
+            label: `catálogo del plan ${program}`,
+          };
 
   /**
    * Medir los cupos = volver a pedir la asignatura con max_age=0.
@@ -131,11 +131,14 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
 
       {data && (
         <>
-          {/* Mismo `.head` que el catálogo y Mi semestre: identidad a la
-              izquierda, lo que la pantalla ofrece a la derecha. En las listas
-              eso de la derecha es un conteo; acá es la acción, porque una
-              ficha no tiene nada que contar a nivel de página. */}
-          <header className="head">
+          {/* `.head--stack`, no el `.head` de lado a lado del catálogo y Mi
+              semestre: ahí lo de la derecha es un número corto que siempre
+              cabe en la misma línea. Acá es un botón junto a un título que
+              puede ser una frase entera, y con flex-wrap ese botón saltaba de
+              "al lado" a "abajo a la izquierda" según cupiera o no — dos
+              lugares distintos para lo mismo. Con columna fija queda siempre
+              debajo, en el mismo sitio sin importar el largo del nombre. */}
+          <header className="head head--stack">
             <div>
               <p className="eyebrow tnum">
                 {data.code}
@@ -336,9 +339,9 @@ function ScheduleRow({ c }: { c: ClassSession }) {
   return (
     <li className="sched__row">
       <Clock size={13} strokeWidth={1.75} aria-hidden="true" />
-      <span className="sched__day">{DAYS[c.weekday] ?? '—'}</span>
+      <span className="sched__day">{WEEKDAYS_LONG[c.weekday] ?? '—'}</span>
       <span className="sched__time tnum">
-        {c.start_time}–{c.end_time}
+        {formatClockTime(c.start_time)}–{formatClockTime(c.end_time)}
       </span>
       <span className="sched__where">
         <MapPin size={13} strokeWidth={1.75} aria-hidden="true" />

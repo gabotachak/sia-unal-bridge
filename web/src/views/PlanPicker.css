@@ -120,6 +120,28 @@
   -webkit-appearance: none;
 }
 
+/* La propia, que reemplaza a la nativa: solo visible con texto que borrar
+   (SearchInput.tsx la monta y desmonta, no la esconde con CSS). */
+.search__clear {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  color: var(--text-faint);
+  transition:
+    color var(--fast) var(--ease-out),
+    background-color var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .search__clear:hover {
+    color: var(--text);
+    background: var(--surface-2);
+  }
+}
+
 /* ── Facultades y planes ────────────────────────────────────────── */
 
 .faculty {

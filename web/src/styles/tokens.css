@@ -55,6 +55,21 @@
   --warn: #8a5a10;
   --warn-soft: #f8ecd4;
 
+  /* Paleta categórica: identifica CADA materia en Horario (el borde de su
+     tarjeta, sus bloques en el calendario). No compite con los cuatro
+     colores de significado de arriba —evita el jade y el musgo por hue,
+     el ocre y el óxido por saturación— porque acá el color no dice nada
+     sobre el dato: solo distingue una materia de otra. Ocho bastan: con
+     más de ocho materias se cicla, y Mi semestre ya tope en diez. */
+  --course-1: #3a6ea5;
+  --course-2: #8256a8;
+  --course-3: #b8562f;
+  --course-4: #2f8f7a;
+  --course-5: #a34a74;
+  --course-6: #5c6bc0;
+  --course-7: #7a8a3f;
+  --course-8: #c17a1f;
+
   /* Sombras. Tintadas con el marrón del texto, no negras: una sombra gris
      sobre papel cálido se ve sucia. */
   --shadow-sm: 0 1px 2px rgb(30 24 19 / 0.06), 0 1px 3px rgb(30 24 19 / 0.08);
@@ -111,6 +126,15 @@
     --warn: #e0a83c;
     --warn-soft: #2e2312;
 
+    --course-1: #7aa8dd;
+    --course-2: #b18fd6;
+    --course-3: #e0925f;
+    --course-4: #5fc4ab;
+    --course-5: #d980a8;
+    --course-6: #9aa5e8;
+    --course-7: #b3c46a;
+    --course-8: #e0ab54;
+
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.45);
     --shadow-md: 0 4px 12px rgb(0 0 0 / 0.5);
     --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.65);
@@ -147,6 +171,15 @@
 
   --warn: #e0a83c;
   --warn-soft: #2e2312;
+
+  --course-1: #7aa8dd;
+  --course-2: #b18fd6;
+  --course-3: #e0925f;
+  --course-4: #5fc4ab;
+  --course-5: #d980a8;
+  --course-6: #9aa5e8;
+  --course-7: #b3c46a;
+  --course-8: #e0ab54;
 
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.45);
   --shadow-md: 0 4px 12px rgb(0 0 0 / 0.5);

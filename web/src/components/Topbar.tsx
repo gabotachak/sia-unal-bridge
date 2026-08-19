@@ -1,4 +1,4 @@
-import { CalendarDays, LayoutList, Monitor, Moon, Sun, Trash2 } from 'lucide-react';
+import { CalendarDays, LayoutList, ListChecks, Monitor, Moon, Sun, Trash2 } from 'lucide-react';
 import { AppLink } from './AppLink';
 import { useConfirm } from './Confirm';
 import { useTheme } from '../hooks/useTheme';
@@ -127,6 +127,14 @@ export function Topbar() {
             active={screen.name === 'semester'}
             label="Mi semestre"
             badge={plan.items.length}
+          >
+            <ListChecks size={ICON} strokeWidth={STROKE} />
+          </IconButton>
+
+          <IconButton
+            to={{ name: 'schedule' }}
+            active={screen.name === 'schedule'}
+            label="Mi horario"
           >
             <CalendarDays size={ICON} strokeWidth={STROKE} />
           </IconButton>

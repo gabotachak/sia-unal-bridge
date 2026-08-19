@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeftRight,
   Check,
   CornerUpLeft,
   HelpCircle,
-  Search,
   SlidersHorizontal,
   Ticket,
   X,
@@ -12,12 +11,14 @@ import {
 import { routes } from '../api/client';
 import type { CoursesResponse, CourseSummary } from '../api/types';
 import { useApi } from '../hooks/useApi';
+import { useCatalogFilters } from '../hooks/useCatalogFilters';
 import { usePlan } from '../hooks/usePlan';
 import { Layout } from '../components/Layout';
 import { AppLink } from '../components/AppLink';
 import { useConfirm } from '../components/Confirm';
 import { AddButton } from '../components/AddButton';
 import { Empty, Fault, Loading } from '../components/States';
+import { SearchInput } from '../components/SearchInput';
 import { SeatsFigure } from '../components/Seats';
 import { TableHead } from '../components/TableHead';
 import type { TableCol } from '../lib/table';
@@ -51,25 +52,52 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
    * una sola opción había que elegir dos veces y comparar de memoria. Los
    * valores son pocos y fijos —siete tipologías, una decena de créditos— así
    * que caben todos a la vista, con cuántas asignaturas hay en cada uno.
+   *
+   * Viven en `useCatalogFilters` (Context), no en `useState` local: ir a la
+   * ficha de una asignatura desmonta esta pantalla, y sin Context los
+   * filtros —y el scroll— se perdían en el viaje de ida y vuelta.
    */
-  const [q, setQ] = useState('');
-  const [typols, setTypols] = useState<ReadonlySet<string>>(new Set());
-  const [creds, setCreds] = useState<ReadonlySet<number>>(new Set());
-  const [onlyOpen, setOnlyOpen] = useState(false);
+  const { q, setQ, typols, setTypols, creds, setCreds, onlyOpen, setOnlyOpen, showFacets, setShowFacets, scrollY, setScrollY } =
+    useCatalogFilters();
 
   /**
-   * Las dos filas de facetas, plegadas en el teléfono.
-   *
-   * Diecisiete chips con nombre largo envuelven en cuatro o cinco líneas: media
-   * pantalla gastada en opciones antes de ver la primera asignatura. En el
-   * escritorio caben en dos filas y ahí se quedan siempre a la vista —esto no
-   * es un desplegable nuevo, es la misma pantalla con menos ancho—, así que el
-   * botón que las pliega solo existe bajo 700px, por CSS.
-   *
-   * Plegadas no son filtros invisibles: el contador del botón dice cuántos hay
-   * puestos, y la cuenta del encabezado ('120 de 694') no cambia de sitio.
+   * Restaura el scroll UNA vez, apenas hay filas que pintar — antes de eso
+   * la página mide menos alto que el que tenía cuando se guardó, y
+   * `scrollTo` cae corto.
    */
-  const [showFacets, setShowFacets] = useState(false);
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || !data || data.courses.length === 0) return;
+    restored.current = true;
+    if (scrollY > 0) window.scrollTo(0, scrollY);
+  }, [data, scrollY]);
+
+  /**
+   * Guarda el scroll EN CADA scroll, no al desmontar.
+   *
+   * Se probó al desmontar primero y no servía: el cleanup de un efecto
+   * corre después de que React ya pintó la pantalla siguiente, y para
+   * cuando por fin se ejecutaba, el navegador ya había reflowado con la
+   * página nueva —más corta— y `window.scrollY` ya no era el de acá, sino
+   * el que el navegador recortó solo. Escuchando el scroll en vivo, el
+   * valor guardado siempre es el último real de ESTA pantalla, tomado
+   * mientras todavía existía.
+   */
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        setScrollY(window.scrollY);
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [setScrollY]);
 
   // Los valores que EXISTEN en este plan, con su cuenta. Nada de listas fijas:
   // Medellín llega a 12 créditos y Bogotá no pasa de 6.
@@ -106,6 +134,45 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
   const total = data?.courses.length ?? 0;
   const facetCount = typols.size + creds.size;
   const filtering = !!q || facetCount > 0 || onlyOpen;
+
+  /**
+   * Libre elección aparte del resto, con un atajo al lado.
+   *
+   * Es la tipología más numerosa con diferencia (215 de 694 en este plan) y
+   * la que casi nadie busca junto con las demás: se arma el semestre con las
+   * obligatorias y optativas del plan, y las libres se miran aparte —o se
+   * excluyen de un toque, que es lo que da el chip sintético. No es una
+   * tipología real del SIA: es `nonLibreTypologies` completo, así que
+   * alternarlo compone con el resto de chips igual que cualquier selección
+   * manual.
+   */
+  const libreTypology = facets.typologies.find((t) => t.startsWith('LIBRE'));
+  const nonLibreTypologies = facets.typologies.filter((t) => !t.startsWith('LIBRE'));
+  const notLibreActive =
+    nonLibreTypologies.length > 0 &&
+    typols.size === nonLibreTypologies.length &&
+    nonLibreTypologies.every((t) => typols.has(t));
+  const notLibreCount = nonLibreTypologies.reduce((n, t) => n + (facets.byTypology.get(t) ?? 0), 0);
+  function toggleNotLibre() {
+    pickTypology(notLibreActive ? new Set() : new Set(nonLibreTypologies));
+  }
+
+  /**
+   * Marcar TODAS las tipologías filtra exactamente igual que no marcar
+   * ninguna —`typols.has(c.typology)` no excluye a nadie de cualquiera de
+   * las dos formas— así que dejarlas todas en verde mentía: parecía un
+   * filtro fuerte ("filtros 7") cuando en la lista de abajo no faltaba
+   * nada. Elegir la última que cierra el conjunto completo lo vacía en vez
+   * de completarlo — vuelve al estado real: sin filtro.
+   */
+  function pickTypology(next: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>)) {
+    setTypols((prev) => {
+      const resolved = typeof next === 'function' ? next(prev) : next;
+      return resolved.size === facets.typologies.length && facets.typologies.length > 0
+        ? new Set()
+        : resolved;
+    });
+  }
 
   function clearAll() {
     setQ('');
@@ -193,16 +260,13 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
       {data && (
         <>
           <div className="toolbar">
-            <label className="search search--flex">
-              <Search size={16} strokeWidth={1.75} aria-hidden="true" />
-              <span className="sr-only">Buscar asignatura</span>
-              <input
-                type="search"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar por nombre o código…"
-              />
-            </label>
+            <SearchInput
+              value={q}
+              onChange={setQ}
+              placeholder="Buscar por nombre o código…"
+              label="Buscar asignatura"
+              className="search--flex"
+            />
 
             {/* El filtro que más se usa va arriba y solo: es una pregunta de
                 sí o no —"¿puedo meterme hoy?"— y no compite con las otras. */}
@@ -250,11 +314,11 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
             <div className="filters__row">
               <span className="filters__label">tipología</span>
               <div className="chips">
-                {facets.typologies.map((t) => (
+                {nonLibreTypologies.map((t) => (
                   <button
                     key={t}
                     className={`chip chip--sm ${typols.has(t) ? 'is-on' : ''}`}
-                    onClick={() => setTypols((s) => toggle(s, t))}
+                    onClick={() => pickTypology((s) => toggle(s, t))}
                     aria-pressed={typols.has(t)}
                     title={t}
                   >
@@ -262,6 +326,36 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                     <span className="chip__code tnum">{facets.byTypology.get(t)}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Aparte del resto: no es una tipología más entre siete, es la
+                pregunta "¿libres sí o no?", binaria. */}
+            <div className="filters__row">
+              <span className="filters__label">electivas</span>
+              <div className="chips">
+                {libreTypology && (
+                  <button
+                    className={`chip chip--sm ${typols.has(libreTypology) ? 'is-on' : ''}`}
+                    onClick={() => pickTypology((s) => toggle(s, libreTypology))}
+                    aria-pressed={typols.has(libreTypology)}
+                    title={libreTypology}
+                  >
+                    {sentence(libreTypology.replace(/\s*\([^)]*\)\s*$/, ''))}
+                    <span className="chip__code tnum">{facets.byTypology.get(libreTypology)}</span>
+                  </button>
+                )}
+                {nonLibreTypologies.length > 0 && (
+                  <button
+                    className={`chip chip--sm ${notLibreActive ? 'is-on' : ''}`}
+                    onClick={toggleNotLibre}
+                    aria-pressed={notLibreActive}
+                    title="Todas las tipologías del plan menos libre elección."
+                  >
+                    Todas menos libre elección
+                    <span className="chip__code tnum">{notLibreCount}</span>
+                  </button>
+                )}
               </div>
             </div>
 

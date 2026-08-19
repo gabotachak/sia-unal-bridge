@@ -1,4 +1,4 @@
-import { Ban, Check, Plus } from 'lucide-react';
+import { Ban, Check, Plus, Trash2 } from 'lucide-react';
 import { usePlan } from '../hooks/usePlan';
 import { itemId, selectionId, type PlanItem } from '../lib/storage';
 import './AddButton.css';
@@ -47,9 +47,15 @@ export function AddButton({ item, variant = 'plus' }: Props) {
       aria-pressed={added}
     >
       {/* El icono dice el estado sin leer nada: la tilde es "ya está", la cruz
-          es "se puede", el prohibido es "acá no". */}
+          es "se puede", el prohibido es "acá no". Ya está + hover es la
+          misma caneca que borra en Mi semestre —mismo gesto, misma señal—
+          superpuesta a la tilde y alternada por CSS, no por estado: es una
+          pista visual, no un cambio de qué botón es. */}
       {added ? (
-        <Check size={16} strokeWidth={2.5} aria-hidden="true" />
+        <span className="add__icon">
+          <Check className="add__icon--idle" size={16} strokeWidth={2.5} aria-hidden="true" />
+          <Trash2 className="add__icon--hover" size={16} strokeWidth={1.75} aria-hidden="true" />
+        </span>
       ) : blocked ? (
         <Ban size={16} strokeWidth={1.75} aria-hidden="true" />
       ) : (

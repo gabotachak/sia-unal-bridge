@@ -1,0 +1,201 @@
+/* El calendario semanal. Rejilla propia, no la de .table: acá el eje no son
+   columnas de datos sino días, y las horas se posicionan por coordenada, no
+   por fila — es lo único que permite que una clase de 09:00 a 11:00 ocupe
+   el doble de alto que una de 09:00 a 10:00. */
+
+/* `overflow: auto` en los dos ejes, no `hidden`: el alto es el que calcula
+   `useFitHourHeight` para caber sin scrollear en la ventana —como Google
+   Calendar—, pero un rango de horas muy largo en una ventana muy baja
+   puede no entrar ni al piso legible (`MIN_HOUR_REM`); ahí scrollea en vez
+   de volverse ilegible. El mismo `auto` cubre el caso angosto de abajo
+   (menos de 720px), que necesita scroll horizontal. */
+.week {
+  position: relative;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: auto;
+}
+
+/* Ver el comentario en WeekCalendar.tsx: overlay para no empujar la
+   rejilla al aparecer/desaparecer.
+
+   Centrado sobre las columnas de días, no sobre TODO el ancho: `left`
+   arranca después de `.week__gutter` (3.4rem), si no el centro cae
+   corrido hacia la derecha por el ancho de la columna de horas. Y en vez
+   de un `top` fijo con el texto flotando suelto, ocupa una franja con
+   `display: flex` que lo centra tanto horizontal como verticalmente —
+   deliberado, no "el texto quedó ahí porque sí". La franja mide lo mismo
+   que las primeras horas visibles sin scrollear: centrar en el alto total
+   de la rejilla (varias pantallas) lo mandaría fuera de vista. */
+.week__empty {
+  position: absolute;
+  z-index: 2;
+  inset: 3.2rem 0 auto 3.4rem; /* top: debajo de .week__header; left: después del gutter */
+  height: 13rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--gap-lg);
+  text-align: center;
+  text-wrap: balance;
+  font-size: var(--t-small);
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+.week__header {
+  display: flex;
+  border-bottom: 1px solid var(--rule-strong);
+  background: var(--surface-2);
+}
+
+.week__gutter {
+  flex: none;
+  width: 3.4rem;
+}
+
+.week__day-label {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.5rem 0.3rem;
+  text-align: center;
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-left: 1px solid var(--rule);
+}
+
+.week__body {
+  display: flex;
+  position: relative;
+  /* Cada rótulo de hora sube 0.55em para alinearse con SU raya (ver
+     .week__hour-label) — el de las 06:00, arriba de todo, subía hasta
+     quedar a medias fuera de `.week`, que recorta lo que se sale
+     (`overflow: auto`). Este aire es lo que le da a dónde subir sin
+     cortarse. */
+  padding-top: 0.5rem;
+}
+
+/* La columna de horas comparte alto con las de días porque el navegador
+   estira flex items a la altura del más alto del grupo — sin esto los
+   rótulos de hora se desalinean apenas una columna crece por un bloque. */
+.week__body > .week__gutter {
+  display: flex;
+  flex-direction: column;
+}
+
+.week__hour-label {
+  flex: none;
+  padding-right: 0.4rem;
+  text-align: right;
+  font-size: var(--t-nano);
+  color: var(--text-faint);
+  transform: translateY(-0.55em);
+  box-sizing: border-box;
+}
+
+.week__col {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  border-left: 1px solid var(--rule);
+}
+
+.week__gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--rule);
+}
+.week__col:first-child .week__gridline:first-child {
+  border-top: 0;
+}
+
+/* Un bloque de clase. El color de categoría vive en `--course-color`, puesto
+   inline por materia (ver courseColors.ts): el fondo lo diluye con la
+   superficie para que el texto siga siendo legible sin definir ocho pares
+   de fondo+texto a mano. */
+.week__block {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  overflow: hidden;
+  padding: 0.25rem 0.35rem;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--course-color);
+  background: color-mix(in srgb, var(--course-color) 20%, var(--surface));
+  font-size: var(--t-nano);
+  line-height: 1.35;
+  cursor: default;
+}
+
+/* El nombre manda: nadie reconoce una materia por su código en un bloque de
+   2cm de alto. Con `-webkit-line-clamp` en vez de `white-space: nowrap`
+   porque acá SÍ hay dos líneas para leerlo entero en un bloque de una hora
+   o más — cortarlo a la primera línea desperdiciaba el alto que el propio
+   bloque ya tiene. */
+.week__block-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.week__block-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.week__block-key {
+  color: var(--course-color);
+  font-weight: 600;
+  flex: none;
+}
+.week__block-room {
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.week__block.is-conflict {
+  border-left-color: var(--bad);
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--course-color) 20%, var(--surface)),
+    color-mix(in srgb, var(--course-color) 20%, var(--surface)) 6px,
+    var(--bad-soft) 6px,
+    var(--bad-soft) 12px
+  );
+}
+.week__block-conflict {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.25rem;
+  color: var(--bad);
+}
+
+/* ── Responsivo ─────────────────────────────────────────────────────
+   Bajo cierto ancho, seis-siete columnas de día ya no caben legibles. En
+   vez de apilar los días —perdería la comparación que ES el punto del
+   calendario— se deja el ancho mínimo por columna y el contenedor scrollea
+   horizontal, mismo patrón que usan las tablas del catálogo. */
+@media (max-width: 720px) {
+  /* `.week` ya es `overflow: auto` en los dos ejes (arriba); acá solo el
+     mínimo que obliga a scrollear en horizontal. */
+  .week__header,
+  .week__body {
+    min-width: 42rem;
+  }
+}

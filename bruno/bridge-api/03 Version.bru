@@ -1,0 +1,19 @@
+meta {
+  name: 03 Version
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/version
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Tag semver y commit del build corriendo — ver docs/COMMANDS.md.
+}

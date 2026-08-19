@@ -73,7 +73,7 @@ sedes y niveles que la API nunca había recorrido):
 | `docs/OPEN-QUESTIONS.md` | Qué está verificado y qué no. Léelo antes de asumir |
 | `docs/DEVELOPMENT.md` | Entorno: Docker, Postgres, cómo replicar el flujo |
 | `bruno/sia-catalogo/` | Colección Bruno: el flujo ADF crudo, a mano contra el SIA |
-| `bruno/bridge-api/` | Colección Bruno: los 14 endpoints de esta API |
+| `bruno/bridge-api/` | Colección Bruno: los 15 endpoints de esta API |
 
 ## Arquitectura acordada
 

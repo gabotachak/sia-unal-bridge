@@ -7,7 +7,7 @@ import (
 )
 
 func (a *api) healthz(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "created_by": "gabotachak"})
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "created_by": "gabotachak", "version": a.buildVersion})
 }
 
 // version reports the tag (semver, "dev" si no viene de un build con ldflags)

@@ -209,7 +209,7 @@ plausibles y equivocados.
 | [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | Qué está probado y qué no |
 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Entorno, fixtures, cómo replicar el flujo |
 | [`bruno/sia-catalogo/`](bruno/sia-catalogo/) | El flujo ADF crudo, a mano contra el SIA |
-| [`bruno/bridge-api/`](bruno/bridge-api/) | Los 14 endpoints de esta API |
+| [`bruno/bridge-api/`](bruno/bridge-api/) | Los 15 endpoints de esta API |
 | [`web/`](web/) | La interfaz: React + TypeScript sobre esta API |
 
 ## Verificar contra el servidor

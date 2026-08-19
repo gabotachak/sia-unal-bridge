@@ -632,7 +632,7 @@ components:
         campus_code: { type: string, examples: ["1101"] }
         level:
           type: string
-          description: Slug del nivel. Es identidad: el directorio se cachea y se lee por (sede, nivel).
+          description: "Slug del nivel. Es identidad: el directorio se cachea y se lee por (sede, nivel)."
           examples: ["pregrado"]
         faculty_code: { type: string, examples: ["2055"] }
         code: { type: string, examples: ["2A74"] }

@@ -10,9 +10,11 @@ import (
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
 
-// DefaultPoolSize is fase 1's chosen size: the SIA takes 8 concurrent
-// sessions without throttling; 4 is a courtesy limit, not a server
-// constraint. See docs/ARCH.md "Concurrencia".
+// DefaultPoolSize is fase 1's chosen size. Measured against production
+// (2026-08-19): the SIA takes up to 80 concurrent sessions cleanly; 88
+// already shows ~4.5% failures (docs/OPEN-QUESTIONS.md §5). 4 is sized to
+// current real traffic, not a server constraint — see docs/ARCH.md
+// "Concurrencia".
 const DefaultPoolSize = 4
 
 // keepaliveTick / keepaliveIdle: the session dies after ~4.2min idle, not

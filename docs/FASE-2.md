@@ -224,10 +224,15 @@ seguidas.
 `cmd/refresher` levanta **su propio pool**, y la invariante que no se negocia:
 
 ```
-conexiones(api) + conexiones(refresher) ≤ 8       ← el techo medido
+conexiones(api) + conexiones(refresher) ≤ 80      ← el techo medido (OPEN-QUESTIONS.md §5)
    4 (api, por defecto)  +  2 (refresher)  =  6   ← operación normal
    4                     +  4              =  8   ← ventana de mantenimiento, API ociosa
 ```
+
+80 es el resultado de una rampa medida contra producción (2026-08-19), no un número de
+cortesía: 88 concurrentes ya rompe ~4.5% de las peticiones. Los valores por defecto de
+arriba se quedan chicos frente a ese techo a propósito — es margen medido, no una regla
+inventada para no molestar al SIA.
 
 **Coste aceptado:** dos procesos no comparten `singleflight`, así que el job y un
 cliente pueden pedir la misma asignatura a la vez y gastar dos POSTs en vez de uno. Es
@@ -498,7 +503,7 @@ un log, sin abrir una sola conexión al SIA.
 | `REFRESH_HOT_SET_SIZE` | `250` | asignaturas del barrido de cupos |
 
 `SIA_POOL_SIZE` sigue siendo el de la API y **no** se comparte. La suma de ambos es la
-invariante de ≤ 8.
+invariante de ≤ 80 (techo medido, `OPEN-QUESTIONS.md` §5).
 
 ---
 
@@ -508,7 +513,7 @@ invariante de ≤ 8.
 |---|---|---|
 | La UNAL repinta la página a mitad de barrido | circuit breaker del paso 5; la colección Bruno deja de pasar | abortar, re-mapear con [`FIELDS.md`](FIELDS.md) |
 | **Datos plausibles y equivocados, ×135 000** | no da síntoma — es el fallo propio de este dominio | las aserciones del paso 5 existen solo para esto |
-| El job ahoga a la API | `503 busy` en tráfico real | pool propio + invariante ≤ 8; bajar `REFRESH_WORKERS` |
+| El job ahoga a la API | `503 busy` en tráfico real | pool propio + invariante ≤ 80; bajar `REFRESH_WORKERS` |
 | Cortesía con un servidor público | **18.8 MB/min** por worker hoy; ~4 tras el paso 3 | `RATE_POSTS_PER_SEC`, ventana nocturna, hot set chico |
 | `seat_snapshot` crece sin freno | tamaño de tabla | dedupe del paso 6; retención si aun así crece |
 | Cambio de semestre | `SIA_TERM` cambia y todo queda viejo de golpe | `section` está *keyed* por `term`: lo viejo queda como historial. Disparo manual de `catalog` + `detail` |

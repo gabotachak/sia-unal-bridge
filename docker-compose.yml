@@ -78,7 +78,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-sia}:${POSTGRES_PASSWORD:-sia}@db:5432/${POSTGRES_DB:-sia_bridge}?sslmode=disable
       SIA_BASE_URL: ${SIA_BASE_URL:-https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf}
       # El pool de la API, sólo para que el job pueda avisar si la suma pasa
-      # de 8 conexiones — el techo medido. No lo comparte.
+      # de 80 conexiones — el techo medido (docs/OPEN-QUESTIONS.md §5). No lo comparte.
       SIA_POOL_SIZE: ${SIA_POOL_SIZE:-4}
       SIA_TERM: ${SIA_TERM:-2026-2}
       LOG_LEVEL: ${LOG_LEVEL:-info}

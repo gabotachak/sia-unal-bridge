@@ -44,7 +44,7 @@ No se vuelven a discutir salvo que aparezca una medición nueva.
 | `typology` en `course_program` | probado: 8 códigos divergen entre planes | [G §17](GOTCHAS.md) |
 | `section` global + `section_program` visibilidad | los cupos son globales, los grupos visibles no | [G §16](GOTCHAS.md) |
 | `seat_snapshot` append-only | habilita alertas sin rediseñar | [DM §4](DATA-MODEL.md) |
-| Pool de **4**, mutex por **operación lógica** | 8 en paralelo van bien; dentro de una conexión, no | [G §28](GOTCHAS.md) |
+| Pool de **4**, mutex por **operación lógica** | hasta 80 en paralelo van bien; dentro de una conexión, no | [G §28](GOTCHAS.md) |
 | Keepalive ≤3 min | muere a ~4.2 min, no a los 5 | [G §7](GOTCHAS.md) |
 | `pt1:r1:<N>:cb4` con `N` leído de la respuesta | con `1` fijo se rompe en la 2.ª asignatura | [G §20](GOTCHAS.md) |
 

@@ -201,8 +201,10 @@ temporada son ~1 GB/día contra un servidor público para reescribir el mismo n�
   (~3 h, 4 conexiones al SIA) en mitad de la mañana. La TZ del host ya es Bogotá, pero eso
   no es garantía para el cron.
 - **Las conexiones al SIA son un techo compartido.** `SIA_POOL_SIZE` (API) +
-  `REFRESH_POOL_SIZE` (job) debe quedar **≤ 8**. Pasarse no da un error: da `503 busy` a
-  usuarios reales durante las horas que dura un barrido.
+  `REFRESH_POOL_SIZE` (job) debe quedar **≤ 80** (techo medido contra producción,
+  `docs/OPEN-QUESTIONS.md` §5 — 88 ya degrada). Pasarse el presupuesto acordado entre
+  API y job no da un error: da `503 busy` a usuarios reales durante las horas que dura
+  un barrido.
 - **HSTS con `includeSubDomains`.** `internal/httpapi/middleware.go` ya manda
   `Strict-Transport-Security: max-age=31536000; includeSubDomains` en cada respuesta
   de la API. Una vez el navegador lo cachea para `sia-api.gabotachak.dev`,

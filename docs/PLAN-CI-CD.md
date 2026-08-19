@@ -132,7 +132,8 @@ mano.
   y `internal/**` cambian en el mismo PR, el orden migración-antes-que-api del
   workflow no es opcional: al revés, la api vieja puede fallar contra el schema
   nuevo entre un paso y el otro.
-- **`SIA_POOL_SIZE` + `REFRESH_POOL_SIZE` ≤ 8.** Un rebuild de `api` no lo cambia,
+- **`SIA_POOL_SIZE` + `REFRESH_POOL_SIZE` ≤ 80** (techo medido, `docs/OPEN-QUESTIONS.md`
+  §5). Un rebuild de `api` no lo cambia,
   pero si el PR toca `.env` en el server a mano fuera de este flujo, el CI no se
   entera — el `.env` del server no vive en git.
   y no se toca desde CI en este plan.

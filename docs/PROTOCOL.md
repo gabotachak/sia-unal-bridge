@@ -447,5 +447,6 @@ Otro marcador útil: `Horarios/Aula: No informado` para grupos sin horario asign
 Una carrera completa (98 asignaturas con detalle) = **201 POSTs, 99 s, 31 MB**, medido
 de punta a punta con el Volver dinámico de §7.
 
-El SIA aguanta **8 sesiones concurrentes** sin errores ni throttling, y la latencia por
-búsqueda no se degrada (0.5-0.9 s con N=1 y con N=8).
+El SIA aguanta **80 sesiones concurrentes** sin errores ni throttling, y la latencia por
+búsqueda no se degrada (0.5-0.9 s con N=1 y con N=8; plana hasta N=80). En 88 ya aparece
+~4.5% de fallas — ver `OPEN-QUESTIONS.md` §5.

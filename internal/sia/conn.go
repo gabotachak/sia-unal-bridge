@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
@@ -48,18 +49,28 @@ type SIAConn struct {
 	// connection (see Bootstrap, which resets these).
 	navLevel, navCampus, navFaculty int
 
-	// navTipologia/navModo/navSedeElect/navFacElect are the electives
-	// cascade's equivalent tracking (soc4, soc5, soc10, soc6). soc4 and soc5
-	// are constant across every call, and soc10/soc6 repeat whenever two
-	// consecutive requests hit the same sede — so the SECOND time a pooled
-	// connection is reused, those would repost unchanged and noop without
-	// this guard. "" = unset (matches formState's zero value).
-	navTipologia, navModo, navSedeElect, navFacElect string
+	// navTipologia/navModo/navSedeElect are the electives cascade's
+	// equivalent tracking (soc4, soc5, soc10). soc4 and soc5 are constant
+	// across every call, and soc10 repeats whenever two consecutive requests
+	// hit the same sede — so the SECOND time a pooled connection is reused,
+	// those would repost unchanged and noop without this guard. "" = unset
+	// (matches formState's zero value).
+	//
+	// soc6 is deliberately NOT tracked: the soc10 post that precedes it
+	// re-renders the dropdown and clears its selection server-side, so every
+	// soc6 post is a genuine change (GOTCHAS §37).
+	navTipologia, navModo, navSedeElect string
 
 	// DetailRegion: 0 = in the search region; >0 = an open detail region.
 	// Back is pt1:r1:<DetailRegion>:cb4 and the number grows with every
 	// detail opened in the session. Never hardcode it. GOTCHAS §20.
 	DetailRegion int
+
+	// Traffic counters, atomic because Pool.Stats reads them from another
+	// goroutine while this connection is checked out. They are the courtesy
+	// budget made visible: "18.8 MB/min por worker" is a number this
+	// project has to keep an eye on (docs/FASE-2.md "Riesgos").
+	posts, bytes atomic.Int64
 
 	LastUsed time.Time
 }
@@ -104,6 +115,7 @@ func (c *SIAConn) Bootstrap(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sia: bootstrap: read body: %w", err)
 	}
+	c.bytes.Add(int64(len(body)))
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("sia: bootstrap: status %d", resp.StatusCode)
 	}
@@ -117,7 +129,7 @@ func (c *SIAConn) Bootstrap(ctx context.Context) ([]byte, error) {
 	c.ParkedAt = catalog.ProgramKey{}
 	c.parked = false
 	c.navLevel, c.navCampus, c.navFaculty = -1, -1, -1
-	c.navTipologia, c.navModo, c.navSedeElect, c.navFacElect = "", "", "", ""
+	c.navTipologia, c.navModo, c.navSedeElect = "", "", ""
 	c.DetailRegion = 0
 	c.LastUsed = time.Now()
 	return body, nil
@@ -150,10 +162,20 @@ func (c *SIAConn) post(ctx context.Context, values url.Values) ([]byte, map[stri
 	if err != nil {
 		return nil, nil, fmt.Errorf("sia: post: read body: %w", err)
 	}
+	c.posts.Add(1)
+	c.bytes.Add(int64(len(body)))
 	if resp.StatusCode != http.StatusOK {
 		return nil, nil, fmt.Errorf("sia: post: status %d", resp.StatusCode)
 	}
 	c.LastUsed = time.Now()
+
+	// Order matters: a DEAD session also answers with this redirect, but
+	// short (412–877 B). Classifying that as the server choking on one page
+	// would rob it of the retry a noop gets, and one expired session would
+	// then take the rest of the batch with it.
+	if !isNoop(body) && isSIAErrorPage(body) {
+		return nil, nil, fmt.Errorf("%w (%d bytes)", errSIAErrorPage, len(body))
+	}
 
 	env, err := ParseEnvelope(body)
 	if err == nil {

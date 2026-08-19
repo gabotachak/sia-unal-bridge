@@ -67,7 +67,19 @@ func ParseList(raw []byte) ([]Row, error) {
 		if code == "" {
 			return // header/footer row or malformed — not a data row
 		}
-		name := strings.TrimSpace(tr.Find(`td[id$=":c2"]`).First().Text())
+		// The name lives in the INNERMOST span, not in the cell: an
+		// unscheduled course adds a sibling badge inside the same td
+		//
+		//	<span container><span title="">Nombre </span><div></div>ASIGNATURA SIN PROGRAMAR</span>
+		//
+		// and reading the cell's whole text glues the two together
+		// ("Complemento a teoría de la computaciónASIGNATURA SIN PROGRAMAR").
+		// That reached the course.name column, and it also broke the it11
+		// filter of fase 2, which searches by the name we stored.
+		name := strings.TrimSpace(tr.Find(`td[id$=":c2"] span[title]`).First().Text())
+		if name == "" {
+			name = strings.TrimSpace(tr.Find(`td[id$=":c2"]`).First().Text())
+		}
 		creditsText := strings.TrimSpace(tr.Find(`td[id$=":c5"] span`).First().Text())
 		typology := strings.TrimSpace(tr.Find(`td[id$=":c6"] span`).First().Text())
 		description := strings.TrimSpace(tr.Find(`td[id$=":c8"] span`).First().Text())

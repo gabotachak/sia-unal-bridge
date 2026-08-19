@@ -72,6 +72,21 @@ type SIASource interface {
 	// The returned Course has Sections populated; Code/Name/Credits/
 	// Description come from the detail header, not the listing.
 	FetchDetail(ctx context.Context, key ProgramKey, code, term string) (CourseOffering, error)
+
+	// FetchDetails fetches several courses of the SAME program over ONE
+	// connection, invoking yield per result so the caller persists
+	// incrementally — a course is the unit of commit, so an interrupted
+	// sweep keeps everything already yielded.
+	//
+	// It does not save the cb1 per course (the _afrRK are renumbered after
+	// every Volver — GOTCHAS §4 — and caching them is the bug that killed
+	// the previous project), but it does save the re-parking between
+	// courses, which is where §30/§31/§33 break a crawler silently.
+	//
+	// A yield error stops the batch; a fetch error for one course is passed
+	// to yield and the batch continues.
+	FetchDetails(ctx context.Context, key ProgramKey, refs []CourseRef, term string,
+		yield func(CourseOffering, error) error) error
 }
 
 // Store is the driven port for Postgres persistence and cache reads.
@@ -113,4 +128,39 @@ type Store interface {
 	ProgramsOfferingCourse(ctx context.Context, campusCode, code string) ([]Program, error)
 	SearchCourses(ctx context.Context, campusCode, q string) ([]Course, error)
 	ProgramCoverage(ctx context.Context, campusCode string) (known, withCatalog int, err error)
+
+	// ── Refresher (fase 2) ────────────────────────────────────────────
+
+	// CoursesNeedingDetail returns the program's courses whose GLOBAL detail
+	// (max(section.fetched_at) for the course, valid for every plan) is
+	// missing or older than maxAge. It is the filter that makes the global
+	// sweep cost ~3 h instead of ~38 (docs/FASE-2.md).
+	CoursesNeedingDetail(ctx context.Context, programID int64, maxAge time.Duration) ([]CourseRef, error)
+
+	// CoursesNeedingVisibility is the per-plan variant: courses whose
+	// course_program.detail_fetched_at for THIS program is missing or stale.
+	// It is the only way to learn which groups this plan sees, and it costs
+	// ~270 k POSTs across the university — once a semester, not nightly.
+	CoursesNeedingVisibility(ctx context.Context, programID int64, maxAge time.Duration) ([]CourseRef, error)
+
+	// SeatsHotSet returns a campus's most-requested courses, each with a
+	// program that already sees it, ordered by demand. docs/API.md's 5 min
+	// seat TTL cannot be sustained over 1380 programs; over ~300 courses it
+	// can. Ties break on recency.
+	SeatsHotSet(ctx context.Context, campusCode string, limit int) ([]CourseRef, error)
+
+	// RecordDemand counts that a CLIENT (never the job) asked for this
+	// course. Called by httpapi, the only adapter that knows there is a
+	// person on the other side.
+	RecordDemand(ctx context.Context, campusCode, code string) error
+
+	// Run bookkeeping — observability only, never a checkpoint.
+	StartRun(ctx context.Context, mode, scope string) (int64, error)
+	FinishRun(ctx context.Context, run RefreshRun) error
+	LastRuns(ctx context.Context) ([]RefreshRun, error)
+
+	// TryLock takes a session-scoped pg_try_advisory_lock so a sweep that
+	// overruns its cron interval does not stack a second one on top. ok
+	// false means somebody else holds it; release is nil in that case.
+	TryLock(ctx context.Context, key string) (release func(), ok bool, err error)
 }

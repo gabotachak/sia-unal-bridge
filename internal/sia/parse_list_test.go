@@ -3,6 +3,7 @@ package sia
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -89,5 +90,33 @@ func TestDedupeByCode_PreservesOrderAndFirstOccurrence(t *testing.T) {
 	}
 	if out[1].Code != "B" {
 		t.Errorf("second row wrong: %+v", out[1])
+	}
+}
+
+// An unscheduled course carries a badge inside the same <td> as its name.
+// Reading the cell's whole text glued them together and put
+// "…ASIGNATURA SIN PROGRAMAR" in course.name — plausible and wrong, and the
+// it11 filter of fase 2 searches by exactly that stored name.
+func TestParseList_NameExcludesTheUnscheduledBadge(t *testing.T) {
+	rows, err := ParseList(fixture(t, "listado_regular_2026-08-15.xml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if strings.Contains(r.Name, "ASIGNATURA SIN PROGRAMAR") {
+			t.Fatalf("row %s name carries the badge: %q", r.Code, r.Name)
+		}
+	}
+	var found bool
+	for _, r := range rows {
+		if r.Code == "2025965" {
+			found = true
+			if r.Name != "Complemento a teoría de la computación" {
+				t.Errorf("got name %q", r.Name)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("fixture no longer contains the unscheduled course 2025965")
 	}
 }

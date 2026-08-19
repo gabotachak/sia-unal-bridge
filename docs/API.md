@@ -193,7 +193,7 @@ elige. Quien no quiera manejarlo, usa la ruta canónica.
 | Método | Ruta | Notas |
 |---|---|---|
 | `GET` | `/v1/healthz` | liveness |
-| `GET` | `/v1/status` | conexiones vivas, `parkedAt`, `detailRegion`, edad de sesión |
+| `GET` | `/v1/status` | cobertura de la cache, estado de conexiones vivas y **última corrida del `Refresher`** |
 | `GET` | `/v1/version` | tag semver y commit del build corriendo (`{"version","commit"}`) — ver `docs/COMMANDS.md` |
 
 ---
@@ -233,7 +233,27 @@ Ese endpoint sirve solo del Store y **declara su cobertura**:
 }
 ```
 
-Cuando exista `Refresher`, la cobertura crece sola y el contrato no cambia.
+El `Refresher` (fase 2) hace crecer esa cobertura sola, sin cambiar el contrato, y
+`/v1/status` cuenta lo que hizo — sin eso, "la cobertura crece sola" es una afirmación que
+nadie puede comprobar:
+
+```json
+{
+  "programs_known": 1408,
+  "programs_with_catalog": 49,
+  "refresh": {
+    "reference": { "mode": "reference", "started_at": "...", "finished_at": "...",
+                   "programs_ok": 27, "programs_failed": 0, "programs_skipped": 0,
+                   "courses_ok": 1380, "posts": 131, "bytes": 41000000,
+                   "ended_reason": "done" },
+    "detail":    { "mode": "detail", "scope": "global", "ended_reason": "deadline", "...": "..." }
+  }
+}
+```
+
+`ended_reason` es `done` · `deadline` · `signal` · `circuit_breaker` · `error`. Los dos
+primeros son normales: un barrido cortado por su presupuesto de reloj reanuda solo, porque
+el checkpoint son los marcadores de frescura. `circuit_breaker` es el que hay que mirar.
 
 ---
 
@@ -255,7 +275,7 @@ Defaults iniciales, a calibrar con uso real:
 | catálogo | 7 d | `program.catalog_fetched_at` |
 | detalle: grupos, horario, profesor | 24 h | `section.fetched_at` |
 | detalle: visibilidad por plan | 24 h | `course_program.detail_fetched_at` |
-| cupos | 5 min | `seat_snapshot.measured_at` |
+| cupos | 5 min | `section.seats_checked_at` |
 
 El default de cupos es el único elegido a ojo: hoy no se mueven (medido, 0 cambios en
 347 grupos a lo largo de 35 min en pre-inscripción). El ritmo real solo se puede medir
@@ -295,8 +315,17 @@ Los cupos además llevan la edad **en el body**, porque nunca se sirve un cupo s
 de cuándo es:
 
 ```json
-{ "key": "1", "number": 1, "available": 32, "measured_at": "2026-08-15T16:22:03Z", "age_seconds": 47 }
+{ "key": "1", "number": 1, "available": 32, "measured_at": "2026-08-15T16:22:03Z",
+  "age_seconds": 47, "changed_at": "2026-08-15T11:04:58Z" }
 ```
+
+`measured_at` y `age_seconds` conservan su significado — *de cuándo es este número* — y
+`changed_at` es información nueva: **cuándo cambió por última vez**. Son dos preguntas
+distintas y el esquema las separa (`section.seats_checked_at` contra
+`max(seat_snapshot.measured_at)`), porque `seat_snapshot` solo crece cuando el número
+cambia: medido, 0 cambios en 347 grupos a lo largo de 35 min, así que insertar en cada
+medición serían millones de filas para almacenar una recta. `changed_at` se omite si nunca
+se ha medido un cambio.
 
 ---
 
@@ -337,7 +366,8 @@ de cuándo es:
       "seats": {
         "available": 32,
         "measured_at": "2026-08-15T16:22:03Z",
-        "age_seconds": 47
+        "age_seconds": 47,
+        "changed_at": "2026-08-15T11:04:58Z"
       }
     }
   ]

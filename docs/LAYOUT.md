@@ -13,8 +13,10 @@ Traduce a paquetes de Go la arquitectura de [ARCH.md](ARCH.md) y el contrato de
 ```
 sia-unal-bridge/
 ├── cmd/
-│   └── bridge/
-│       └── main.go                 # único sitio con wiring: config → adapters → server
+│   ├── bridge/
+│   │   └── main.go                 # único sitio con wiring: config → adapters → server
+│   └── refresher/
+│       └── main.go                 # el Job: config → store → POOL PROPIO → Service
 │
 ├── internal/
 │   ├── catalog/                    # ── DOMINIO ── cero imports de infraestructura
@@ -59,6 +61,11 @@ sia-unal-bridge/
 │   │   ├── middleware.go           # slog, recover, request id
 │   │   └── status.go               # /healthz, /status
 │   │
+│   ├── refresher/                  # ── ADAPTADOR driving: el Job (fase 2) ──
+│   │   ├── refresher.go            # Run(ctx, Options): orquesta un barrido, errgroup, limitador
+│   │   ├── modes.go                # reference · catalog · detail(global|plan) · seats(hot)
+│   │   └── report.go               # contadores, errores agregados, circuit breaker
+│   │
 │   └── config/
 │       └── config.go
 │
@@ -85,15 +92,19 @@ sia-unal-bridge/
 | `internal/sia` | driven | todo lo que toca el SIA real: protocolo, estado, parseo |
 | `internal/store` | driven | persistencia y consultas |
 | `internal/httpapi` | driving | traduce HTTP a casos de uso y errores de dominio a status |
+| `internal/refresher` | driving | enumera el trabajo y lo recorre acotado; entra por los mismos casos de uso que `httpapi` |
 | `internal/config` | — | variables de entorno a un struct |
 
-`Refresher` no tiene paquete todavía: está aplazado a fase 2 ([ARCH.md](ARCH.md)).
-Cuando llegue, es `internal/refresher` + `cmd/refresher`, y consume los mismos puertos
-sin tocar nada de lo anterior.
+`internal/refresher` importa `internal/catalog` **y nada más de infraestructura**: es un
+adaptador driving, puede depender del dominio pero no de `sia` ni de `store`. En el momento
+en que importara uno de los dos dejaría de entrar por los casos de uso y sería un segundo
+camino a Postgres, que es lo que [FASE-2.md](FASE-2.md) prohíbe. El test de la invariante
+del hexágono lo cubre igual que a `internal/catalog`.
 
 ### La invariante que sostiene el hexágono
 
-`internal/catalog` **no importa** `gin`, `pgx`, `goquery` ni `encoding/xml`.
+`internal/catalog` **no importa** `gin`, `pgx`, `goquery` ni `encoding/xml`. Y ni él ni
+`internal/refresher` importan `internal/sia`, `internal/store` o `internal/httpapi`.
 
 Si eso se rompe, el hexágono ya no existe aunque el árbol de carpetas siga igual. Vale
 un test:
@@ -113,7 +124,7 @@ devuelven, y está bien: dependen del dominio, que apunta hacia adentro.)
 
 ## Por qué `internal/sia` está partido así
 
-Es el paquete gordo y debe serlo: ahí viven las 33 trampas de
+Es el paquete gordo y debe serlo: ahí viven las 39 trampas de
 [GOTCHAS.md](GOTCHAS.md). Está dividido por **fase del protocolo**, no por capa
 técnica, para que cada trampa tenga un archivo obvio donde vivir y donde buscarla.
 
@@ -163,7 +174,7 @@ Dependencias de verdad: **gin, pgx, goose, goquery**. Más tres paquetes
 | `sqlx` / `scany` | `pgx.RowToStructByName` | pgx v5 ya lo hace nativo |
 | `golang-migrate` | `goose` | goose embebe más fácil y permite migraciones en Go si algún día hace falta |
 | `colly` / frameworks de scraping | `net/http` a mano | necesitan control total de UA, cookies y secuencialidad. Un framework estorba ([GOTCHAS §1](GOTCHAS.md)) |
-| `testcontainers-go` | `docker-compose.yml` que ya existe | `TEST_DATABASE_URL` + `t.Skip()` si no está. Menos maquinaria, mismo resultado |
+| `testcontainers-go` | `docker-compose.yml` que ya existe | `TEST_DATABASE_URL` + `t.Skip()` si no está. Menos maquinaria, mismo resultado — **pero apuntando a otra base**: estos tests escriben de verdad, y compartir base con producción le metió 28 planes de sedes falsas (`make migrate-test`) |
 | regex sobre el HTML | goquery | es el fallo que mató al proyecto anterior |
 
 ### Avisos de uso
@@ -212,6 +223,7 @@ Es el orden de [DEVELOPMENT.md](DEVELOPMENT.md) con los archivos puestos:
 | 5 | pool | `sia/pool.go` | sí |
 | 6 | persistencia y read-through | `store/*`, `catalog/service.go` | sí |
 | 7 | API HTTP | `httpapi/*` | sí |
+| 8 | el Job (fase 2) | `refresher/*`, `cmd/refresher` | sí |
 
 Los pasos 2 y 3 son los que más rinden hacer primero: no necesitan red y son la parte
 con más trampas. Tenerlos ya probados contra fixtures hace que, cuando el paso 4 falle,

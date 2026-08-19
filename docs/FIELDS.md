@@ -17,11 +17,11 @@ Los ids llevan al menos desde marzo de 2026 sin cambiar, pero son frágiles por 
 | `pt1:r1:0:soc4` | select | Tipología de asignatura | `7` activa electivas |
 | `pt1:r1:0:soc5` | select | ¿Por qué deseas buscar? | modo, solo electivas |
 | `pt1:r1:0:soc10` | select | ¿Porque sede? | sede, solo electivas |
-| `pt1:r1:0:soc6` | select | ¿Por qué facultad? | facultad, solo electivas |
+| `pt1:r1:0:soc6` | select | ¿Por qué facultad? | facultad, solo electivas. Su comodín "toda la sede" existe según **(sede, nivel)**: en doctorado no hay ([GOTCHAS §35](GOTCHAS.md)) |
 | `pt1:r1:0:soc7` | select | ¿Por qué plan? | plan, opcional |
 | `pt1:r1:0:soc8` | select | ¿Por qué plan? | duplicado, sin uso observado |
 | `pt1:r1:0:it10` | input | Número de créditos de la asignatura | filtro libre |
-| `pt1:r1:0:it11` | input | Nombre de la asignatura | filtro libre |
+| `pt1:r1:0:it11` | input | Nombre de la asignatura | filtro libre. **Viaja en cada POST y no se limpia solo** ([GOTCHAS §34](GOTCHAS.md)) |
 | `pt1:r1:0:cb1` | button | **Mostrar** | dispara la consulta |
 | `pt1:r1:0:t4` | table | tabla de resultados | selección de fila |
 | `pt1:r1:0:t4:{RK}:cl2` | link | código de la fila `{RK}` | abre el detalle |
@@ -168,6 +168,12 @@ Las sedes de presencia nacional listan **más** programas que Bogotá porque ree
 de otras sedes. Dentro de ellas hay una **facultad comodín con código terminado en
 `000`** (`6000 SEDE AMAZONIA`, `7000 SEDE ORINOQUIA`, `8000 SEDE CARIBE`,
 `9000 SEDE TUMACO`, y también `2000`, `4000`) que agrupa todo lo reexpuesto.
+
+Ese comodín es el que el buscador de electivas usa en `soc6` para traer la sede entera de
+una sola consulta — y **en doctorado no aparece**. Medido 2026-08-17 en Bogotá (11
+opciones), Medellín (6) y Palmira (2): solo facultades reales. Los 82 planes de doctorado
+necesitan una búsqueda por facultad y la unión de los resultados
+([GOTCHAS §35](GOTCHAS.md)).
 
 ### `it10` / `it11` — filtros de texto
 

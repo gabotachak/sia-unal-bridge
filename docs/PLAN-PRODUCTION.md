@@ -22,6 +22,7 @@ inventar nada nuevo, el amigo solo necesita saber cuáles:
 | `api` | `18080` | `0.0.0.0` (todas las interfaces) | `sia-api.gabotachak.dev` |
 | `web` | `13000` | `0.0.0.0` | `sia.gabotachak.dev` |
 | `db` | `15432` | **`127.0.0.1` solo** | ninguno — ver decisión abajo |
+| `refresher` | — | no escucha nada | ninguno — es un job de cron, ver abajo |
 
 ---
 
@@ -138,8 +139,70 @@ curl https://sia.gabotachak.dev/                 # 200, HTML del SPA
 
 ---
 
+## Fase 4 — el `Refresher` en producción (fase 2 del proyecto)
+
+Aplicado y verificado en el server el **2026-08-17**. No expone puertos ni dominios: es la
+misma imagen con otro entrypoint, un modo por corrida, y sale.
+
+| Qué | Estado |
+|---|---|
+| Migración `00002` | aplicada (`make migrate`, versión 2) |
+| Imagen con el binario `refresher` | construida (`docker compose --profile jobs build api refresher`) |
+| `/etc/cron.d/sia-refresher` | instalado, `root:root 644`, su línea exacta probada a mano |
+| Log | `/var/log/sia-refresher.log` + `logrotate` semanal |
+| Base de test aparte | `sia_bridge_test` creada y migrada |
+
+**Corre como `root`** porque `robot` no está en el grupo `docker` (ahí están `ramsus`,
+`brahiam`, `mcsmanager`, `app-runner`). Si algún día se agrega, cambiar la columna de
+usuario del crontab es preferible.
+
+### Tres cosas que se rompen en silencio, y cómo se cerraron
+
+- **`--profile jobs` explícito en cada línea del cron.** El servicio vive en ese perfil
+  para que `docker compose up` no dispare un barrido; según la versión de Compose, `run`
+  no lo encuentra sin el flag. Habría fallado a las 3 a.m. y sin ruido.
+- **`tzdata` en la imagen.** `alpine` no lo trae, así que `TZ=America/Bogota` no se podía
+  resolver y **todo log salía en UTC**: el contenedor decía 08:10 a las 03:10 locales, 5
+  horas corridas respecto al cron que lanza los barridos. Está en el `Dockerfile`.
+- **`TEST_DATABASE_URL` apuntando a la base de producción.** Los tests de
+  `internal/store` y `cmd/refresher` escriben de verdad: metieron 28 planes de sedes
+  inventadas (`999x`) y dejaron `/v1/status` reportando 1408 planes conocidos donde el
+  censo real son 1380. Limpiado, y ahora apunta a `sia_bridge_test`, que
+  `deploy/initdb/01-test-database.sql` crea sola en un despliegue nuevo.
+
+### Operación
+
+```bash
+# ver qué hizo el último barrido de cada modo
+curl -s localhost:18080/v1/status | python3 -m json.tool
+
+# disparar uno a mano (3 h de reloj: nohup, o se lo lleva el SSH al caerse)
+sudo sh -c 'nohup docker compose --profile jobs run --rm refresher --mode=catalog --workers=2 --max-duration=3h >> /var/log/sia-refresher.log 2>&1 &'
+
+# apagar todo sin editar cron
+# .env → REFRESH_ENABLED=false   (cualquier modo sale con código 0 y un log)
+```
+
+`ended_reason` en `/v1/status` es lo primero que hay que mirar: `deadline` y `signal` son
+normales —el barrido reanuda solo, porque el checkpoint son los marcadores de frescura—;
+`circuit_breaker` significa que abortó por 5 fallos seguidos o >20% de error, y el log
+dice qué unidad y con qué error.
+
+**Pendiente con fecha:** la línea de cupos del crontab va comentada. Descomentarla el
+**27/08/2026** cuando abran inscripciones, y volver a comentarla al cerrar — fuera de
+temporada son ~1 GB/día contra un servidor público para reescribir el mismo número.
+
+---
+
 ## Riesgos / lo que puede fallar en silencio
 
+- **El barrido pesado en horario pico.** `CRON_TZ=America/Bogota` es obligatorio en el
+  crontab: cron no hereda la TZ del host, y una hora corrida mete el barrido de detalle
+  (~3 h, 4 conexiones al SIA) en mitad de la mañana. La TZ del host ya es Bogotá, pero eso
+  no es garantía para el cron.
+- **Las conexiones al SIA son un techo compartido.** `SIA_POOL_SIZE` (API) +
+  `REFRESH_POOL_SIZE` (job) debe quedar **≤ 8**. Pasarse no da un error: da `503 busy` a
+  usuarios reales durante las horas que dura un barrido.
 - **HSTS con `includeSubDomains`.** `internal/httpapi/middleware.go` ya manda
   `Strict-Transport-Security: max-age=31536000; includeSubDomains` en cada respuesta
   de la API. Una vez el navegador lo cachea para `sia-api.gabotachak.dev`,

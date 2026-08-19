@@ -1,0 +1,59 @@
+# /etc/cron.d/sia-refresher — la cadencia de la fase 2 (docs/FASE-2.md).
+#
+# Instalar con:
+#   sudo install -m 644 deploy/cron.d/sia-refresher /etc/cron.d/sia-refresher
+#
+# Corre como root porque `robot` no está en el grupo `docker`. Si algún día lo
+# está, cambiar la columna de usuario a `robot` es preferible.
+#
+# Tres reglas que van con esta tabla:
+#
+#   0. `--profile jobs` va explícito: el servicio vive en ese perfil para que
+#      `docker compose up` no dispare un barrido, y según la versión de Compose
+#      `run` no lo encuentra sin el flag. Fallaría a las 3 a.m. y en silencio.
+#   1. --max-duration SIEMPRE menor que el intervalo. Además el job toma un
+#      pg_try_advisory_lock por modo al arrancar: si la corrida anterior sigue
+#      viva, la nueva sale con código 0 y un log, no se encola.
+#   2. La ventana nocturna es para el barrido pesado, no para los cupos: de
+#      noche los cupos no se mueven y nadie los mira.
+#   3. La cadencia de cupos es PROVISIONAL. El número real lo fija el muestreo
+#      del 27/08/2026 (docs/OPEN-QUESTIONS.md §2). No congelarlo antes.
+#
+# CRON_TZ es obligatorio: cron no hereda la TZ del host, y una hora corrida
+# mete el barrido pesado en horario pico.
+CRON_TZ=America/Bogota
+SHELL=/bin/sh
+PATH=/usr/local/bin:/usr/bin:/bin
+PROJECT_DIR=/mnt/newhdd/robot/repos/sia-unal-bridge
+# cron manda la salida por correo; en este server no hay MTA, así que se
+# silencia y cada línea escribe a su propio log (ver LOG más abajo).
+MAILTO=""
+LOG=/var/log/sia-refresher.log
+
+# Referencia: niveles, sedes y directorio de cada sede. 131 POSTs, ~72 s
+# (medido 2026-08-17). Los planes cambian entre semestres, no dentro.
+ 0  3  1  *  *   root  cd $PROJECT_DIR && docker compose --profile jobs run --rm refresher --mode=reference >> $LOG 2>&1
+
+# Catálogo: ~2760 POSTs, ~0.7 GB, 40–90 min con 2 workers. "Casi inmutable"
+# está medido a nivel de intuición, no de reloj; semanal es barato y cubre el
+# error. Al abrir semestre, un disparo manual del mismo comando.
+ 0  2  *  *  0   root  cd $PROJECT_DIR && docker compose --profile jobs run --rm refresher --mode=catalog --workers=2 --max-duration=3h >> $LOG 2>&1
+
+# Detalle global: una vez por ASIGNATURA, desde cualquier plan que ya la liste.
+# Las filas de section (profesor, horario, aula, cupos) valen para todos los
+# planes, así que esto cubre la universidad en ~3 h. Si no cabe en la ventana,
+# el checkpoint hace que mañana siga donde quedó.
+ 0  1  *  *  *   root  cd $PROJECT_DIR && docker compose --profile jobs run --rm refresher --mode=detail --scope=global --workers=2 --max-duration=4h >> $LOG 2>&1
+
+# Cupos: calentador del hot set, SOLO en temporada de inscripciones. Fuera de
+# ella los cupos no se mueven (0 cambios en 347 grupos en 35 min) y correrlo
+# todo el año es gastar el ancho de banda de la UNAL para reescribir el mismo
+# número. Prendida desde 2026-08-19 (inscripciones abiertas antes del
+# 27/08 previsto) — volver a comentarla al cerrar inscripciones.
+*/15 6-22 * * *  root  cd $PROJECT_DIR && docker compose --profile jobs run --rm refresher --mode=seats --scope=hot --workers=1 --max-duration=10m >> $LOG 2>&1
+
+# Detalle por plan: la visibilidad de cada plan, ~38 h en serie, ~10 h con 4
+# workers. NO va en cron: es un disparo manual en ventana de mantenimiento,
+# antes de que abran inscripciones y con la API avisada.
+#
+#   docker compose --profile jobs run --rm refresher --mode=detail --scope=plan --workers=4 --max-duration=10h

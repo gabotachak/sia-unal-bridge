@@ -13,6 +13,10 @@ services:
     # (SSD del sistema). Sin default a propósito — la ruta es de cada máquina.
     volumes:
       - ${PGDATA_DIR:?falta PGDATA_DIR en .env}:/var/lib/postgresql
+      # Crea sia_bridge_test en el PRIMER arranque. Los tests de integración
+      # escriben de verdad, y compartir base con producción significó 28 planes
+      # falsos dentro de ella (ver el propio script).
+      - ./deploy/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sia}"]
       interval: 5s
@@ -36,9 +40,54 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SIA_TERM: ${SIA_TERM:-2026-2}
       FETCH_COOLDOWN: ${FETCH_COOLDOWN:-300}
+      # Para que los logs cuadren con el reloj del host y con el cron. Necesita
+      # tzdata en la imagen (ver Dockerfile), o Go se queda en UTC en silencio.
+      TZ: ${TZ:-America/Bogota}
     # PORT es fijo dentro del contenedor; API_PORT sólo mueve el puerto del host.
     ports: ["${API_PORT:-18080}:8080"]
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # El Job de fase 2. Misma imagen que `api`, otro entrypoint, y `restart: no`
+  # porque termina a propósito: una corrida, un modo, y sale.
+  #
+  # Está bajo el perfil `jobs`, así que `docker compose up -d` NO lo arranca.
+  # Sin eso, levantar el stack dispararía un barrido, y `restart: unless-stopped`
+  # lo repetiría en bucle. Se invoca desde cron (ver deploy/cron.d/sia-refresher):
+  #
+  #   docker compose run --rm refresher --mode=catalog --workers=2
+  refresher:
+    build:
+      context: .
+      args:
+        GIT_TAG: ${GIT_TAG:-dev}
+        GIT_SHA: ${GIT_SHA:-unknown}
+    profiles: ["jobs"]
+    entrypoint: ["refresher"]
+    # Sin --mode no hace nada y sale con 2: la corrida siempre elige uno.
+    command: ["--mode=reference"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-sia}:${POSTGRES_PASSWORD:-sia}@db:5432/${POSTGRES_DB:-sia_bridge}?sslmode=disable
+      SIA_BASE_URL: ${SIA_BASE_URL:-https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf}
+      # El pool de la API, sólo para que el job pueda avisar si la suma pasa
+      # de 8 conexiones — el techo medido. No lo comparte.
+      SIA_POOL_SIZE: ${SIA_POOL_SIZE:-4}
+      SIA_TERM: ${SIA_TERM:-2026-2}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      REFRESH_ENABLED: ${REFRESH_ENABLED:-true}
+      REFRESH_WORKERS: ${REFRESH_WORKERS:-2}
+      REFRESH_POOL_SIZE: ${REFRESH_POOL_SIZE:-2}
+      REFRESH_MAX_DURATION: ${REFRESH_MAX_DURATION:-4h}
+      REFRESH_RATE_POSTS_PER_SEC: ${REFRESH_RATE_POSTS_PER_SEC:-6}
+      REFRESH_CATALOG_MAX_AGE: ${REFRESH_CATALOG_MAX_AGE:-168h}
+      REFRESH_DETAIL_MAX_AGE: ${REFRESH_DETAIL_MAX_AGE:-24h}
+      REFRESH_HOT_SET_SIZE: ${REFRESH_HOT_SET_SIZE:-250}
+      # cron no hereda la TZ del host y una hora corrida mete el barrido
+      # pesado en horario pico. Necesita tzdata en la imagen (ver Dockerfile).
+      TZ: ${TZ:-America/Bogota}
     depends_on:
       db:
         condition: service_healthy

@@ -47,9 +47,21 @@ type ClassSession struct {
 	Building  string       `db:"building"   json:"building,omitempty"`
 }
 
+// SeatSnapshot is a seat count with the two timestamps that answer two
+// different questions (docs/FASE-2.md "Cupos"):
+//
+//	MeasuredAt — cuándo se MIRÓ (section.seats_checked_at). Frescura,
+//	             age_seconds, Cache-Control. Se actualiza en cada medición.
+//	ChangedAt  — cuándo CAMBIÓ (max(seat_snapshot.measured_at)). Historial.
+//	             Solo se mueve cuando el número es distinto al anterior.
+//
+// Separarlos es lo que permite deduplicar seat_snapshot sin que el dato
+// PAREZCA viejo y dispare el read-through que el job existe para evitar:
+// medido, 0 cambios en 347 grupos a lo largo de 35 min.
 type SeatSnapshot struct {
-	Available  int       `db:"available_seats" json:"available"`
-	MeasuredAt time.Time `db:"measured_at"     json:"measured_at"`
+	Available  int        `db:"available_seats"  json:"available"`
+	MeasuredAt time.Time  `db:"seats_checked_at" json:"measured_at"`
+	ChangedAt  *time.Time `db:"measured_at"      json:"changed_at,omitempty"`
 }
 
 func (s SeatSnapshot) AgeSeconds() int { return int(time.Since(s.MeasuredAt).Seconds()) }

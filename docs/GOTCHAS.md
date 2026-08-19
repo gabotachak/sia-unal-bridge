@@ -1,10 +1,14 @@
 # Trampas verificadas
 
-Cada punto fue comprobado contra el servidor de producción el **2026-08-15**.
+Cada punto fue comprobado contra el servidor de producción el **2026-08-15**, y las seis
+últimas (§34–§39) el **2026-08-17/18**, implementando la fase 2.
 Varios contradicen lo que asumía el proyecto anterior (`BetterCampus/sia-scraper`).
 
 Léelo antes de escribir código.
 
+> §34-§39 las destapó el `Refresher` al recorrer sedes y niveles que la API nunca había
+> tocado. Las seis eran bugs de la API tambien, no del Job.
+>
 > §20-§28 salen de la segunda ronda de experimentos (2026-08-15, tarde). Las dos caras
 > de descubrir por tu cuenta son la §20 —se disfraza de sesión colgada— y la §27, que
 > no se nota nunca: simplemente faltan grupos.
@@ -701,6 +705,11 @@ veces.
 > conexión, reenvía `soc1=0, soc9=2` sin saberlo → mismo no-op del §30. Ver detalle
 > completo en §31.
 
+> **Excepción, 2026-08-18:** `soc6` no la sufre. El `soc10` que va justo antes lo
+> re-renderiza y le borra la selección en el servidor, así que reenviarle el mismo valor
+> vuelve a ser un cambio real. Rebotar ahí no solo sobra: es imposible en las sedes de
+> una sola facultad. Medido en §37.
+
 ---
 
 ## 31. El §30 es un problema del *pool*, no solo de un bucle mal escrito
@@ -822,3 +831,218 @@ fresco (§4), así que el fallo aparece al pedir cupos y parece un problema de c
 `sia/cascade.go`: `FetchCatalog`. Verificado con
 `TestLive_CatalogAfterElectivesOnSameConn`, que hace electivas y luego catálogo sobre la
 misma conexión y el mismo plan: 98 filas donde antes había un no-op.
+
+---
+
+## 34. `it11` viaja en el estado del formulario: si no lo limpias, recorta el siguiente listado
+
+Descubierta implementando la fase 2 (2026-08-17). El filtro por nombre es lo que hace
+barato el barrido de detalle: el `cb1` sin filtrar son **232 KB** y con filtro **17.8 KB**
+sobre el mismo plan — **13× menos** (medido, Ingeniería de Sistemas, Bogotá).
+
+La trampa no es el servidor, es el formulario. `it11` va en **cada POST** junto con los
+nueve `soc*` ([PROTOCOL §2](PROTOCOL.md)), así que una conexión que filtró y vuelve al
+pool con `form.Nombre` puesto convierte el **siguiente catálogo completo** en un listado
+recortado: ~3 filas plausibles donde debían ir 98. Nadie ve un error; se guarda un
+catálogo mutilado y se marca fresco.
+
+Es la familia del §33 con la causa invertida:
+
+| | §33 (`soc4`) | §34 (`it11`) |
+|---|---|---|
+| Dónde vive el estado | en el **servidor** | en el **formulario** |
+| Por qué falla | escribir `form` no cambia el servidor | escribir `form` **sí** llega, y se queda |
+| Cómo se limpia | posteando el `valueChange` real | poniendo el campo en `""` |
+
+**Cómo se resuelve:** limpiarlo es parte de la operación lógica, no de la buena educación
+del llamador. `findRow` pone `form.Nombre`, hace su búsqueda y lo borra en la misma
+función, tanto en el listado regular como en el de electivas — que es el más caro de los
+dos (~240–320 KB) y el único donde viven las de libre elección.
+
+Y el filtro puede devolver **varias filas**: la fila se elige por **código**, jamás por
+posición. Si el código no aparece (acentos, nombres raros), se repite la búsqueda sin
+filtro; el filtro es una optimización, no la fuente de verdad.
+
+`sia/source.go`: `findRow`, `findRowInListings`. Verificado con
+`TestLive_NameFilterShrinksTheListingAndDoesNotStick`: filtra, comprueba que la fila está,
+y exige que el listado inmediatamente posterior vuelva a traer las 98 filas.
+
+---
+
+## 35. El comodín "toda la sede" de `soc6` NO EXISTE en doctorado
+
+Medido 2026-08-17, en las tres sedes con doctorado que se probaron:
+
+| Sede | Nivel | Opciones `soc6` | Comodín `SEDE …` |
+|---|---|---|---|
+| Bogotá | pregrado | 13 | sí, índice 12 |
+| Bogotá | posgrado | 13 | sí, índice 12 |
+| Bogotá | **doctorado** | **11** | **no** |
+| Medellín | **doctorado** | **6** | **no** |
+| Palmira | pregrado | 4 | sí, índice 3 |
+| Palmira | **doctorado** | **2** | **no** |
+
+El §32 dice que la posición del comodín es por sede. Es más que eso: su **existencia** es
+por *(sede, nivel)*. En doctorado `soc6` lista solo facultades.
+
+Tratar su ausencia como error —que es lo que hacía el código— dejaba el catálogo de
+**~82 planes de doctorado** inservible: `502` por la API y programas fallidos en el
+barrido. El síntoma es un error explícito y honesto (`no "SEDE " wildcard among 2 soc6
+options`), así que no es de los silenciosos; pero se descubrió porque el Job lo destapó
+en Palmira, no por la API. La fase 2 predijo exactamente eso: *"cualquier bug de
+persistencia que el job destape es un bug que la API también tenía"*.
+
+**Cómo se resuelve:** el comodín es una **optimización, no el mecanismo**. Cuando existe,
+una búsqueda cubre la sede; cuando no, el listado de la sede es la **unión de una búsqueda
+por facultad** (Palmira doctorado: 186 + 21 = 207 filas, 76 tras dedupe). Por eso
+`FetchElectives` devuelve `[][]byte` — un cuerpo por búsqueda — y no un cuerpo solo.
+
+Con la unión aparece un caso nuevo: una facultad **sin** libre elección. Un no-op ahí es
+ambiguo (§6/§7), así que se recuerda y solo se reporta si **todas** las búsquedas dan
+no-op; si alguna trajo filas, la sesión está viva y las vacías son vacías de verdad.
+
+`sia/cascade.go`: `electivesTargets`. Verificado con
+`TestLive_FetchElectives_LevelWithoutSedeWildcard`.
+
+---
+
+## 36. El nombre de la asignatura en el listado viene pegado a una insignia
+
+En la celda `c2` del listado, una asignatura sin programar mete un cartel **dentro del
+mismo `<td>`**:
+
+```html
+<td id="...:c2"><span class="af_column_data-container">
+  <span title="">Complemento a teoría de la computación </span>
+  <div></div>ASIGNATURA SIN PROGRAMAR
+</span></td>
+```
+
+Leer el texto de la celda entera los pega: `"Complemento a teoría de la
+computaciónASIGNATURA SIN PROGRAMAR"`. Eso llegaba a la columna `course.name` — dato
+plausible y equivocado, del tipo que este dominio produce sin avisar — y además rompía el
+filtro del §34, que busca por el nombre que tenemos guardado.
+
+**Cómo se resuelve:** el nombre está en el `<span title="">` más interno, no en la celda.
+`parse_list.go` lee `td[id$=":c2"] span[title]` y solo cae al texto completo de la celda
+si eso no existe.
+
+`sia/parse_list.go`: `ParseList`. Verificado con
+`TestParseList_NameExcludesTheUnscheduledBadge` sobre el fixture del 2026-08-15.
+
+---
+
+## 37. `soc10` borra la selección de `soc6`, así que el rebote del §30 sobra ahí
+
+El §30 dice que reenviar a un dropdown el valor que ya tiene produce un no-op
+indistinguible de una sesión muerta, y que por eso hay que **rebotar** por otro valor
+antes. Es cierto para `soc1`/`soc9`/`soc2`/`soc3`/`soc10`. Para `soc6` **no**, y esa
+excepción importa porque el rebote necesita una segunda opción por la que rebotar.
+
+Medido 2026-08-18, una sola conexión sobre Amazonia posgrado:
+
+| POST | Bytes | ¿no-op? |
+|---|---|---|
+| `soc10=1` | 6 515 | no |
+| `soc6=0` | 1 174 714 | no |
+| `soc6=0` otra vez | **1 036** | **sí** |
+| `soc10=2`, `soc10=1` (rebote de sede) | 7 875 / 21 721 | no |
+| `soc6=0` **después del re-render** | **21 042** | **no** |
+
+Repetir `soc6` sin más sí es no-op. Pero `FetchElectives` **siempre** postea `soc10`
+antes, y ese POST **vuelve a pintar el dropdown de `soc6` y le borra la selección en el
+servidor**. Después de eso, el mismo valor de siempre vuelve a ser un cambio real.
+
+Por qué importa: el código rastreaba `soc6` en `navFacElect` y rebotaba por otra opción
+cuando coincidía. Las sedes chicas listan **una sola opción** —`6000 SEDE AMAZONIA`,
+`8000 SEDE CARIBE`— así que no había por dónde rebotar, y el guardia `len(opts) < 2`
+devolvía `soc6 has 1 options, need at least 2`. Resultado: **14 planes de Amazonia y
+Caribe sin catálogo**, otra vez destapado por el barrido de la fase 2, no por la API.
+
+**Cómo se resuelve:** `soc6` no se rastrea. Se postea siempre, tal cual, y un no-op ahí
+vuelve a ser lo que dice el §7 —un error de verdad—. `electivesTargets` acepta una sola
+opción; lo que sigue siendo error es **cero** opciones, porque toda sede lista al menos
+su propia entrada de sede y un dropdown vacío significa que el `soc10` anterior no cuajó.
+
+Ojo con la tentación de contarlo al revés: la opción única de Amazonia **es** el comodín
+`SEDE …` del §32, así que ese caso cae en la rama del comodín y hace **una** búsqueda,
+no una por facultad.
+
+`sia/cascade.go`: `FetchElectives`, `electivesTargets`. Verificado con
+`TestElectivesTargets` y `TestLive_FetchElectives_SingleFacultySede` (dos planes de la
+misma sede sobre una misma conexión, que es el caso para el que existía el rebote).
+
+---
+
+## 38. Los `_afrRK` de la unión de electivas no sirven para hacer clic
+
+El §4 dice que un `_afrRK` solo vale para la respuesta de la que se leyó. El §35 añadió,
+sin querer, una forma nueva de romperlo: donde no hay comodín de sede, el listado de
+electivas es **una búsqueda por facultad**, y **cada cuerpo reinicia las claves en 0**.
+
+Medido en `1101/2572` (DOCTORADO EN CIENCIAS AGROPECUARIAS), Bogotá doctorado:
+
+```
+body 0: 11 063 B    body 4: 73 073 B     rows unidas = 441
+body 1: 64 340 B    body 5: 103 563 B    row 0 -> rk="0"
+body 2: 392 807 B   ...                  row 1 -> rk="1"
+body 3: 11 063 B    body 10: 11 085 B    row 2 -> rk="2"
+```
+
+`findRowInListings` unía los 11 cuerpos y buscaba el código ahí. La fila aparecía, pero su
+clave pertenecía a la tabla de **otra** búsqueda: la única viva en el servidor es la de la
+**última**. El clic caía en la fila que ocupara esa posición en la tabla equivocada, o en
+ninguna, y la respuesta era `no detail region id in ~11960 byte response`.
+
+**Lo que costó:** la corrida de `detail --scope=global` del 2026-08-18 (la primera que
+lanzó el cron sola) hizo **68 861 POSTs para 1442 asignaturas — 47 POSTs por asignatura**
+contra las ~3.7 medidas, con **1795 fallos** y 1340 planes sin visitar en 4 h. Cada
+asignatura pagaba las 11 búsquedas y luego fallaba el clic. Los planes afectados son
+exactamente los que no tienen listado regular: los doctorados, donde **todas** sus
+asignaturas salen por la vía de electivas.
+
+Ojo con el disfraz: el `circuit_breaker` **no** saltó, porque cuenta *unidades*
+(programas) y un programa se da por bueno con que una sola asignatura pase. 38 programas
+"OK" escondían 1795 asignaturas fallidas. `programs_ok` no es una medida de salud.
+
+**Cómo se resuelve:** `eachElectivesSearch` recorre las búsquedas una por una y `FindElectiveRow`
+**se detiene en la que trae el código**, dejando esa tabla como el render vivo. La unión
+(`electiveRows`) sigue existiendo para el catálogo, que solo lee código, nombre y créditos
+y nunca hace clic.
+
+`sia/cascade.go`: `eachElectivesSearch`, `FindElectiveRow`. `sia/source.go`:
+`findRowInListings`. Verificado con `TestLive_DetailOfAnElectiveOnlyCourse`.
+
+---
+
+## 39. El SIA se cae solo: CDATA cortado y redirect a `errorNavegacion.jsf`
+
+Hay asignaturas cuyo detalle **rompe al servidor**. La respuesta llega truncada a media
+sección CDATA y con un redirect pegado al final:
+
+```
+...<span id="pt1:r1:1:pgl3" class="row detass-creditos ...">Cr&eacute;ditos:<?xml version='1.0' encoding='UTF-8'?>
+<partial-response id="j_id1"><redirect url="/Catalogo/facespublico/errorNavegacion.jsf?..."></redirect></partial-response>
+```
+
+Corta justo después de `Créditos:`. Medido 2026-08-18 en `2011302` y `2018602`, ambas de
+Bogotá; **reproducible en una conexión recién creada**, así que es de la asignatura, no de
+la sesión. Sin detectarlo, el síntoma era `XML syntax error: unexpected EOF in CDATA
+section` y —peor— la conexión quedaba marcada en una región de detalle que no existe, con
+lo que **las 40 asignaturas siguientes del mismo plan morían detrás**.
+
+Dos cosas importan al tratarlo:
+
+1. **La sesión queda muerta.** Todo POST posterior responde un re-render vacío. Hay que
+   volver a hacer bootstrap sí o sí.
+2. **Reintentar la asignatura no sirve.** Una sesión nueva entra a la misma página rota.
+   Por eso `errSIAErrorPage` **no** está en `isRecoverable`: `FetchDetails` re-bootstrapea
+   *sin* reintentar, y el resto del lote sobrevive.
+
+Y una trampa dentro de la trampa: **una sesión caducada devuelve ese mismo redirect**,
+pero en 412–877 B. Clasificar eso como "página rota" le quitaría el reintento que sí
+merece (§7), y una sola sesión vencida se llevaría el lote entero. Por eso la detección
+exige que el cuerpo **no** sea de tamaño no-op.
+
+`sia/conn.go`: `post`. `sia/noop.go`: `isSIAErrorPage`, `errSIAErrorPage`.
+`sia/source.go`: `FetchDetails`.

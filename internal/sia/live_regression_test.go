@@ -71,11 +71,11 @@ func TestLive_FetchElectives_TwiceOnSameConn(t *testing.T) {
 	sistemas := catalog.ProgramKey{Level: 0, Campus: 2, Faculty: 8, Program: 3}
 	industrial := catalog.ProgramKey{Level: 0, Campus: 2, Faculty: 8, Program: 8}
 
-	body1, err := c.FetchElectives(ctx, sistemas)
+	bodies1, err := c.FetchElectives(ctx, sistemas)
 	if err != nil {
 		t.Fatalf("first FetchElectives: %v", err)
 	}
-	rows1, err := ParseList(body1)
+	rows1, err := electiveRows(bodies1)
 	if err != nil {
 		t.Fatalf("ParseList 1: %v", err)
 	}
@@ -85,11 +85,11 @@ func TestLive_FetchElectives_TwiceOnSameConn(t *testing.T) {
 
 	// Second call, DIFFERENT program but SAME campus — soc10/soc6 target
 	// the exact same values as the first call.
-	body2, err := c.FetchElectives(ctx, industrial)
+	bodies2, err := c.FetchElectives(ctx, industrial)
 	if err != nil {
 		t.Fatalf("second FetchElectives on the same connection: %v", err)
 	}
-	rows2, err := ParseList(body2)
+	rows2, err := electiveRows(bodies2)
 	if err != nil {
 		t.Fatalf("ParseList 2: %v", err)
 	}
@@ -174,11 +174,11 @@ func TestLive_ElectivesWildcardIsPerCampus(t *testing.T) {
 			if _, err := c.Bootstrap(ctx); err != nil {
 				t.Fatalf("Bootstrap: %v", err)
 			}
-			body, err := c.FetchElectives(ctx, tc.key)
+			bodies, err := c.FetchElectives(ctx, tc.key)
 			if err != nil {
 				t.Fatalf("FetchElectives: %v", err)
 			}
-			rows, err := ParseList(body)
+			rows, err := electiveRows(bodies)
 			if err != nil {
 				t.Fatalf("ParseList: %v", err)
 			}
@@ -233,4 +233,154 @@ func TestLive_CatalogAfterElectivesOnSameConn(t *testing.T) {
 		t.Fatal("got 0 rows: the connection was still in the electives search")
 	}
 	t.Logf("%d rows in the regular listing after an electives fetch", len(rows))
+}
+
+// TestLive_FetchElectives_LevelWithoutSedeWildcard is the regression for the
+// bug the fase 2 sweep uncovered: at doctorado level soc6 lists only
+// faculties, with no "SEDE …" option, in every sede measured (Bogotá,
+// Medellín, Palmira — 2026-08-17). Treating that as an error made the catalog
+// of ~82 doctorado plans unfetchable, through the API as much as through the
+// job.
+//
+// The listing is then the UNION of one search per faculty: 186 + 21 = 207 rows
+// for Palmira's doctorado when this was written. Skipped unless SIA_LIVE=1.
+func TestLive_FetchElectives_LevelWithoutSedeWildcard(t *testing.T) {
+	if os.Getenv("SIA_LIVE") != "1" {
+		t.Skip("set SIA_LIVE=1 to run against the real SIA server")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	c, err := NewConn("https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Bootstrap(ctx); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+
+	// Palmira, doctorado: two faculties, no wildcard.
+	palmiraDoctorado := catalog.ProgramKey{Level: 1, Campus: 8, Faculty: 0, Program: 0, CampusCode: "1104"}
+	bodies, err := c.FetchElectives(ctx, palmiraDoctorado)
+	if err != nil {
+		t.Fatalf("FetchElectives without a sede wildcard: %v", err)
+	}
+	if len(bodies) < 2 {
+		t.Fatalf("got %d listing bodies, want one per faculty", len(bodies))
+	}
+	rows, err := electiveRows(bodies)
+	if err != nil {
+		t.Fatalf("electiveRows: %v", err)
+	}
+	if len(rows) < 50 {
+		t.Fatalf("got %d elective rows across %d faculties, want the sede's libre elección", len(rows), len(bodies))
+	}
+	t.Logf("%d bodies, %d rows, %d after dedupe", len(bodies), len(rows), len(DedupeByCode(rows)))
+
+	// And the regular half still works on the same connection afterwards
+	// (soc4 is left on 7 on purpose — GOTCHAS §31).
+	regular, err := c.FetchCatalog(ctx, palmiraDoctorado)
+	if err != nil {
+		t.Fatalf("FetchCatalog after a faculty-by-faculty electives search: %v", err)
+	}
+	if _, err := ParseList(regular); err != nil {
+		t.Fatalf("ParseList regular: %v", err)
+	}
+}
+
+// TestLive_FetchElectives_SingleFacultySede is the regression for the second
+// bug the fase 2 sweep uncovered: the small sedes list a single soc6 option
+// (their own "6000 SEDE AMAZONIA"), and the old code demanded two — one to
+// post and one to bounce through. That left 14 plans of Amazonia and Caribe
+// with no catalog at all.
+//
+// It runs the SAME sede twice on ONE connection, which is the case the bounce
+// existed for: reposting soc6 unchanged used to no-op. It does not, because
+// the soc10 in between re-renders the dropdown and clears its selection
+// server-side (measured 2026-08-18, GOTCHAS §37). Skipped unless SIA_LIVE=1.
+func TestLive_FetchElectives_SingleFacultySede(t *testing.T) {
+	if os.Getenv("SIA_LIVE") != "1" {
+		t.Skip("set SIA_LIVE=1 to run against the real SIA server")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	c, err := NewConn("https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Bootstrap(ctx); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+
+	// Amazonia, posgrado: soc6 has exactly one option. Two DIFFERENT plans of
+	// the same sede, so the second call repeats every electives value.
+	for _, key := range []catalog.ProgramKey{
+		{Level: 2, Campus: 1, Faculty: 0, Program: 1, CampusCode: "1125"},
+		{Level: 2, Campus: 1, Faculty: 0, Program: 4, CampusCode: "1125"},
+	} {
+		bodies, err := c.FetchElectives(ctx, key)
+		if err != nil {
+			t.Fatalf("FetchElectives %s: %v", key, err)
+		}
+		rows, err := electiveRows(bodies)
+		if err != nil {
+			t.Fatalf("electiveRows %s: %v", key, err)
+		}
+		if len(rows) == 0 {
+			t.Fatalf("%s: got no elective rows", key)
+		}
+		t.Logf("%s: %d bodies, %d rows", key, len(bodies), len(rows))
+	}
+}
+
+// TestLive_DetailOfAnElectiveOnlyCourse is the regression for the bug the
+// nightly `detail` cron uncovered: a course reachable ONLY through the
+// electives listing, in a sede+nivel with no soc6 wildcard, was unfetchable.
+//
+// The electives listing is one search per faculty there, and every body
+// restarts _afrRK at 0. findRowInListings used to union the bodies and pick a
+// row out of the union, so the key it clicked belonged to a table the server
+// had already replaced: "no detail region id in ~11960 byte response", 1795
+// times in one run of four hours. GOTCHAS §38.
+//
+// DOCTORADO EN CIENCIAS AGROPECUARIAS has an EMPTY regular listing, so every
+// one of its courses takes the electives path. Skipped unless SIA_LIVE=1.
+func TestLive_DetailOfAnElectiveOnlyCourse(t *testing.T) {
+	if os.Getenv("SIA_LIVE") != "1" {
+		t.Skip("set SIA_LIVE=1 to run against the real SIA server")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	c, err := NewConn("https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Bootstrap(ctx); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+
+	key := catalog.ProgramKey{Level: 1, Campus: 2, Faculty: 0, Program: 2, CampusCode: "1101"}
+	if body, err := c.FetchCatalog(ctx, key); err != nil {
+		t.Fatalf("FetchCatalog: %v", err)
+	} else if rows, err := ParseList(body); err != nil || len(rows) != 0 {
+		// Not a failure of the fix, but the premise no longer holds and the
+		// test would be proving nothing.
+		t.Skipf("the regular listing is no longer empty (%d rows, err=%v): pick another plan", len(rows), err)
+	}
+
+	const code = "2011183" // Intercambio academico internacional
+	off, err := fetchDetail(ctx, c, key, catalog.CourseRef{
+		Code: code, Name: "Intercambio academico internacional",
+	}, "2026-2")
+	if err != nil {
+		t.Fatalf("detail of an elective-only course: %v", err)
+	}
+	if off.Course.Code != code {
+		t.Fatalf("got the detail of %s, asked for %s", off.Course.Code, code)
+	}
+	if len(off.Course.Sections) == 0 {
+		t.Fatalf("%s came back with no groups", code)
+	}
 }

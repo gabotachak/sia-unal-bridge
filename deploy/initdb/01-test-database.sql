@@ -1,0 +1,14 @@
+-- Se ejecuta UNA vez, en el primer arranque del contenedor `db`
+-- (/docker-entrypoint-initdb.d). Para una base ya inicializada no corre: ahí hay
+-- que crearla a mano —
+--
+--   psql -h localhost -p 15432 -U sia -d postgres -c 'CREATE DATABASE sia_bridge_test OWNER sia;'
+--
+-- Existe porque en el server TEST_DATABASE_URL apuntaba a la MISMA base que
+-- DATABASE_URL, así que `go test ./...` escribía en producción: 28 planes de
+-- sedes falsas (999x), 21 asignaturas y filas de refresh_run con modos de
+-- prueba. `/v1/status` reportaba 1408 planes conocidos donde el censo real son
+-- 1380. Los tests de store/ y cmd/refresher/ escriben de verdad — es su
+-- tradeoff elegido frente a testcontainers (docs/LAYOUT.md) — y por eso
+-- necesitan una base propia, no una convención de nombres.
+CREATE DATABASE sia_bridge_test OWNER sia;

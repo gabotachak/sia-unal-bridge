@@ -127,6 +127,10 @@ CREATE TABLE section (                     -- UNAL "grupo"
     start_date  date,
     end_date    date,
     fetched_at  timestamptz NOT NULL DEFAULT now(),
+
+    -- Cuándo se MIRARON los cupos por última vez (migración 00002). Distinto de
+    -- max(seat_snapshot.measured_at), que es cuándo CAMBIARON. Ver decisión 4.
+    seats_checked_at timestamptz,
     raw         jsonb,
     UNIQUE (campus_code, code, term, key),
     FOREIGN KEY (campus_code, code)
@@ -162,6 +166,43 @@ CREATE INDEX ON seat_snapshot (section_id, measured_at DESC);
 CREATE VIEW current_seats AS
 SELECT DISTINCT ON (section_id) section_id, available_seats, measured_at
 FROM seat_snapshot ORDER BY section_id, measured_at DESC;
+
+-- ─── fase 2: demanda y observabilidad de corridas ────────────────
+-- course_demand cuenta lo que piden los CLIENTES. Solo httpapi escribe acá: el
+-- hot set del barrido de cupos sale de la demanda real, y el proxy fácil ("las
+-- que tienen detail_fetched_at") deja de servir en cuanto el barrido global
+-- marque todas. Sin FK a propósito: se cuenta la intención, aunque la
+-- asignatura todavía no exista en cache.
+CREATE TABLE course_demand (
+    campus_code       text NOT NULL,
+    code              text NOT NULL,
+    hits              bigint NOT NULL DEFAULT 0,
+    last_requested_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (campus_code, code)
+);
+
+CREATE INDEX ON course_demand (campus_code, hits DESC, last_requested_at DESC);
+
+-- refresh_run es la ÚNICA tabla nueva de la fase 2 que no es de correctitud:
+-- el checkpoint del Job son los marcadores de frescura, no un cursor. Esto
+-- existe para que un fallo a las 3 de la mañana en el programa 412 de 1380 sea
+-- encontrable, y para que /v1/status pueda decir qué hizo el último barrido.
+CREATE TABLE refresh_run (
+    id               bigserial PRIMARY KEY,
+    mode             text NOT NULL,            -- reference · catalog · detail · seats
+    scope            text NOT NULL DEFAULT '', -- global · plan · hot
+    started_at       timestamptz NOT NULL DEFAULT now(),
+    finished_at      timestamptz,
+    programs_ok      int NOT NULL DEFAULT 0,
+    programs_failed  int NOT NULL DEFAULT 0,
+    programs_skipped int NOT NULL DEFAULT 0,   -- ya estaban frescos
+    courses_ok       int NOT NULL DEFAULT 0,
+    posts            bigint NOT NULL DEFAULT 0,
+    bytes            bigint NOT NULL DEFAULT 0,
+    ended_reason     text                      -- done · deadline · signal · circuit_breaker · error
+);
+
+CREATE INDEX ON refresh_run (mode, started_at DESC);
 ```
 
 ---
@@ -323,11 +364,29 @@ subconjunto que tiene habilitado. Ver [GOTCHAS.md §16](GOTCHAS.md).
 Las filas repetidas tienen las 5 columnas idénticas y su detalle es byte-idéntico.
 Son emparejamientos (asignatura × plan), no grupos. Ver [GOTCHAS.md §13](GOTCHAS.md).
 
-### 4. `seat_snapshot` es append-only
+### 4. `seat_snapshot` es append-only, y solo crece cuando el número CAMBIA
 
 No un `UPDATE` sobre la fila del grupo. Te da gratis el historial para alertas
 (*"avísame cuando se libere un cupo"*) y para graficar cómo se llenó un grupo.
 La vista `current_seats` sirve el último valor.
+
+Con el `Refresher` midiendo en bucle eso se vuelve un problema de volumen: medido, **0
+cambios en 347 grupos a lo largo de 35 min**, así que un barrido cada 15 min sobre 3000
+grupos escribiría ~288 000 filas al día para almacenar una recta. Pero tampoco sirve
+"insertar solo si cambió" a secas: `measured_at` es lo que la API usa para decidir
+frescura, así que no insertar haría que el dato **pareciera viejo** y el read-through lo
+volviera a pedir — el Job causando justo los POSTs que existe para evitar.
+
+La migración `00002` separa las dos preguntas:
+
+| Concepto | Columna | Quién la usa |
+|---|---|---|
+| Cuándo se **miró** | `section.seats_checked_at` — se actualiza en CADA medición | frescura, `age_seconds`, `Cache-Control` |
+| Cuándo **cambió** | `max(seat_snapshot.measured_at)` — solo al cambiar | historial, gráficas, alertas, `changed_at` |
+
+En el body de la API son dos campos y el segundo es información nueva
+([API.md](API.md)). Verificado en vivo: dos barridos seguidos del hot set dejaron
+`seat_snapshot` en 252 filas y refrescaron `seats_checked_at` en las 244 secciones.
 
 ### 5. Dos caches con granularidad distinta
 
@@ -341,7 +400,7 @@ El detalle es irreductiblemente unitario: no hay forma de traer los grupos de va
 asignaturas en una petición.
 
 `program.catalog_fetched_at` gobierna el primero; `section.fetched_at` y
-`seat_snapshot.measured_at` el segundo.
+`section.seats_checked_at` el segundo.
 
 ### 6. Un hit de detalle es por `(code, program)`, no por `code`
 
@@ -350,7 +409,7 @@ validez distinta**:
 
 | Capa | Válida para | Gobernada por |
 |---|---|---|
-| filas de `section` — profesor, horario, aula, cupos | **todos** los programas | `section.fetched_at`, `seat_snapshot.measured_at` |
+| filas de `section` — profesor, horario, aula, cupos | **todos** los programas | `section.fetched_at`, `section.seats_checked_at` |
 | `section_program` — qué grupos ve este plan | **solo** los programas ya consultados | `course_program.detail_fetched_at` |
 
 Concreto: se bajó `1000004-B` desde Sistemas (25 grupos). Llega una consulta de

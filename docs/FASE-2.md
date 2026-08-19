@@ -9,6 +9,11 @@ Mismo formato que [`PLAN.md`](PLAN.md): pasos con criterio de aceptación. La
 justificación de cada número vive en el documento que lo midió; aquí solo está el
 enlace.
 
+> **Estado: implementada y verificada contra producción el 2026-08-17.**
+> `internal/refresher` + `cmd/refresher`, migración `00002`, los cuatro modos, `/v1/status`
+> y el crontab de `deploy/cron.d/sia-refresher`. Lo medido y las desviaciones respecto a
+> este plan están al final, en [Resultado](#resultado-2026-08-17).
+
 | Documento | Para qué lo abres |
 |---|---|
 | [`GOTCHAS.md`](GOTCHAS.md) | **§28, §30, §31, §33 son las que rompen un crawler** |
@@ -58,7 +63,8 @@ Lo que ya existe y no hay que volver a construir:
 - `sia.Source` con las dos cascadas, el comodín por sede (§32) y el arreglo de §33.
 - `store` con upserts idempotentes de catálogo, detalle, visibilidad y cupos.
 - Los marcadores de frescura: `program.catalog_fetched_at`,
-  `course_program.detail_fetched_at`, `section.fetched_at`, `seat_snapshot.measured_at`.
+  `course_program.detail_fetched_at`, `section.fetched_at`, `seat_snapshot.measured_at`
+  (el de cupos pasó a ser `section.seats_checked_at` en el paso 6 — ver *Cupos*).
 
 Lo que **no** existe y esta fase agrega: enumeración masiva, control de concurrencia
 propio, presupuesto de cortesía, cadencia y observabilidad de corridas.
@@ -526,9 +532,119 @@ Al cerrar esta fase hay que tocar, y conviene hacerlo en el mismo PR que el cód
 
 ---
 
+---
+
+## Resultado (2026-08-17/18)
+
+Medido contra producción, no estimado.
+
+| Barrido | Medido | El plan decía |
+|---|---|---|
+| `reference` (todos los niveles × sedes) | 27 directorios, 1380 entradas, **131 POSTs, 72 s** | 142 POSTs, 78 s |
+| `reference`, segunda corrida | **0 POSTs, <1 s** — todo fresco | criterio del paso 1 ✔ |
+| `catalog` (SEDE DE LA PAZ, 9 planes) | 468 asignaturas, 114 POSTs, **39 s** con 2 workers | ~13 POSTs/plan ✔ |
+| `catalog` (Palmira, 27 planes) | 16 recorridos + **11 saltados** tras un `SIGINT`: cero repeticiones | criterio del paso 2 ✔ |
+| `it11` en el listado | 232 675 B → **17 862 B (13×)**, misma fila encontrada por código | 241 KB → 15–27 KB ✔ |
+| `detail --scope=global` | **~0.7 asignaturas/s/worker**, ~3.7 POSTs y **~87 KB** por asignatura | ~1/s, ~2 POSTs, ~68 KB |
+| `FetchDetails` por lote | 24 POSTs contra **28** de llamadas sueltas intercaladas (6 asignaturas, 2 planes) | "menos POSTs" ✔ |
+| `seats --scope=hot` | 5 asignaturas en 24 s; segundo barrido: **0 filas nuevas** en `seat_snapshot`, `seats_checked_at` refrescado en las 244 secciones | criterio del paso 6 ✔ |
+| Bogotá, `detail` a mitad | **201 de 505 planes saltados** porque otro plan ya había traído sus asignaturas | la aritmética de las 3 h ✔ |
+| `catalog` en toda la UNAL (2026-08-17, 1 h 46 min) | 1306 planes OK, 23 fallidos, 60 saltados, 224 750 asignaturas, 16 246 POSTs, 3.4 GB | ~2 760 POSTs, ~2.7 h, ~0.7 GB |
+| Los 23 fallidos, ya arreglados (§37) | **18 planes reales** de Amazonia, Caribe, Orinoquía y 2 sueltos; los otros 5 eran los tests escribiendo en la base de producción | — |
+| `catalog` sobre esas 5 sedes tras el arreglo (2026-08-18) | 18 planes OK, **0 fallidos**, 206 POSTs, 21 MB | cobertura **1380/1380** |
+| `detail --scope=global` lanzado por cron (2026-08-18, 01:00) | 1442 asignaturas, **1795 fallos**, 68 861 POSTs = **47 POSTs/asignatura** | ~3.7 POSTs/asignatura |
+| Los 1795 fallos | un solo bug: los `_afrRK` de la unión de electivas (§38), que golpea a **todo doctorado** porque su listado regular está vacío | — |
+| `detail --scope=plan` en Bogotá tras el arreglo | 76 asignaturas, **0 fallos**, 806 POSTs = 10.6 POSTs/asignatura sobre planes 100 % de electivas | 3.7 en planes con listado regular |
+
+`-race` limpio con W=4 sobre programas concurrentes. `REFRESH_ENABLED=false` sale con
+código 0 y un log **sin abrir una conexión al SIA**. Dos corridas del mismo modo: la
+segunda sale con código 0 por el `pg_try_advisory_lock`.
+
+### Lo que el Job destapó (y era de la API también)
+
+Cuatro trampas nuevas, las cuatro en rutas que la API podía recorrer y nunca había
+recorrido: [GOTCHAS §34](GOTCHAS.md) (`it11` se queda en el formulario y recorta el
+siguiente listado), [§35](GOTCHAS.md) (**en doctorado no existe el comodín de sede**, así
+que el catálogo de ~82 planes era `502`), [§36](GOTCHAS.md) (el nombre del listado venía
+pegado a la insignia `ASIGNATURA SIN PROGRAMAR`, y ese texto llegaba a `course.name`) y
+[§37](GOTCHAS.md) (el rebote del §30 sobre `soc6` es innecesario **e imposible** en las
+sedes de una sola facultad, así que 14 planes de Amazonia y Caribe no tenían catálogo).
+
+Y dos más que solo aparecieron cuando el cron corrió solo de madrugada:
+[§38](GOTCHAS.md) (el `_afrRK` sacado de la **unión** de las búsquedas de electivas
+pertenece a una tabla que el servidor ya reemplazó, así que el detalle de cualquier
+asignatura de doctorado era inalcanzable) y [§39](GOTCHAS.md) (hay asignaturas que
+**tumban al SIA**: CDATA cortado y redirect a `errorNavegacion.jsf`, y sin detectarlo la
+conexión se llevaba por delante las 40 asignaturas siguientes del plan).
+
+El §37 salió del barrido completo, no de una prueba: 23 planes fallidos en el log de
+`/var/log/sia-refresher.log`, agrupados por error, y 14 de ellos con el mismo
+`soc6 has 1 options, need at least 2`. Sin `refresh_run` y sin el log por unidad, ese
+número se habría visto como "1362 de 1380, casi todo".
+
+El §38 es peor de encontrar y vale la pena subrayar por qué: **el circuit breaker no
+saltó**. Cuenta unidades, y una unidad es un programa que se da por bueno con que **una**
+de sus asignaturas pase. 38 programas "OK" tapaban 1795 asignaturas fallidas. Lo que lo
+delató fue la aritmética de `posts` contra `courses_ok`: 47 POSTs por asignatura donde el
+plan decía 3.7. Si algún día hay que elegir una sola métrica para vigilar el Job, es esa
+razón, no `programs_failed`.
+
+Era la predicción explícita de este documento: *"cualquier bug de persistencia que el job
+destape es un bug que la API también tenía. Eso es una feature."*
+
+### Desviaciones deliberadas del plan
+
+| Plan | Implementado | Por qué |
+|---|---|---|
+| `CoursesNeedingDetail(...) ([]string, error)` | devuelve `[]CourseRef` con `Name` y `HadSections` | el nombre es lo que filtra `it11`, y sin él el paso 3 no aplica al barrido; `HadSections` es lo que hace honesta la aserción de 0 grupos |
+| `plan.go`, `worker.go`, `hotset.go` como archivos | fundidos en `refresher.go` y `modes.go` | tres archivos de ~40 líneas cada uno no se buscan mejor que dos de ~250 |
+| Aserción *"`_afrRK` idéntico entre dos búsquedas"* | **no implementada** | con `it11` una búsqueda filtrada devuelve 1–3 filas y el renumerado puede repetir la clave legítimamente: la aserción abortaría barridos válidos. La invariante real —nunca cachear un `_afrRK`— se sostiene en el código y en `TestLive_FetchDetails_TwoWorkersDoNotCrossTalk` |
+| Aserción *">90 % con 0 grupos = el parser"* | solo sobre las asignaturas que **ya tenían** grupos | SEDE DE LA PAZ responde 0 grupos en todas sus asignaturas, y es verdad. La primera versión falló dos de sus planes por decir la verdad |
+| — | **añadido**: el detalle verifica el código que la propia página imprime | es gratis (el regex del encabezado ya lo capturaba y lo tiraba) y es el único detector directo de §28/§4: un detalle bien formado que habla de otra asignatura |
+
+### Números que este plan estimaba de más
+
+- **POSTs por asignatura: ~3.7, no ~2.** El plan contaba el `cb1` de `findRow` más el
+  detalle; faltaban el `soc3` de reparqueo, el `Volver` y —para las de libre elección— la
+  cascada de electivas completa, que con las rebotes de §30 son 8 POSTs.
+- **Bytes por asignatura: ~87 KB, no ~68 KB**, por lo mismo. Aun así el filtro bajó el
+  barrido de ~366 KB a ~87 KB por asignatura (4.2×) al aplicarlo también al listado de
+  electivas, que es el más gordo de los dos.
+
+---
+
 ## Lo que **no** se hace en fase 2
 
 Alertas de cupo (el historial ya las soporta, pero son producto, no crawler) ·
 prerrequisitos y componentes (se siguen parseando sin guardar) · paginación del SIA (no
 existe, [§14](GOTCHAS.md)) · autenticación · descubrimiento de semestres pasados (el SIA
 solo expone el actual) · cualquier optimización que implique **cachear un `_afrRK`**.
+
+---
+
+## Pendiente de verificar (al 2026-08-18)
+
+Todo lo de arriba está medido. Esto **no**, y es lo que queda por mirar:
+
+| Cuándo | Qué | Cómo se ve que salió bien |
+|---|---|---|
+| **2026-08-19, ~05:05** | Primera corrida de `detail --scope=global` con los arreglos de §38/§39 dentro de la imagen (el rebuild se hizo el 18/08 por la noche) | `posts / courses_ok` cerca de **3.7**, no de 47; `errors_dropped` bajo o ausente |
+| **2026-08-23, ~05:00** | Primer `catalog` semanal que lanza el cron solo (domingo 02:00). Los anteriores fueron manuales | `reason=done`, no `circuit_breaker`; `programs_failed=0` |
+| **2026-08-27** | Descomentar la línea de `seats` en `deploy/cron.d/sia-refresher` y reinstalarla. La cadencia de 15 min es **provisional**: el número real lo fija el muestreo de ese día ([OPEN-QUESTIONS §2](OPEN-QUESTIONS.md)) | filas nuevas en `seat_snapshot` durante el día, no solo `seats_checked_at` |
+
+La métrica a vigilar es **`posts / courses_ok`**, no `programs_failed`: el §38 pasó
+inadvertido cuatro horas porque 38 programas "OK" tapaban 1795 asignaturas fallidas.
+
+```sql
+SELECT id, mode, scope, courses_ok, posts,
+       round(posts::numeric / nullif(courses_ok, 0), 1) AS posts_por_asignatura,
+       ended_reason
+FROM refresh_run ORDER BY id DESC LIMIT 5;
+```
+
+Dos cosas que ya se sabe que **no** son bugs y no hay que volver a investigar:
+
+- **3 planes con catálogo vacío de verdad**: `1102/3CLE`, `1103/4336`, `1103/4620`. No
+  ofertan nada este semestre; `catalog_fetched_at` está puesto y la lista es vacía.
+- **2 asignaturas que tumban al SIA**: `2011302` y `2018602` (Bogotá). Es el §39, es del
+  servidor, y falla igual en una conexión recién creada. Se reportan y se sigue.

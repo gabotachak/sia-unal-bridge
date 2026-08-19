@@ -8,7 +8,7 @@ justificación de cada decisión vive en los otros documentos; aquí solo está 
 
 | Documento | Para qué lo abres |
 |---|---|
-| [`GOTCHAS.md`](GOTCHAS.md) | **antes de escribir la primera línea.** 33 trampas |
+| [`GOTCHAS.md`](GOTCHAS.md) | **antes de escribir la primera línea.** 39 trampas |
 | [`PROTOCOL.md`](PROTOCOL.md) | cuerpos de petición reales |
 | [`FIELDS.md`](FIELDS.md) | ids de componente, opciones, formatos del detalle |
 | [`DATA-MODEL.md`](DATA-MODEL.md) | esquema y las nueve decisiones no obvias |
@@ -229,18 +229,29 @@ de `API.md`, con `X-Cache: miss` la primera vez y `hit` la segunda.
 
 ---
 
-## Fase 2 — `Refresher`
+## Fase 2 — `Refresher` · **implementada (2026-08-17)**
 
-> **Plan completo: [`FASE-2.md`](FASE-2.md)** — pasos, criterios de aceptación,
-> concurrencia y cadencia. Lo de abajo es el esbozo que lo originó.
+> **Plan completo y criterios de aceptación: [`FASE-2.md`](FASE-2.md)**.
 
-- `internal/refresher` + `cmd/refresher`, consumiendo los mismos puertos.
-- Dimensionado: **1380 entradas de programa**, 852 códigos. Una carrera con detalle son
-  201 POSTs / 99 s / 31 MB → el crawl completo es **30-40 h**.
-- `errgroup` acotado al tamaño del pool + rate limiter + checkpoint por programa
-  (resumible). El límite es la cortesía con la UNAL: 4 conexiones crawleando son
-  ~120 MB/min contra un servidor público.
-- Después: otras sedes (hay que calificar los IDs públicos antes), alertas de cupo.
+`internal/refresher` + `cmd/refresher`, consumiendo los mismos casos de uso que la API.
+Cuatro modos (`reference`, `catalog`, `detail --scope=global|plan`, `seats --scope=hot`),
+`errgroup` acotado al pool, limitador de cortesía, presupuesto de reloj y `refresh_run`
+para observabilidad. El checkpoint son los marcadores de frescura: reanudar es volver a
+correr.
+
+Medido el 2026-08-17 contra producción:
+
+| Barrido | Resultado |
+|---|---|
+| `reference` | 27 directorios, 1380 entradas, **131 POSTs / 72 s**; segunda corrida **0 POSTs** |
+| `catalog` (SEDE DE LA PAZ, 9 planes) | 468 asignaturas, 114 POSTs, 39 s con 2 workers |
+| `detail --scope=global` | ~0.7 asignaturas/s/worker, **~87 KB por asignatura** con el filtro `it11` |
+| `it11` en el listado | 232 KB → **17.8 KB** (13×) |
+| `seats --scope=hot` | 5 asignaturas en 24 s; segundo barrido: **0 filas nuevas** en `seat_snapshot` |
+
+Y destapó seis trampas que la API también tenía: [GOTCHAS §34–§39](GOTCHAS.md).
+
+Después: alertas de cupo (el historial ya las soporta), prerrequisitos y componentes.
 
 ---
 

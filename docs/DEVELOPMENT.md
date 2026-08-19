@@ -47,6 +47,22 @@ docker compose up -d db
 psql postgres://sia:sia@localhost:5432/sia_bridge
 ```
 
+### La base de test es OTRA base
+
+`TEST_DATABASE_URL` apunta a `sia_bridge_test`, no a `sia_bridge`. No es una
+formalidad: los tests de `internal/store` y `cmd/refresher` **escriben de verdad** —es el
+tradeoff elegido frente a testcontainers ([LAYOUT.md](LAYOUT.md))— y apuntar las dos a la
+misma base metió 28 planes de sedes inventadas (`999x`) dentro de producción, con
+`/v1/status` reportando 1408 planes donde el censo real son 1380.
+
+La crea `deploy/initdb/01-test-database.sql` en el primer arranque del contenedor `db`. Si
+la base ya existía, a mano:
+
+```bash
+psql -h localhost -p 15432 -U sia -d postgres -c 'CREATE DATABASE sia_bridge_test OWNER sia;'
+make migrate-test        # y de nuevo tras cada migración nueva
+```
+
 ---
 
 ## API en contenedor
@@ -67,8 +83,28 @@ después; el schema no cambia entre versiones todavía).
 `api` espera a que `db` esté `healthy` (`depends_on.condition: service_healthy`), no
 solo arrancado.
 
-El esquema está en [DATA-MODEL.md](DATA-MODEL.md). Cuando haya migraciones, van en
-`migrations/`.
+El esquema está en [DATA-MODEL.md](DATA-MODEL.md); las migraciones en `migrations/`
+(`00001_init.sql`, `00002_refresher.sql`).
+
+### El Job (`refresher`)
+
+Misma imagen, otro entrypoint, y bajo el perfil `jobs` para que `docker compose up` **no**
+lo dispare — si arrancara con el stack, `restart` lo repetiría en bucle:
+
+```bash
+docker compose --profile jobs run --rm refresher --mode=reference
+docker compose --profile jobs run --rm refresher --mode=catalog --workers=2 --max-duration=3h
+docker compose --profile jobs run --rm refresher --mode=detail --scope=global --workers=2
+docker compose --profile jobs run --rm refresher --mode=seats --scope=hot --workers=1
+
+# Fuera de compose, contra la base del host:
+DATABASE_URL=... go run ./cmd/refresher --mode=catalog --campus=1104 --max-duration=10m
+```
+
+`--campus` acota el barrido a una sede, que es la forma barata de probarlo: SEDE DE LA PAZ
+(9 planes) o Palmira (27) en vez de Bogotá (505). La cadencia de producción está en
+[`deploy/cron.d/sia-refresher`](../deploy/cron.d/sia-refresher) y `REFRESH_ENABLED=false`
+lo apaga todo. Ver [FASE-2.md](FASE-2.md).
 
 ---
 
@@ -136,11 +172,16 @@ Es un catálogo público de una universidad, sin `robots.txt`. Aun así:
 - **Un bootstrap por sesión**, jamás por request. Cuesta entre 0.15 s/52 KB y 7 s/4.5 MB,
   y no lo controlas ([GOTCHAS §25](GOTCHAS.md)).
 - Reutiliza la conexión: cambiar de carrera son 2 POSTs, no 6.
-- Usa `it11` cuando busques una asignatura concreta: 241 KB → 15 KB.
+- Usa `it11` cuando busques una asignatura concreta: medido 2026-08-17, 232 KB → 17.8 KB.
+  El `Refresher` lo hace en los dos listados, y **limpia el campo** al terminar: se queda
+  pegado en el formulario y recorta la siguiente búsqueda ([GOTCHAS §34](GOTCHAS.md)).
 - El crawl completo con detalle son **30-40 h** (una carrera de 98 asignaturas = 201
-  POSTs / 99 s / 31 MB). Hazlo resumible. El SIA aguantó 8 conexiones en paralelo sin
-  errores ni throttling, así que se puede paralelizar con moderación
-  ([OPEN-QUESTIONS.md](OPEN-QUESTIONS.md)).
+  POSTs / 99 s / 31 MB). Ya es resumible: el `Refresher` usa los marcadores de frescura
+  como checkpoint. El SIA aguantó 8 conexiones en paralelo sin errores ni throttling, así
+  que se puede paralelizar con moderación ([OPEN-QUESTIONS.md](OPEN-QUESTIONS.md)) —
+  respetando `conexiones(api) + conexiones(refresher) ≤ 8`.
+- `REFRESH_RATE_POSTS_PER_SEC` es el presupuesto de cortesía del Job, y la ventana
+  nocturna es para el barrido pesado, no para los cupos.
 
 Durante el desarrollo, trabaja contra fixtures y toca el servidor real solo para
 verificar.

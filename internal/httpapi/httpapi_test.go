@@ -31,6 +31,7 @@ type fakeStore struct {
 	reference map[string]time.Time
 	campuses  map[string][]catalog.Campus
 	levels    []catalog.Level
+	demand    map[string]int // campus/code → veces que un CLIENTE lo pidió
 }
 
 func newFakeStore() *fakeStore {
@@ -250,6 +251,35 @@ func (f *fakeStore) ProgramCoverage(context.Context, string) (int, int, error) {
 	return 0, 0, nil
 }
 
+// Fase 2's port additions. demand records what recordDemand counted, so a
+// test can assert the API feeds the hot set.
+func (f *fakeStore) CoursesNeedingDetail(context.Context, int64, time.Duration) ([]catalog.CourseRef, error) {
+	return nil, nil
+}
+func (f *fakeStore) CoursesNeedingVisibility(context.Context, int64, time.Duration) ([]catalog.CourseRef, error) {
+	return nil, nil
+}
+func (f *fakeStore) SeatsHotSet(context.Context, string, int) ([]catalog.CourseRef, error) {
+	return nil, nil
+}
+func (f *fakeStore) RecordDemand(_ context.Context, campusCode, code string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.demand == nil {
+		f.demand = map[string]int{}
+	}
+	f.demand[campusCode+"/"+code]++
+	return nil
+}
+func (f *fakeStore) StartRun(context.Context, string, string) (int64, error) { return 1, nil }
+func (f *fakeStore) FinishRun(context.Context, catalog.RefreshRun) error     { return nil }
+func (f *fakeStore) LastRuns(context.Context) ([]catalog.RefreshRun, error) {
+	return []catalog.RefreshRun{{ID: 1, Mode: "catalog", Scope: "", EndedReason: "done"}}, nil
+}
+func (f *fakeStore) TryLock(context.Context, string) (func(), bool, error) {
+	return func() {}, true, nil
+}
+
 type fakeSIA struct {
 	detailCalls int
 }
@@ -295,6 +325,17 @@ func (f *fakeSIA) FetchDetail(_ context.Context, _ catalog.ProgramKey, code, ter
 		},
 		Typology: "FUND. OBLIGATORIA (B)",
 	}, nil
+}
+
+func (f *fakeSIA) FetchDetails(ctx context.Context, key catalog.ProgramKey, refs []catalog.CourseRef, term string,
+	yield func(catalog.CourseOffering, error) error) error {
+	for _, ref := range refs {
+		o, err := f.FetchDetail(ctx, key, ref.Code, term)
+		if yerr := yield(o, err); yerr != nil {
+			return yerr
+		}
+	}
+	return nil
 }
 
 // TestCourseDetail_MissThenHit is paso 7's acceptance bar (docs/PLAN.md):

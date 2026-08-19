@@ -19,7 +19,7 @@ info:
     | referencia (niveles, sedes, facultades, planes) | 30 d | `reference_fetch.fetched_at` |
     | catálogo | 7 d | `program.catalog_fetched_at` |
     | detalle: grupos, horario, profesor | 24 h | `course_program.detail_fetched_at` |
-    | cupos | 5 min | `seat_snapshot.measured_at` |
+    | cupos | 5 min | `section.seats_checked_at` |
 
     Un miss puede tardar segundos: detrás hay entre 1 y 15 POSTs contra el SIA.
 
@@ -72,11 +72,11 @@ paths:
   /status:
     get:
       tags: [Operación]
-      summary: Cobertura de la cache, global a todas las sedes
+      summary: Cobertura de la cache y última corrida del Refresher
       operationId: status
       responses:
         "200":
-          description: Cuántos planes tienen catálogo completo
+          description: Cuántos planes tienen catálogo completo, y qué hizo cada barrido
           content:
             application/json:
               schema:
@@ -90,6 +90,13 @@ paths:
                     type: integer
                     description: De esos, cuántos tienen su lista de asignaturas cacheada.
                     examples: [2]
+                  refresh:
+                    type: object
+                    description: >
+                      Última corrida de cada modo del Refresher, indexada por modo
+                      (reference · catalog · detail · seats). Vacío si nunca corrió.
+                    additionalProperties:
+                      $ref: "#/components/schemas/RefreshRun"
 
   /version:
     get:
@@ -742,8 +749,18 @@ components:
       type: object
       properties:
         available: { type: integer, examples: [40] }
-        measured_at: { type: string, format: date-time }
+        measured_at:
+          type: string
+          format: date-time
+          description: Cuándo se MIDIÓ este número (section.seats_checked_at).
         age_seconds: { type: integer, examples: [5] }
+        changed_at:
+          type: string
+          format: date-time
+          description: >
+            Cuándo CAMBIÓ por última vez. seat_snapshot solo crece cuando el número
+            es distinto al anterior, así que este campo es historial y measured_at es
+            frescura. Ausente si nunca se registró un cambio.
 
     Seats:
       type: object
@@ -751,8 +768,37 @@ components:
         key: { type: string, examples: ["1"] }
         number: { type: integer, examples: [1] }
         available: { type: integer, examples: [40] }
-        measured_at: { type: string, format: date-time }
+        measured_at:
+          type: string
+          format: date-time
+          description: Cuándo se MIDIÓ este número (section.seats_checked_at).
         age_seconds: { type: integer, examples: [5] }
+        changed_at:
+          type: string
+          format: date-time
+          description: Cuándo CAMBIÓ por última vez. Ausente si nunca se registró un cambio.
+
+    RefreshRun:
+      type: object
+      description: Una corrida del Refresher (docs/FASE-2.md). Observabilidad, no checkpoint.
+      properties:
+        mode: { type: string, examples: [detail] }
+        scope: { type: string, examples: [global] }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, description: Ausente si sigue corriendo. }
+        programs_ok: { type: integer, examples: [412] }
+        programs_failed: { type: integer, examples: [0] }
+        programs_skipped: { type: integer, description: Ya estaban frescos., examples: [968] }
+        courses_ok: { type: integer, examples: [3120] }
+        posts: { type: integer, description: POSTs contra el SIA en esa corrida., examples: [8412] }
+        bytes: { type: integer, examples: [412000000] }
+        ended_reason:
+          type: string
+          enum: [done, deadline, signal, circuit_breaker, error]
+          description: >
+            deadline y signal son normales — el barrido reanuda solo, porque el
+            checkpoint son los marcadores de frescura. circuit_breaker es el que
+            hay que mirar: abortó por 5 fallos seguidos o >20% de error.
 
     Error:
       type: object

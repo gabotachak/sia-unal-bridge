@@ -416,7 +416,19 @@ func (s *Service) Catalog(ctx context.Context, program Program, maxAge time.Dura
 		if err != nil {
 			return nil, err
 		}
+		// Each half is checked on its own: the cap applies per listing, and
+		// a campus with many electives could legitimately push the combined
+		// set past 1000.
+		if err := checkListing(regular, program, "regular"); err != nil {
+			return nil, err
+		}
+		if err := checkListing(electives, program, "electives"); err != nil {
+			return nil, err
+		}
 		combined := append(regular, electives...)
+		if err := s.suspectEmptyCatalog(ctx, program, combined); err != nil {
+			return nil, err
+		}
 		if err := s.store.UpsertCatalog(ctx, program, combined); err != nil {
 			return nil, err
 		}

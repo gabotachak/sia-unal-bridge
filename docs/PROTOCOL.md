@@ -171,10 +171,17 @@ it11=calculo               26 848 B     6 filas
 it11=algoritmos            15 018 B     1 fila
 ```
 
+Re-medido el 2026-08-17 sobre el barrido de la fase 2: 232 675 B → 17 862 B, **13×**.
+
 `it10` filtra por **número de créditos** (no por nombre, pese a lo que sugiere el orden).
 
 **No reemplaza la carrera.** Probado: con `soc3` vacío y `it11` puesto, ADF ignora la
 consulta y re-renderiza el resultado anterior.
+
+**Y no se limpia solo.** `it11` es un input del formulario, así que viaja en **cada** POST
+junto a los nueve `soc*` (§2). Dejarlo puesto convierte el siguiente listado completo en
+uno recortado: ~3 filas plausibles donde iban 98, sin ningún error. Limpiarlo es parte de
+la operación, no cortesía del llamador ([GOTCHAS §34](GOTCHAS.md)).
 
 ---
 
@@ -192,18 +199,31 @@ dropdowns. Son 9 pasos, verificados uno a uno contra un HAR de navegador:
 | 5 | valueChange | `soc4` | `7` | **tipología = libre elección** |
 | 6 | valueChange | `soc5` | `0` | modo: "Por facultad y plan" |
 | 7 | valueChange | `soc10` | `2` | sede del buscador → puebla `soc6` |
-| 8 | valueChange | `soc6` | `12` | facultad → **`12` = toda la sede** |
+| 8 | valueChange | `soc6` | `12` | facultad → **`12` = toda la sede** (en Bogotá-pregrado) |
 | 9 | action | `cb1` | — | **Mostrar** |
+
+Los pasos 8 y 9 se **repiten una vez por facultad** cuando la sede no ofrece comodín en
+ese nivel — ver el truco de abajo.
 
 `soc7` ("¿Por qué plan?") es opcional; puede ir vacío.
 
 **Saltarse el paso 7 produce basura silenciosa:** `_rowCount` inflado y `_afrRK` no
 contiguos con duplicados. Con la cascada correcta: 240 filas limpias para Bogotá.
 
-### Truco: todas las facultades a la vez
+### Truco: todas las facultades a la vez — cuando existe
 
 `soc6=12` no es una facultad — es la opción `2000 SEDE BOGOTÁ`, un comodín que devuelve
 las asignaturas de libre elección de **toda la sede** mezcladas.
+
+Dos límites, los dos medidos:
+
+- **La posición cambia con la sede** (`12` en Bogotá, `10` en Medellín, `3` en Palmira):
+  se lee de la respuesta del paso 7, nunca se constantiza ([GOTCHAS §32](GOTCHAS.md)).
+- **La existencia cambia con el nivel.** En doctorado no hay comodín en ninguna sede
+  (Bogotá 11 opciones, Medellín 6, Palmira 2 — todas facultades reales, 2026-08-17). Ahí
+  el listado de la sede es la **unión de una búsqueda por facultad**: repetir pasos 8-9
+  por cada opción y dedupear por código. Palmira doctorado: 186 + 21 = 207 filas, 76 tras
+  dedupe ([GOTCHAS §35](GOTCHAS.md)).
 
 No existe equivalente para el flujo regular: las obligatorias y optativas siempre
 requieren carrera concreta.

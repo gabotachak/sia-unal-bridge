@@ -19,7 +19,7 @@ No hay API pública. Esto la construye — y encima, la interfaz que se apoya en
 [![Docker](https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.1-6BA539?style=flat-square&logo=openapiinitiative&logoColor=white)](internal/httpapi/openapi.yaml)
 [![Arquitectura](https://img.shields.io/badge/arquitectura-hexagonal-8A2BE2?style=flat-square)](docs/ARCH.md)
-[![Trampas](https://img.shields.io/badge/gotchas-33%20verificadas-orange?style=flat-square)](docs/GOTCHAS.md)
+[![Trampas](https://img.shields.io/badge/gotchas-36%20verificadas-orange?style=flat-square)](docs/GOTCHAS.md)
 
 </div>
 
@@ -53,6 +53,24 @@ docker compose up -d          # db + api
 cd web && npm install && npm run dev   # → localhost:5173
 ```
 
+### Llenar la cache sin esperar a un cliente
+
+El `Refresher` es la misma imagen con otro entrypoint: un modo por corrida, y sale. Su
+checkpoint son los marcadores de frescura, así que **reanudar es volver a correr** y dos
+corridas seguidas no hacen ni un POST.
+
+```bash
+docker compose --profile jobs run --rm refresher --mode=reference                 # niveles, sedes, planes: 131 POSTs, 72 s
+docker compose --profile jobs run --rm refresher --mode=catalog --workers=2       # la lista de asignaturas de cada plan
+docker compose --profile jobs run --rm refresher --mode=detail --scope=global \
+                                  --workers=2 --max-duration=4h    # grupos, horarios y cupos
+docker compose --profile jobs run --rm refresher --mode=seats --scope=hot         # calienta lo que la gente mira
+```
+
+La cadencia va en [`deploy/cron.d/sia-refresher`](deploy/cron.d/sia-refresher);
+`REFRESH_ENABLED=false` lo apaga todo sin editar cron. `GET /v1/status` cuenta qué hizo la
+última corrida de cada modo. Detalles y números medidos: [`docs/FASE-2.md`](docs/FASE-2.md).
+
 ## La interfaz
 
 React + TypeScript, cuatro dependencias directas, sin librería de estado ni de
@@ -74,8 +92,10 @@ vista, y un miss frío no se esconde tras un spinner — se explica, con cronóm
   <img src="docs/assets/architecture.svg" alt="Arquitectura hexagonal: httpapi como puerto driving; Store (Postgres) y SIASource (ADF) como puertos driven." width="860">
 </div>
 
-Hexagonal. Un puerto driving (`httpapi`), dos driven (`Store` sobre Postgres, `SIASource`
-sobre ADF). El dominio no importa gin, ni pgx, ni goquery.
+Hexagonal. Dos puertos driving (`httpapi` y el `Refresher` de la fase 2), dos driven
+(`Store` sobre Postgres, `SIASource` sobre ADF). El dominio no importa gin, ni pgx, ni
+goquery — y el `Refresher` tampoco: entra por los mismos casos de uso que la API, así que
+hay un solo camino de escritura a Postgres.
 
 ```mermaid
 sequenceDiagram
@@ -147,11 +167,14 @@ Un solo concepto: `?max_age=<segundos>`. `?max_age=0` fuerza la consulta al SIA.
 | referencia — niveles, sedes, facultades, planes | 30 d | `reference_fetch.fetched_at` |
 | catálogo | 7 d | `program.catalog_fetched_at` |
 | detalle — grupos, horario, profesor | 24 h | `course_program.detail_fetched_at` |
-| **cupos** | **5 min** | `seat_snapshot.measured_at` |
+| **cupos** | **5 min** | `section.seats_checked_at` |
 
 Cada respuesta lleva `Age`, `Cache-Control`, `X-Cache` y, en un miss, `X-SIA-Fetch-Ms`.
 Los cupos además llevan `age_seconds` **en el body**: nunca se sirve un cupo sin decir de
-cuándo es.
+cuándo es — y `changed_at`, que es cuándo el número cambió por última vez. Son dos
+preguntas distintas: medido, 0 cambios en 347 grupos a lo largo de 35 min, así que el
+historial solo crece cuando el cupo se mueve mientras la frescura se actualiza en cada
+medición.
 
 ## Lo que no es obvio
 
@@ -165,7 +188,7 @@ Estas cinco salen de medir contra el servidor, no de suponer:
 | **El catálogo de un plan son dos consultas** | `soc4=0` significa literalmente *todas menos libre elección*. Las libres salen del buscador de electivas, que es por sede |
 | **Una respuesta de ~900 B no es un error HTTP** | Es un no-op: falta un paso de la cascada, o caducó la sesión. Se trata como error explícito en vez de devolver datos incompletos |
 
-Las 33 completas, cada una verificada contra producción, en
+Las 36 completas, cada una verificada contra producción, en
 [`docs/GOTCHAS.md`](docs/GOTCHAS.md). Varias fallan **en silencio**: devuelven datos
 plausibles y equivocados.
 
@@ -173,7 +196,7 @@ plausibles y equivocados.
 
 | | |
 |---|---|
-| [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **Las 33 trampas. Léelo antes de tocar el código.** |
+| [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **Las 39 trampas. Léelo antes de tocar el código.** |
 | [`docs/ARCH.md`](docs/ARCH.md) | Puertos, read-through, pool de sesiones, concurrencia |
 | [`docs/API.md`](docs/API.md) | Contrato HTTP: IDs públicos, frescura, errores |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Esquema Postgres y las nueve decisiones no obvias |

@@ -211,12 +211,3 @@ export function saveSort(scope: SortScope, sort: StoredSort | null): void {
     // Cuota llena o modo privado: no vale la pena romper la app por esto.
   }
 }
-
-/** La ruta del catálogo de un plan. Un solo sitio la arma, porque la escriben
- *  el raíl, la redirección de la raíz y los avisos de cambio de plan. */
-export function selectionPath(
-  s: Pick<Selection, 'level' | 'campus' | 'faculty' | 'program'>,
-): string {
-  const q = s.faculty ? `?f=${s.faculty}` : '';
-  return `/nivel/${s.level}/sede/${s.campus}/plan/${s.program}${q}`;
-}

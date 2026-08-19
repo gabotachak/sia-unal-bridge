@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
 import {
   ArrowLeft,
   Building2,
@@ -22,7 +21,8 @@ import { Layout } from '../components/Layout';
 import { useConfirm } from '../components/Confirm';
 import { Empty, Fault, Loading } from '../components/States';
 import { fold, sentence } from '../lib/format';
-import { selectionId, selectionPath } from '../lib/storage';
+import { selectionId } from '../lib/storage';
+import { useNav } from '../state/nav';
 import './PlanPicker.css';
 
 /**
@@ -43,7 +43,7 @@ import './PlanPicker.css';
 export function PlanPicker() {
   const plan = usePlan();
   const [ask, confirmDialog] = useConfirm();
-  const navigate = useNavigate();
+  const { navigate } = useNav();
   const current = plan.selection;
 
   // El punto de partida es donde ya estás: cambiar de plan casi siempre es
@@ -137,7 +137,7 @@ export function PlanPicker() {
     }
 
     plan.select(next);
-    navigate(selectionPath(next), { replace: true });
+    navigate({ name: 'program', selection: next }, { replace: true });
   }
 
   const first = !current; // primera vez: no hay nada que perder ni a dónde volver
@@ -187,7 +187,10 @@ export function PlanPicker() {
         )}
 
         {!first && (
-          <button className="btn setup__back" onClick={() => navigate(selectionPath(current))}>
+          <button
+            className="btn setup__back"
+            onClick={() => navigate({ name: 'program', selection: current })}
+          >
             <ArrowLeft size={15} strokeWidth={1.75} aria-hidden="true" />
             seguir con {current.program}
           </button>

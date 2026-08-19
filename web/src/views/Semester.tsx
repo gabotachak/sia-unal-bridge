@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
 import { Check, Clock, Eraser, RefreshCw, Ticket, Trash2, User } from 'lucide-react';
 import { ApiError, FETCH_COOLDOWN, get, routes } from '../api/client';
 import type { CourseDetail } from '../api/types';
@@ -7,8 +6,9 @@ import { usePlan } from '../hooks/usePlan';
 import { formatAge, formatCountdown, titleCase } from '../lib/format';
 import { pooled } from '../lib/pooled';
 import { MAX_RETRIES, backoffMs, isTransient, sleep } from '../lib/retry';
-import { itemId, selectionPath, type PlanItem } from '../lib/storage';
+import { itemId, type PlanItem } from '../lib/storage';
 import { Layout } from '../components/Layout';
+import { AppLink } from '../components/AppLink';
 import { useConfirm } from '../components/Confirm';
 import { IconButton } from '../components/IconButton';
 import { Empty } from '../components/States';
@@ -400,9 +400,12 @@ export function Semester() {
           />
           {plan.selection && (
             <p className="sem__back">
-              <Link className="btn btn--primary" to={selectionPath(plan.selection)}>
+              <AppLink
+                className="btn btn--primary"
+                to={{ name: 'program', selection: plan.selection }}
+              >
                 ir al catálogo
-              </Link>
+              </AppLink>
             </p>
           )}
         </>
@@ -495,16 +498,31 @@ function CourseCard({
       <header className="card__head table__row">
         <span className="card__code tnum col-code">{item.code}</span>
 
-        {/* El `state` es lo que le dice a la ficha que la flecha de volver
-            tiene que apuntar acá y no al catálogo — desde el que, viniendo por
-            este enlace, nunca se pasó. */}
-        <Link
+        {/* `from: 'semester'` es lo que le dice a la ficha que la flecha de
+            volver tiene que apuntar acá y no al catálogo — desde el que,
+            viniendo por este enlace, nunca se pasó. Los nombres de la
+            Selection son de relleno —Mi semestre solo guarda códigos— y no
+            hace falta que sean reales: con `from: 'semester'` la ficha nunca
+            los lee (ver el comentario del `back` en Course.tsx). */}
+        <AppLink
           className="card__name"
-          to={`/nivel/${item.level}/sede/${item.campus}/plan/${item.program}/asignatura/${encodeURIComponent(item.code)}?f=${item.faculty}`}
-          state={{ from: 'semester' }}
+          to={{
+            name: 'course',
+            selection: {
+              level: item.level,
+              campus: item.campus,
+              campusName: item.campus,
+              faculty: item.faculty,
+              facultyName: '',
+              program: item.program,
+              programName: item.program,
+            },
+            code: item.code,
+            from: 'semester',
+          }}
         >
           {item.name}
-        </Link>
+        </AppLink>
 
         <span
           className={`tag tag--${slugTypology(item.typology)} col-typ`}

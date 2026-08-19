@@ -1,22 +1,22 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Clock, MapPin, RefreshCw, User } from 'lucide-react';
 import { FETCH_COOLDOWN, routes } from '../api/client';
 import type { ClassSession, CourseDetail, Section } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { Layout } from '../components/Layout';
+import { AppLink } from '../components/AppLink';
 import { AddButton } from '../components/AddButton';
 import { Empty, Fault, Loading } from '../components/States';
 import { Seats } from '../components/Seats';
 import { formatCountdown, sentence, titleCase } from '../lib/format';
+import type { Screen } from '../state/nav';
 import './Course.css';
 
 const DAYS = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
-export function Course() {
-  const { campus = '', program = '', code = '', level = 'pregrado' } = useParams();
-  const [params] = useSearchParams();
-  const faculty = params.get('f') ?? '';
+export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }> }) {
+  const { selection: sel, code, from } = screen;
+  const { level, campus, faculty, program } = sel;
 
   const scope = { level, campus, faculty };
   const path = routes.course(scope, program, code);
@@ -29,25 +29,16 @@ export function Course() {
    * la que nunca se había estado. No es un atajo roto: es una salida que
    * miente sobre el camino recorrido.
    *
-   * Quién lo dice es el enlace de origen, con el `state` de react-router. Se
-   * eligió eso y no un `?from=` en la URL porque de dónde vienes no es parte
-   * de la identidad de la asignatura: dos URLs distintas para la misma ficha
-   * ensuciarían el historial y lo que se copie y pegue.
-   *
-   * Tampoco `navigate(-1)`: con la URL pegada a pelo, "atrás" saca de la app.
-   *
-   * El `state` de react-router vive en el history del navegador, así que
-   * sobrevive a recargar la página. Lo que no sobrevive es entrar por un
-   * enlace pegado en una pestaña nueva — y ahí el catálogo del plan es
-   * justamente la respuesta correcta, porque no hay camino que recordar.
+   * Quién lo dice es quien navegó hasta acá: Mi semestre pone `from: 'semester'`
+   * en la pantalla misma al construirla (ver Semester.tsx). Antes esto vivía
+   * en el `state` de react-router; ahora es un campo más del objeto pantalla,
+   * porque la pantalla ES el estado.
    */
-  const from = (useLocation().state as { from?: string } | null)?.from;
-
   const back =
     from === 'semester'
-      ? { to: '/semestre', label: 'mi semestre' }
+      ? { to: { name: 'semester' as const }, label: 'mi semestre' }
       : {
-          to: `/nivel/${level}/sede/${campus}/plan/${program}${faculty ? `?f=${faculty}` : ''}`,
+          to: { name: 'program' as const, selection: sel },
           label: `catálogo del plan ${program}`,
         };
 
@@ -127,15 +118,15 @@ export function Course() {
     <Layout>
       {/* Sin migas de pan, hace falta una salida explícita. Una sola, y al
           sitio del que se vino: el catálogo de este plan. */}
-      <Link className="back" to={back.to}>
+      <AppLink className="back" to={back.to}>
         <ArrowLeft size={15} strokeWidth={1.75} aria-hidden="true" />
         {back.label}
-      </Link>
+      </AppLink>
 
       {loading && !data && (
         <Loading elapsed={elapsed} attempt={attempt} what="Trayendo la asignatura" />
       )}
-      {fault && <Fault error={fault} onRetry={() => reload()} />}
+      {fault && <Fault error={fault} level={level} onRetry={() => reload()} />}
       {rateLimited && <p className="course__cooldown">{rateLimited.humane}</p>}
 
       {data && (

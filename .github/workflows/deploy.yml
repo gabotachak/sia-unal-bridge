@@ -56,7 +56,14 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
+          # bash -c explícito: el login shell de `robot` en el server es fish
+          # (no bash) — SSH ejecuta el script con el login shell del usuario,
+          # y en fish `set -e` no es errexit, es "borrar variable" sin
+          # argumento: falla su propia línea pero NO frena el resto del
+          # script. Sin este wrapper, un git pull o un make migrate roto
+          # no detiene nada — sigue derecho a buildear y desplegar igual.
           script: |
+            bash -c '
             set -e
             cd /mnt/newhdd/robot/repos/sia-unal-bridge
             git pull
@@ -68,6 +75,7 @@ jobs:
             ${{ steps.filter.outputs.api == 'true' && 'docker compose build api && docker compose up -d --no-deps api' || '' }}
             ${{ steps.filter.outputs.web == 'true' && 'docker compose build web && docker compose up -d --no-deps web' || '' }}
             ${{ steps.filter.outputs.job == 'true' && 'docker compose --profile jobs build refresher' || '' }}
+            '
 
       - name: Healthcheck
         if: steps.filter.outputs.api == 'true' || steps.filter.outputs.web == 'true' || steps.filter.outputs.job == 'true' || steps.filter.outputs.db == 'true'

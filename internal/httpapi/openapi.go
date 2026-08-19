@@ -32,6 +32,16 @@ var swaggerUICSS []byte
 //go:embed swaggerui/swagger-ui-bundle.js
 var swaggerUIBundleJS []byte
 
+// swaggerUIInitJS is the call that actually renders the UI into #ui. It has
+// to be an external file, not an inline <script> in swaggerHTML: default-src
+// 'self' with no script-src override blocks inline scripts too (no
+// 'unsafe-inline', no nonce, no hash) — the CSS and the bundle load fine
+// (same-origin <link>/<script src>), but an inline <script> block is silent
+// dead code under that policy. Page renders, #ui just never fills in.
+//
+//go:embed swaggerui/init.js
+var swaggerUIInitJS []byte
+
 // swaggerUI serves Swagger UI (vendored, see swaggerUICSS) against the
 // embedded spec. The page is a convenience for humans; the spec at
 // /v1/openapi.yaml is the artifact tooling should consume.
@@ -51,6 +61,10 @@ func (a *api) swaggerUIBundleJS(c *gin.Context) {
 	c.Data(http.StatusOK, "application/javascript; charset=utf-8", swaggerUIBundleJS)
 }
 
+func (a *api) swaggerUIInitJS(c *gin.Context) {
+	c.Data(http.StatusOK, "application/javascript; charset=utf-8", swaggerUIInitJS)
+}
+
 const swaggerHTML = `<!doctype html>
 <html lang="es">
 <head>
@@ -66,17 +80,6 @@ const swaggerHTML = `<!doctype html>
 <body>
   <div id="ui"></div>
   <script src="/v1/docs/swagger-ui-bundle.js"></script>
-  <script>
-    window.ui = SwaggerUIBundle({
-      // Absolute: relative would resolve against /v1/docs's own base and
-      // break the moment the URL picks up a trailing slash.
-      url: '/v1/openapi.yaml',
-      dom_id: '#ui',
-      deepLinking: true,
-      docExpansion: 'list',
-      defaultModelsExpandDepth: 0,
-      tryItOutEnabled: true,
-    });
-  </script>
+  <script src="/v1/docs/init.js"></script>
 </body>
 </html>`

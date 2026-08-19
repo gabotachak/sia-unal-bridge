@@ -47,6 +47,7 @@ func NewRouter(svc *catalog.Service, cooldown int, version, commit string) *gin.
 		v1.GET("/docs", a.swaggerUI)
 		v1.GET("/docs/swagger-ui.css", a.swaggerUICSS)
 		v1.GET("/docs/swagger-ui-bundle.js", a.swaggerUIBundleJS)
+		v1.GET("/docs/init.js", a.swaggerUIInitJS)
 
 		// Not campus-scoped: these two ARE the list of campuses and the
 		// list of levels.

@@ -460,6 +460,23 @@ function CourseCard({
   const totalSeats = all.reduce((n, s) => n + (s.seats?.available ?? 0), 0);
   const noGroups = status === 'done' && detail && all.length === 0;
 
+  /**
+   * Una materia de PEAMA puede traer 20+ grupos. Sin tope, cada tarjeta de
+   * "Mi semestre" —una lista de hasta diez materias— se convertía en su
+   * propia lista larga, y encontrar la tarjeta siguiente era desplazar a
+   * ciegas. Se ven los primeros 5 y el resto queda detrás de "ver más".
+   *
+   * El corte solo entra por encima de COLLAPSE_THRESHOLD, no de
+   * VISIBLE_SECTIONS: con 6 grupos, cortar en 5 dejaría "ver el 1 restante"
+   * ocupando una fila entera por un solo grupo — peor que no cortar.
+   */
+  const VISIBLE_SECTIONS = 5;
+  const COLLAPSE_THRESHOLD = 6;
+  const [expanded, setExpanded] = useState(false);
+  const collapsible = sections.length > COLLAPSE_THRESHOLD;
+  const visibleSections = expanded || !collapsible ? sections : sections.slice(0, VISIBLE_SECTIONS);
+  const hiddenCount = sections.length - visibleSections.length;
+
   // La edad más antigua entre los grupos: el dato que limita.
   const oldestAge = all.reduce<number | null>(
     (max, s) =>
@@ -574,7 +591,7 @@ function CourseCard({
 
       {sections.length > 0 && (
         <ul className="slots">
-          {sections.map((s) => {
+          {visibleSections.map((s) => {
             const seats = s.seats?.available ?? null;
             return (
               <li key={s.key} className={`slot ${seats === 0 ? 'is-zero' : ''}`}>
@@ -599,6 +616,12 @@ function CourseCard({
             );
           })}
         </ul>
+      )}
+
+      {collapsible && (
+        <button type="button" className="slots__more" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? 'ver menos' : `ver los ${hiddenCount} grupos restantes`}
+        </button>
       )}
     </li>
   );

@@ -195,45 +195,90 @@ func (s *Store) Sections(ctx context.Context, campusCode, code string, programID
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if len(ids) == 0 {
+		return out, nil
+	}
 
+	// Batched, not classSessions/CurrentSeats per section: that was 1+2N
+	// round-trips for N sections (measured 75 for a 37-section course,
+	// ~55-115ms). These two queries evaluate the same per-section LATERAL
+	// server-side in one round-trip each.
+	schedules, err := s.classSessionsBatch(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	seats, err := s.currentSeatsBatch(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	for i := range out {
-		schedule, err := s.classSessions(ctx, ids[i])
-		if err != nil {
-			return nil, err
-		}
-		out[i].Schedule = schedule
-		if seats, ok, err := s.CurrentSeats(ctx, ids[i]); err != nil {
-			return nil, err
-		} else if ok {
-			out[i].Seats = &seats
+		out[i].Schedule = schedules[out[i].ID]
+		if seat, ok := seats[out[i].ID]; ok {
+			out[i].Seats = &seat
 		}
 	}
 	return out, nil
 }
 
-func (s *Store) classSessions(ctx context.Context, sectionID int64) ([]catalog.ClassSession, error) {
+func (s *Store) classSessionsBatch(ctx context.Context, sectionIDs []int64) (map[int64][]catalog.ClassSession, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT weekday, start_time, end_time, coalesce(room, ''), coalesce(building, '')
-		FROM class_session WHERE section_id = $1 ORDER BY weekday, start_time`,
-		sectionID,
+		SELECT section_id, weekday, start_time, end_time, coalesce(room, ''), coalesce(building, '')
+		FROM class_session WHERE section_id = ANY($1) ORDER BY section_id, weekday, start_time`,
+		sectionIDs,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("store: classSessions: %w", err)
+		return nil, fmt.Errorf("store: classSessionsBatch: %w", err)
 	}
 	defer rows.Close()
 
-	var out []catalog.ClassSession
+	out := make(map[int64][]catalog.ClassSession)
 	for rows.Next() {
+		var sectionID int64
 		var cs catalog.ClassSession
 		var weekday int
 		var start, end time.Time
-		if err := rows.Scan(&weekday, &start, &end, &cs.Room, &cs.Building); err != nil {
-			return nil, fmt.Errorf("store: classSessions: scan: %w", err)
+		if err := rows.Scan(&sectionID, &weekday, &start, &end, &cs.Room, &cs.Building); err != nil {
+			return nil, fmt.Errorf("store: classSessionsBatch: scan: %w", err)
 		}
 		cs.Weekday = fromISOWeekday(weekday)
 		cs.StartTime = start.Format("15:04")
 		cs.EndTime = end.Format("15:04")
-		out = append(out, cs)
+		out[sectionID] = append(out[sectionID], cs)
+	}
+	return out, rows.Err()
+}
+
+// currentSeatsBatch mirrors ProgramCourses' fix: a LATERAL ... LIMIT 1 per
+// section, in one query, instead of joining current_seats (a DISTINCT ON
+// over all of seat_snapshot) which the planner can rescan broadly under a
+// multi-row join.
+func (s *Store) currentSeatsBatch(ctx context.Context, sectionIDs []int64) (map[int64]catalog.SeatSnapshot, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT sec.id, latest.available_seats, coalesce(sec.seats_checked_at, latest.measured_at), latest.measured_at
+		FROM section sec
+		JOIN LATERAL (
+			SELECT available_seats, measured_at
+			FROM seat_snapshot ss
+			WHERE ss.section_id = sec.id
+			ORDER BY ss.measured_at DESC
+			LIMIT 1
+		) latest ON true
+		WHERE sec.id = ANY($1)`,
+		sectionIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("store: currentSeatsBatch: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[int64]catalog.SeatSnapshot)
+	for rows.Next() {
+		var id int64
+		var snap catalog.SeatSnapshot
+		if err := rows.Scan(&id, &snap.Available, &snap.MeasuredAt, &snap.ChangedAt); err != nil {
+			return nil, fmt.Errorf("store: currentSeatsBatch: scan: %w", err)
+		}
+		out[id] = snap
 	}
 	return out, rows.Err()
 }

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -16,11 +17,18 @@ import (
 // fed this counter, the hot set would just be a list of everything the job
 // already swept (docs/FASE-2.md "Cupos").
 //
-// Best-effort on purpose: failing to count must never fail the response.
+// Best-effort on purpose: failing to count must never fail the response — and
+// "never" includes never adding latency to it either, so the write runs in
+// its own goroutine with its own context. c.Request.Context() dies the moment
+// the handler returns, which a fire-and-forget write would otherwise race.
 func (a *api) recordDemand(c *gin.Context, campusCode, code string) {
-	if err := a.svc.RecordDemand(c.Request.Context(), campusCode, code); err != nil {
-		slog.Warn("httpapi: could not record demand", "campus", campusCode, "code", code, "err", err)
-	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := a.svc.RecordDemand(ctx, campusCode, code); err != nil {
+			slog.Warn("httpapi: could not record demand", "campus", campusCode, "code", code, "err", err)
+		}
+	}()
 }
 
 func (a *api) courseDetail(c *gin.Context) {

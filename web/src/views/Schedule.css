@@ -229,6 +229,16 @@
   margin-top: var(--gap);
 }
 
+/* Botón de exportar + conteo, apilados a la derecha del título. Mismo
+   `align-items: flex-end` que `.head` (Layout.css): el botón y el conteo
+   quedan alineados por su borde derecho, no centrados. */
+.sched__head-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
 /* ── Mobile (< STACK_BREAKPOINT_PX) ───────────────────────────────────
    Casi nada que decir: sin `.sched__list` en el DOM, el flex de
    `.sched__body` tiene un solo hijo y el calendario ya ocupa la fila

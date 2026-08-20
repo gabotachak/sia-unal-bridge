@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Download, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { AppLink } from '../components/AppLink';
 import { Empty } from '../components/States';
@@ -17,6 +17,7 @@ import { useViewportFit } from '../hooks/useViewportFit';
 import { STACK_BREAKPOINT_PX } from '../lib/breakpoints';
 import { blockId } from '../lib/conflicts';
 import { courseColorVar } from '../lib/courseColors';
+import { buildIcsCalendar, downloadIcsFile, icsFileName } from '../lib/ics';
 import { itemId } from '../lib/storage';
 import './Schedule.css';
 
@@ -115,6 +116,21 @@ export function Schedule() {
     plan.items.some((it) => itemId(it) === id),
   ).length;
 
+  // Lo que de verdad se puede exportar: grupos elegidos CON horario. Uno
+  // sin sesiones —`withoutSchedule`, arriba— no aporta ningún VEVENT, así
+  // que ni cuenta para encender el botón ni entra al .ics.
+  const exportable = chosen.filter(({ section }) => section.schedule.length > 0);
+
+  function exportToCalendar() {
+    const courses = exportable.map(({ row, section }) => ({
+      code: row.item.code,
+      name: row.item.name,
+      section,
+    }));
+    const ics = buildIcsCalendar(courses, plan.selection?.campusName);
+    downloadIcsFile(icsFileName(courses), ics);
+  }
+
   /**
    * En mobile con materias, el calendario ya está calculado para llenar
    * exactamente lo que hay entre la barra de arriba y `.tabbar` — el
@@ -142,9 +158,33 @@ export function Schedule() {
           <p className="eyebrow">planificador</p>
           <h1 className="head__title">Mi horario</h1>
         </div>
-        <p className="head__meta tnum">
-          {pickedCount} de {plan.items.length} materias con grupo elegido
-        </p>
+
+        {/* Un solo grupo con las dos piezas de la derecha —el conteo y el
+            botón— para que `.head` siga viendo dos hijos y el reparto de
+            `justify-content: space-between` no cambie. Vive en el header y
+            no en `.sched__list-head` (donde están los otros controles de la
+            lista) porque exportar es del CALENDARIO, no de la lista: sigue
+            haciendo falta con la lista colapsada y en mobile, donde
+            `.sched__list-head` ni se dibuja. */}
+        <div className="sched__head-actions">
+          <button
+            type="button"
+            className="btn"
+            onClick={exportToCalendar}
+            disabled={exportable.length === 0}
+            title={
+              exportable.length === 0
+                ? 'Elige al menos un grupo con horario para exportar.'
+                : 'Descarga un .ics con las materias elegidas: se importa en Google Calendar, Apple Calendar u Outlook.'
+            }
+          >
+            <Download size={14} strokeWidth={1.75} aria-hidden="true" />
+            exportar a calendario
+          </button>
+          <p className="head__meta tnum">
+            {pickedCount} de {plan.items.length} materias con grupo elegido
+          </p>
+        </div>
       </header>
 
       {empty ? (

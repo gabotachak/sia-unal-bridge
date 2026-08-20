@@ -211,8 +211,14 @@ export function saveScheduleSelection(sel: ScheduleSelection): void {
    caso que esto viene a arreglar; y de dónde vienes ordenando no es parte
    de la identidad del catálogo, que es lo que se copia y se pega.        */
 
-/** Qué tabla. Son dos y cada una recuerda la suya. */
-export type SortScope = 'catalog' | 'semester';
+/** Qué tabla. Son dos y cada una recuerda la suya.
+ *
+ *  `plan` es UNA sola preferencia para Mi semestre y Mi horario, no una por
+ *  pantalla: las dos pintan la misma tabla sobre la misma lista, así que
+ *  ordenarla en una y encontrarla desordenada en la otra sería el mismo
+ *  desconcierto que motivó guardar el orden en primer lugar. El catálogo sí
+ *  va aparte — es otra lista, con otras razones para ordenarse. */
+export type SortScope = 'catalog' | 'plan';
 
 /** Lo guardado. `col` se valida contra la tabla que la usa, no acá: este
  *  módulo no sabe qué columnas existen y no tiene por qué saberlo. */

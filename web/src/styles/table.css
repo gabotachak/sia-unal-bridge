@@ -16,6 +16,19 @@
    las dos últimas en la misma vertical que la cabecera. */
 
 .table {
+  /* La tabla decide sus columnas por SU ancho, no por el de la ventana.
+     Antes eran `@media`, y eso alcanzaba mientras la tabla siempre ocupaba
+     la página entera. Dejó de ser cierto cuando Mi horario la puso en un
+     panel al lado del calendario: en una pantalla de 1600px ese panel mide
+     ~34rem, y con media queries se creía de 1600px y pintaba las seis
+     columnas encimadas.
+
+     El corte chico está puesto en el ancho que la tabla TENÍA a 520px de
+     ventana (descontando el padding de `.content`), así que en el teléfono
+     se comporta igual que antes. El grande ya no: salía de los 700px de
+     entonces y ahora lo decide el panel de Mi horario — ver su bloque. */
+  container: table / inline-size;
+
   --col-code: 6.2rem;
   --col-typ: 2.4rem;
   --col-cr: 2.2rem;
@@ -26,6 +39,26 @@
 
   --cols: var(--col-code) minmax(0, 1fr) var(--col-typ) var(--col-cr) var(--col-seats)
     var(--col-act);
+}
+
+/* La variante de tarjetas: Mi semestre y Mi horario, donde cada fila de la
+   tabla es una tarjeta con sus grupos adentro en vez de un enlace plano.
+   `gap: 0` en el contenedor porque la cabecera se pega a la lista; el aire
+   entre tarjetas lo pone `.table__cards`. */
+.table--list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.table__cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  /* El mismo hueco que entre los grupos de la ficha (.groups). */
+  gap: var(--gap-sm);
 }
 
 /* La cabecera comparte la MISMA rejilla que las filas: es lo que hace que
@@ -133,15 +166,34 @@
 }
 
 /* ── Cómo se encoge ─────────────────────────────────────────────────
-   Las columnas se van por prioridad, de menos a más informativa. Lo que
-   nunca se va: el nombre (qué es), los cupos (para qué se entró) y el
-   botón (a qué se vino). Redefinir --cols basta: la cabecera y las filas
-   la heredan juntas, así que no pueden desalinearse.
+   Las columnas se van de una en una, por prioridad, de menos a más
+   informativa:
+
+       38rem   → créditos
+       35rem   → tipología
+       31.5rem → código (y los cupos se aprietan)
+
+   Lo que nunca se va: el nombre (qué es), los cupos (para qué se entró) y
+   el botón (a qué se vino). Redefinir --cols basta: la cabecera y las
+   filas la heredan juntas, así que no pueden desalinearse.
+
+   Se redefine sobre `.table__head, .table__row` y no sobre `.table`
+   porque una consulta de contenedor NO aplica al contenedor mismo: sería
+   circular —cambiarle el ancho a lo que se está midiendo—, así que el
+   navegador solo deja tocar a sus descendientes.
 
    De grande a chico, en ese orden: cada bloque puede pisar al anterior. */
 
-@media (max-width: 700px) {
-  .table {
+/* El primer corte: se van los créditos, la menos informativa de las seis.
+   38rem y no 40 por el panel de Mi horario. La página tiene tope duro
+   (`--measure: 82rem`), así que el panel a la mitad —su máximo, el punto
+   donde mide lo mismo que el calendario— llega a 40rem, y la tabla de
+   adentro a ~39.1rem descontando el padding y el hueco de la barra de
+   scroll. Con el corte en 40 esa columna no aparecía en el panel a NINGÚN
+   ancho de pantalla: era una columna que solo existía en Mi semestre. */
+@container table (max-width: 38rem) {
+  .table__head,
+  .table__row {
     --cols: var(--col-code) minmax(0, 1fr) var(--col-typ) var(--col-seats) var(--col-act);
   }
   .col-cr {
@@ -149,15 +201,50 @@
   }
 }
 
-/* En el teléfono queda lo irreductible: qué materia es, cuántos cupos tiene,
-   y el botón. El código sigue a un toque de distancia, en la ficha de la
-   asignatura. */
-@media (max-width: 520px) {
-  .table {
-    --col-seats: 4.2rem;
+/* Segundo corte: la tipología. Va después de los créditos y antes del
+   código porque es una letra sobre una etiqueta de color — dice de qué
+   bolsa cuelga la materia, que importa al armar el semestre pero no al
+   barrer la lista buscando una en concreto.
+
+   Suelta 3rem contados (2.4 de columna + el gap). Poco, y es a propósito:
+   el salto grande es el siguiente, y sin este escalón intermedio el nombre
+   pasaría de apretado a holgado de un tirón. */
+@container table (max-width: 35rem) {
+  .table__head,
+  .table__row {
+    --cols: var(--col-code) minmax(0, 1fr) var(--col-seats) var(--col-act);
+  }
+  .col-typ {
+    display: none;
+  }
+}
+
+/* Lo irreductible: qué materia es, cuántos cupos tiene, y el botón. El
+   código sigue a un toque de distancia, en la ficha de la asignatura.
+
+   Es el corte que más suelta —6.8rem— porque el código es la única de las
+   tres prescindibles con ancho de verdad. Por eso es el último en irse
+   aunque sea más útil que la tipología: se aguanta hasta que ya no queda
+   de dónde sacar.
+
+   Acá caen dos cosas del mismo ancho: el teléfono (la página entera bajo
+   ~520px) y el panel de Mi horario si alguien encoge mucho la ventana en
+   escritorio. Es la misma tabla igual de apretada — que sea el mismo
+   dibujo es justamente el punto.
+
+   La de cupos también se aprieta. 3.4rem es lo que mide el rótulo más
+   largo que le puede tocar —'sin grupos' a `--t-nano`, con `nowrap`— más
+   un pelo. No baja de ahí: el rótulo no envuelve, se desbordaría. */
+@container table (max-width: 31.5rem) {
+  .table__head,
+  .table__row,
+  .slots {
+    --col-seats: 3.4rem;
+  }
+  .table__head,
+  .table__row {
     --cols: minmax(0, 1fr) var(--col-seats) var(--col-act);
   }
-  .col-typ,
   .col-code {
     display: none;
   }

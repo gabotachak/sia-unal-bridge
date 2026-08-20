@@ -11,8 +11,11 @@ import { loadSort, saveSort, type SortScope } from '../lib/storage';
  * encontrarla como la dejaste. En `useState` a secas se perdía al desmontar
  * la vista, que es exactamente lo que pasa al navegar a la ficha.
  *
- * Cada tabla recuerda la suya: el catálogo y Mi semestre se ordenan por
- * razones distintas y no tienen por qué arrastrarse una a la otra.
+ * Cada tabla recuerda la suya: el catálogo y la lista del plan se ordenan por
+ * razones distintas y no tienen por qué arrastrarse una a la otra. La lista
+ * del plan es UNA tabla aunque se pinte en dos pantallas —Mi semestre y el
+ * panel de Mi horario—, así que las dos comparten el ámbito `plan`; quien lo
+ * reparte entre ellas es `PlanViewProvider`.
  */
 export function useTableSort(scope: SortScope) {
   const [sort, setSort] = useState<Sort<TableCol> | null>(() => {

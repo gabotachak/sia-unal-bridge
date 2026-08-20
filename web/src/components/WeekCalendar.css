@@ -235,11 +235,17 @@
    vez de apilar los días —perdería la comparación que ES el punto del
    calendario— se deja el ancho mínimo por columna y el contenedor scrollea
    horizontal, mismo patrón que usan las tablas del catálogo. */
-@media (max-width: 720px) {
-  /* `.week` ya es `overflow: auto` en los dos ejes (arriba); acá solo el
-     mínimo que obliga a scrollear en horizontal. */
-  .week__header,
-  .week__body {
-    min-width: 42rem;
-  }
+/* Sin media query: el mínimo se declara siempre y actúa solo cuando hace
+   falta. Con `@media (max-width: 720px)` el disparador era la VENTANA, y
+   eso dejó de coincidir con el ancho del calendario cuando el panel de
+   materias de al lado creció a la tabla completa — en una pantalla de
+   1600px el calendario puede quedarse con 30rem y la ventana seguía
+   diciendo que sobraba sitio.
+
+   `.week` ya es `overflow: auto` en los dos ejes (arriba); esto es solo el
+   mínimo que lo obliga a scrollear en horizontal. Por encima de 42rem las
+   columnas son `flex: 1 1 0` y el mínimo no se nota. */
+.week__header,
+.week__body {
+  min-width: 42rem;
 }

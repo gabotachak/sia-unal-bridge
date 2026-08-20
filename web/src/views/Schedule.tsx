@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { AppLink } from '../components/AppLink';
-import { CourseCard } from '../components/CourseCard';
 import { Empty } from '../components/States';
 import { IconButton } from '../components/IconButton';
-import { MeasureChip } from '../components/MeasureChip';
-import { MeasureProgress } from '../components/MeasureProgress';
+import { PlanList } from '../components/PlanList';
+import { PlanToolbar } from '../components/PlanToolbar';
 import { WeekCalendar, type CalendarBlock } from '../components/WeekCalendar';
 import { useCourseDetails } from '../hooks/useCourseDetails';
 import { usePlan } from '../hooks/usePlan';
@@ -26,12 +25,20 @@ import './Schedule.css';
  * Mi semestre (`useScheduleSelection`, Context), así que marcar un radio acá
  * también lo marca allá. Lo único propio de esta pantalla es dónde cae eso
  * en la semana.
+ *
+ * El panel de la izquierda es Mi semestre, literalmente: la misma tabla
+ * (`TableHead` + `CourseCard`), la misma barra de chips (`PlanToolbar`), el
+ * mismo filtro y el mismo orden (`usePlanView`, Context). Antes era una
+ * versión reducida —tarjetas sin código, sin tipología, sin créditos, sin
+ * caneca y sin más control que "medir cupos"— y se leía como un recorte
+ * deliberado. Lo único que obligaba a recortar era el ancho del panel, y de
+ * eso ahora se encarga la propia tabla por consulta de contenedor.
  */
 export function Schedule() {
   const plan = usePlan();
   const [listOpen, setListOpen] = useState(true);
   const { rows, running, done, total, ready, measure, fetchAll } = useCourseDetails(plan.items);
-  const { selection, pick } = useScheduleSelection();
+  const { selection } = useScheduleSelection();
   const { chosen, conflicts } = useScheduleConflicts(rows, selection);
 
   // Mismo cálculo que usa el calendario al lado (`WeekCalendar.tsx`): los
@@ -151,16 +158,16 @@ export function Schedule() {
           )}
         </>
       ) : (
-        // Sin `.toolbar` propio arriba: "medir cupos" vive DENTRO del panel
-        // —es una acción sobre la lista, no sobre la pantalla— y eso deja al
-        // calendario empezar justo debajo del título, en vez de correrlo una
-        // fila entera hacia abajo por un botón que no le pertenece.
+        // Sin `.toolbar` a ancho de pantalla arriba: los tres chips —medir,
+        // con cupos, vaciar— viven DENTRO del panel, que es sobre lo que
+        // actúan. Puestos arriba correrían al calendario una fila entera
+        // hacia abajo por controles que no le pertenecen.
         //
-        // En mobile, sin panel, esta pantalla se queda sin "medir cupos": es
-        // el mismo razonamiento llevado hasta el final. Medir es una acción
-        // sobre la lista de materias, y esa lista es Mi semestre, que tiene
-        // el chip en su barra de siempre. Acá el alto que ocuparía es lo
-        // único escaso que hay.
+        // En mobile, sin panel, esta pantalla se queda sin los tres: es el
+        // mismo razonamiento llevado hasta el final. Son acciones sobre la
+        // lista de materias, y esa lista es Mi semestre, que tiene su barra
+        // de siempre a un toque en `.tabbar`. Acá el alto que ocuparían es
+        // lo único escaso que hay.
         <div className="sched__body">
           {/* El ref y el alto van en `.sched__list`, no en lo de adentro: al
               colapsar/abrir (`listOpen`) esto no se desmonta —solo lo que
@@ -181,13 +188,19 @@ export function Schedule() {
               style={Number.isFinite(listMaxHeightRem) ? { height: `${listMaxHeightRem}rem` } : undefined}
             >
               {listOpen ? (
-                <div className="sched__list-scroll">
+                <>
+                  {/* Fuera del scroll, no pegada con `sticky` dentro: la
+                      barra de chips ya envuelve a dos líneas en un panel
+                      angosto, y flotando sobre el contenido se comía el
+                      alto que las tarjetas necesitan. Como hermana del
+                      área que scrollea se queda quieta y no tapa nada. */}
                   <div className="sched__list-head">
-                    <MeasureChip
+                    <PlanToolbar
                       measure={measure}
                       running={running}
-                      disabled={running || ready.length === 0}
-                      onClick={() => void fetchAll(true, ready)}
+                      ready={ready}
+                      onMeasure={() => void fetchAll(true, ready)}
+                      className="toolbar sched__toolbar"
                     />
                     <IconButton
                       onClick={() => setListOpen(false)}
@@ -198,31 +211,17 @@ export function Schedule() {
                     </IconButton>
                   </div>
 
-                  <MeasureProgress running={running} done={done} total={total} />
-
-                  <ul className="sched__cards">
-                    {rows.map((r) => {
-                      const id = itemId(r.item);
-                      return (
-                        <CourseCard
-                          key={id}
-                          row={r}
-                          onlyOpen={false}
-                          compact
-                          linkFrom="schedule"
-                          selection={{
-                            pickedKey: selection[id] ?? null,
-                            onPick: (key) => pick(id, key),
-                            conflictKeys:
-                              selection[id] && conflicts.conflictItems.has(id)
-                                ? new Set([selection[id]])
-                                : new Set(),
-                          }}
-                        />
-                      );
-                    })}
-                  </ul>
-                </div>
+                  <div className="sched__list-scroll">
+                    <PlanList
+                      rows={rows}
+                      running={running}
+                      done={done}
+                      total={total}
+                      conflictItems={conflicts.conflictItems}
+                      linkFrom="schedule"
+                    />
+                  </div>
+                </>
               ) : (
                 // Con la lista oculta el calendario se queda con todo el
                 // ancho —útil en la semana con más materias amontonadas—,

@@ -48,24 +48,44 @@ export function computeConflicts(blocks: Block[]): {
 }
 
 /**
- * Si CUALQUIER grupo de esta materia choca en horario con un bloque YA
- * elegido de OTRA materia (issue #28, filtro por horario del catálogo).
+ * Qué CLAVES de grupo de esta materia —elegido o no— chocan con un bloque YA
+ * elegido de OTRA materia (issue #28, filtro por horario).
  *
- * A diferencia de `computeConflicts` —que compara grupos ya elegidos entre
- * sí— esto mira una materia que todavía puede no tener grupo elegido: sirve
- * para avisar en el catálogo, antes de comprometerse, que lo que se está
- * mirando no va a encajar con lo que ya se armó en Mi horario. Compara TODOS
- * los grupos, no solo uno, porque en el catálogo no hay una elección todavía
- * de la cual partir.
+ * A diferencia de `computeConflicts` —que solo compara grupos ya elegidos
+ * entre sí— esto mira grupo por grupo de una materia que puede no tener
+ * ninguno elegido todavía: sirve tanto para el catálogo (antes de
+ * comprometerse, "¿algo de esto va a chocar?") como para Mi semestre/Mi
+ * horario (marcar la fila EXACTA que choca, no la materia entera). Por eso
+ * es por grupo y no un booleano: una materia con un grupo ya elegido que NO
+ * choca sigue estando bien, aunque una alternativa suya sí chocaría —el
+ * grupo elegido es el único que importa una vez elegido.
+ */
+export function candidateConflictKeys(
+  itemId: string,
+  sections: readonly { key: string; schedule: readonly ClassSession[] }[],
+  chosenBlocks: readonly Block[],
+): Set<string> {
+  const keys = new Set<string>();
+  const otherBlocks = chosenBlocks.filter((b) => b.itemId !== itemId);
+  if (otherBlocks.length === 0) return keys;
+  for (const s of sections) {
+    if (s.schedule.some((session) => otherBlocks.some((b) => overlaps(session, b.session)))) {
+      keys.add(s.key);
+    }
+  }
+  return keys;
+}
+
+/**
+ * Si CUALQUIER grupo de esta materia choca en horario con un bloque YA
+ * elegido de OTRA materia — la versión de un solo booleano de
+ * `candidateConflictKeys`, para el catálogo, donde no hay filas de grupo
+ * que marcar una por una, solo la materia completa.
  */
 export function courseConflictsWithChosen(
   itemId: string,
-  sections: readonly { schedule: readonly ClassSession[] }[],
+  sections: readonly { key: string; schedule: readonly ClassSession[] }[],
   chosenBlocks: readonly Block[],
 ): boolean {
-  const otherBlocks = chosenBlocks.filter((b) => b.itemId !== itemId);
-  if (otherBlocks.length === 0) return false;
-  return sections.some((s) =>
-    s.schedule.some((session) => otherBlocks.some((b) => overlaps(session, b.session))),
-  );
+  return candidateConflictKeys(itemId, sections, chosenBlocks).size > 0;
 }

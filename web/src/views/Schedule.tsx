@@ -41,7 +41,7 @@ export function Schedule() {
   const [listOpen, setListOpen] = useState(true);
   const { rows, running, done, total, ready, measure, fetchAll } = useCourseDetails(plan.items);
   const { selection } = useScheduleSelection();
-  const { chosen, conflicts } = useScheduleConflicts(rows, selection);
+  const { chosen, conflicts, blocks } = useScheduleConflicts(rows, selection);
 
   // Mismo cálculo que usa el calendario al lado (`WeekCalendar.tsx`): los
   // dos arrancan a la misma altura de página, así que miden el mismo alto
@@ -229,7 +229,7 @@ export function Schedule() {
                       running={running}
                       done={done}
                       total={total}
-                      conflictItems={conflicts.conflictItems}
+                      chosenBlocks={blocks}
                       linkFrom="schedule"
                     />
                   </div>

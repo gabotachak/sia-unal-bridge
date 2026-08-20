@@ -195,6 +195,12 @@ export function CourseCard({
           {visibleSections.map((s) => {
             const seats = s.seats?.available ?? null;
             const inConflict = selection.conflictKeys.has(s.key);
+            // Rojo: ESTE es el grupo elegido y choca — un bloqueo real, ya
+            // armado. Ocre: un grupo que todavía no elegiste, pero que
+            // chocaría si lo eligieras — un aviso, no un bloqueo, porque
+            // nadie lo escogió todavía.
+            const isActiveConflict = inConflict && selection.pickedKey === s.key;
+            const isPotentialConflict = inConflict && selection.pickedKey !== s.key;
             const who = s.instructor ? titleCase(s.instructor) : 'sin profesor asignado';
             const when = s.schedule.length === 0 ? 'sin horario' : formatScheduleSummary(s.schedule);
 
@@ -232,7 +238,7 @@ export function CourseCard({
             return (
               <li
                 key={s.key}
-                className={`slot ${seats === 0 ? 'is-zero' : ''} ${inConflict ? 'is-conflict' : ''}`}
+                className={`slot ${seats === 0 ? 'is-zero' : ''} ${isActiveConflict ? 'is-conflict' : ''} ${isPotentialConflict ? 'is-conflict-potential' : ''}`}
                 onClick={selectRow}
               >
                 <Tooltip
@@ -282,12 +288,27 @@ export function CourseCard({
                 </span>
                 <span className="slot__radio">
                   {inConflict && (
-                    <TriangleAlert
-                      className="slot__conflict-icon"
-                      size={13}
-                      strokeWidth={2}
-                      aria-hidden="true"
-                    />
+                    <Tooltip
+                      content={
+                        <p className="tt-body">
+                          {isActiveConflict
+                            ? 'Este horario choca con tu horario actual.'
+                            : 'Si eliges este grupo, va a chocar con tu horario actual.'}
+                        </p>
+                      }
+                    >
+                      <span
+                        className="slot__conflict-icon"
+                        role="img"
+                        aria-label={
+                          isActiveConflict
+                            ? 'Este horario choca con tu horario actual'
+                            : 'Si eliges este grupo, va a chocar con tu horario actual'
+                        }
+                      >
+                        <TriangleAlert size={13} strokeWidth={2} aria-hidden="true" />
+                      </span>
+                    </Tooltip>
                   )}
                   {radio}
                 </span>

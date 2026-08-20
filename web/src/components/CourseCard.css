@@ -189,6 +189,22 @@
   );
 }
 
+/* Ocre y no óxido: es un aviso —"si eliges esto, va a chocar"—, no un
+   bloqueo ya armado. El grupo elegido de verdad, si choca, se pinta con
+   `.is-conflict` de arriba; esto es una fila que TODAVÍA se puede elegir sin
+   consecuencia porque nadie la eligió. Mismo gesto (rayado diagonal), mismo
+   tono que `SeatsFigure--stale`: el color ya significa "cuidado" en toda la
+   app. */
+.slot.is-conflict-potential {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--warn-soft),
+    var(--warn-soft) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+
 /* Mismo ancho que .iconbtn--row (2rem) y NO 100% de la celda: un grid item
    sin ancho propio se estira a rellenar su columna, y con `justify-content:
    flex-end` quedaba pegado al borde derecho de --col-act mientras el botón
@@ -204,8 +220,12 @@
   width: 2rem;
 }
 .slot__conflict-icon {
+  display: inline-flex;
   color: var(--bad);
   flex: none;
+}
+.slot.is-conflict-potential .slot__conflict-icon {
+  color: var(--warn);
 }
 .slot__radio input[type='radio'] {
   width: 1.05rem;

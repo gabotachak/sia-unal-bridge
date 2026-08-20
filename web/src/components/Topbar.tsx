@@ -159,6 +159,12 @@ export function Topbar() {
             to={{ name: 'donate' }}
             className={`donatebtn ${screen.name === 'donate' ? 'is-on' : ''}`}
             aria-label="Invítame un café"
+            onClick={(e) => {
+              if (screen.name === 'donate') {
+                e.preventDefault();
+                window.history.back();
+              }
+            }}
           >
             <Coffee size={ICON} strokeWidth={STROKE} aria-hidden="true" />
             <span className="donatebtn__word">Invítame un café</span>

@@ -108,11 +108,3 @@
 .donate__key-value:active {
   transform: scale(0.97);
 }
-
-.donate__note {
-  margin: 0;
-  max-width: 26rem;
-  font-size: var(--t-micro);
-  line-height: 1.7;
-  color: var(--text-faint);
-}

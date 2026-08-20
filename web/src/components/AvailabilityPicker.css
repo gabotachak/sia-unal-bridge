@@ -25,6 +25,26 @@
   gap: 0.3rem;
 }
 
+/* Mitad del pill —ícono/select/chevron del lado "desde", o select/chevron
+   del lado "hasta"— estirada a `flex: 1` para que el área clickeable sea
+   el medio pill entero, no solo el ancho del texto de la hora. Un
+   `<label>` sin control propio delega el click al `<select>` que
+   contiene, así que el hueco entre ícono y select también abre el
+   desplegable. */
+.avail__half {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.avail__half select {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
 /* `appearance: none` le quita a `<select>` su relleno y alto de línea de
    fábrica —lo que lo hacía más alto que el resto del pill—, así que la
    flechita nativa se repone a mano con `ChevronDown`. */
@@ -56,4 +76,30 @@
 .avail__range-sep {
   color: inherit;
   opacity: 0.7;
+}
+
+/* Botón aparte para apagar el filtro de horario sin tener que tocar el
+   pill (que ahora es 100% zona de `<select>`): oprimirlo adentro nunca
+   iba a poder "no abrir un desplegable", así que la X vive afuera, al
+   lado. Mismo alto que `.chip--sm` para que se lea parte del mismo grupo. */
+.avail__range-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition:
+    color var(--fast) var(--ease-out),
+    border-color var(--fast) var(--ease-out),
+    background-color var(--fast) var(--ease-out);
+}
+.avail__range-clear:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
 }

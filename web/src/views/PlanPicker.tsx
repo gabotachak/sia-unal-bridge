@@ -300,7 +300,16 @@ export function PlanPicker() {
                               <span className="plan__code tnum">{p.code}</span>
                               <span className="plan__name">{sentence(p.name)}</span>
                               {p.catalog_fetched_at && (
-                                <span className="plan__cached" title="catálogo ya cacheado" />
+                                // Sin tooltip a propósito: el punto ya vive
+                                // adentro de un `<button>`, y anidarle un
+                                // trigger propio metería un segundo parón de
+                                // tabulación dentro del mismo control. El
+                                // dato queda igual disponible para lectores
+                                // de pantalla, tejido en el nombre accesible.
+                                <span className="plan__cached" aria-hidden="true" />
+                              )}
+                              {p.catalog_fetched_at && (
+                                <span className="sr-only"> — catálogo ya cacheado</span>
                               )}
                               {mine && (
                                 <Check

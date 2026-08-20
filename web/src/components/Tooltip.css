@@ -1,0 +1,100 @@
+/* El panel vive en un portal a `document.body`: `position: fixed` con
+   coordenadas puestas por JS (ver Tooltip.tsx), nunca `absolute` relativo a
+   un ancestro — eso es lo que lo deja salir de una fila de tabla recortada.
+   `pointer-events: none` porque el panel nunca es el destino de un click:
+   si el mouse pasa sobre él de camino a otra cosa, no debe capturar nada. */
+
+.tt-panel {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  max-width: 20rem;
+  width: max-content;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  text-align: left;
+  transition: opacity var(--fast) var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tt-panel {
+    transition: none;
+  }
+}
+
+/* Envoltura solo para triggers `disabled` — ver el comentario en
+   Tooltip.tsx sobre por qué un botón apagado necesita esto y uno activo no.
+   Inline-block: no le mete margen a nada a su alrededor, así que un botón
+   dentro de una barra con `gap` no se corre ni un píxel por tenerlo. */
+.tt-disabled-wrap {
+  display: inline-block;
+}
+
+/* ── Vocabulario del contenido ──────────────────────────────────────
+   No todo tooltip necesita las tres piezas: un texto suelto (una sola
+   frase que ya se explica sola) no gana nada con un título aparte. Se usan
+   cuando el contenido tiene de verdad una cabeza y un cuerpo, o una lista
+   de pares dato/valor — nunca por rellenar. */
+
+.tt-title {
+  margin: 0;
+  font-size: var(--t-small);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tt-body {
+  margin: 0;
+  font-size: var(--t-micro);
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+.tt-title + .tt-body {
+  margin-top: 0.25rem;
+}
+
+/* `.tt-eyebrow` + `.tt-title`: rótulo diminuto encima de un dato suelto —una
+   tipología, una clave de grupo— en vez de una frase con su aclaración
+   debajo. Mayúsculas pequeñas, no un párrafo. */
+.tt-eyebrow {
+  margin: 0;
+  font-size: var(--t-nano);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.tt-eyebrow + .tt-title {
+  margin-top: 0.15rem;
+}
+
+.tt-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.tt-rows + .tt-rows,
+.tt-body + .tt-rows,
+.tt-title + .tt-rows {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--rule);
+}
+
+.tt-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: var(--t-micro);
+  color: var(--text-dim);
+}
+.tt-row b {
+  font-size: var(--t-small);
+  font-weight: 600;
+  color: var(--text);
+}

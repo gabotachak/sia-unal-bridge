@@ -6,6 +6,7 @@ import { Empty } from '../components/States';
 import { IconButton } from '../components/IconButton';
 import { PlanList } from '../components/PlanList';
 import { PlanToolbar } from '../components/PlanToolbar';
+import { Tooltip } from '../components/Tooltip';
 import { WeekCalendar, type CalendarBlock } from '../components/WeekCalendar';
 import { useCourseDetails } from '../hooks/useCourseDetails';
 import { usePanelWidth } from '../hooks/usePanelWidth';
@@ -239,15 +240,16 @@ export function Schedule() {
                 // pero el control para volver a abrirla no puede irse con
                 // ella: queda este riel angosto, no un botón flotante que
                 // aparece de la nada.
-                <button
-                  type="button"
-                  className="sched__rail"
-                  onClick={() => setListOpen(true)}
-                  title="Mostrar lista de materias"
-                  aria-label="Mostrar lista de materias"
-                >
-                  <PanelLeftOpen size={16} strokeWidth={1.75} aria-hidden="true" />
-                </button>
+                <Tooltip content={<p className="tt-title">Mostrar lista de materias</p>} placement="bottom">
+                  <button
+                    type="button"
+                    className="sched__rail"
+                    onClick={() => setListOpen(true)}
+                    aria-label="Mostrar lista de materias"
+                  >
+                    <PanelLeftOpen size={16} strokeWidth={1.75} aria-hidden="true" />
+                  </button>
+                </Tooltip>
               )}
             </aside>
           )}

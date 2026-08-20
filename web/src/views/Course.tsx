@@ -8,6 +8,7 @@ import { AppLink } from '../components/AppLink';
 import { AddButton } from '../components/AddButton';
 import { Empty, Fault, Loading } from '../components/States';
 import { Seats } from '../components/Seats';
+import { Tooltip } from '../components/Tooltip';
 import { WEEKDAYS_LONG, formatClockTime, formatCountdown, sentence, titleCase } from '../lib/format';
 import type { Screen } from '../state/nav';
 import './Course.css';
@@ -186,29 +187,30 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
                   filtros puestos. Acá la cuenta atrás SÍ se muestra —a
                   diferencia de Mi semestre— porque es una sola asignatura y
                   el número se refresca de verdad cada segundo. */}
-              <button
-                className="chip"
-                onClick={measureAll}
-                disabled={measuring || cooldownLeft > 0}
-                title={
-                  measuring
-                    ? 'Preguntándole al SIA por los grupos.'
-                    : cooldownLeft > 0
-                      ? 'Se midió hace un momento. El dato que ves es el mismo que traería preguntar otra vez.'
-                      : 'Vuelve a preguntarle al SIA por los grupos y sus cupos.'
+              <Tooltip
+                content={
+                  <p className="tt-body">
+                    {measuring
+                      ? 'Preguntándole al SIA por los grupos.'
+                      : cooldownLeft > 0
+                        ? 'Se midió hace un momento. El dato que ves es el mismo que traería preguntar otra vez.'
+                        : 'Vuelve a preguntarle al SIA por los grupos y sus cupos.'}
+                  </p>
                 }
               >
-                <RefreshCw
-                  size={14}
-                  strokeWidth={1.75}
-                  className={measuring ? 'spin' : undefined}
-                  aria-hidden="true"
-                />
-                {measuring ? 'actualizando' : 'actualizar grupos'}
-                {cooldownLeft > 0 && !measuring && (
-                  <span className="chip__code tnum">{formatCountdown(cooldownLeft)}</span>
-                )}
-              </button>
+                <button className="chip" onClick={measureAll} disabled={measuring || cooldownLeft > 0}>
+                  <RefreshCw
+                    size={14}
+                    strokeWidth={1.75}
+                    className={measuring ? 'spin' : undefined}
+                    aria-hidden="true"
+                  />
+                  {measuring ? 'actualizando' : 'actualizar grupos'}
+                  {cooldownLeft > 0 && !measuring && (
+                    <span className="chip__code tnum">{formatCountdown(cooldownLeft)}</span>
+                  )}
+                </button>
+              </Tooltip>
             </div>
 
             {data.sections.length === 0 ? (

@@ -177,11 +177,23 @@
   cursor: default;
 }
 
-/* El nombre manda: nadie reconoce una materia por su código en un bloque de
-   2cm de alto. Con `-webkit-line-clamp` en vez de `white-space: nowrap`
-   porque acá SÍ hay dos líneas para leerlo entero en un bloque de una hora
-   o más — cortarlo a la primera línea desperdiciaba el alto que el propio
-   bloque ya tiene. */
+/* El código antes del nombre, pero casi invisible: nadie reconoce una
+   materia por su código, así que no se gana una línea de peso — se apaga en
+   `--text-faint` y se abre de tracking para leerse como una referencia, no
+   como un segundo título. Está para cuando SÍ hace falta —cruzarlo contra el
+   SIA, contra otra fuente— y ahí gana tenerlo a la vista sin abrir la ficha. */
+.week__block-code {
+  color: var(--text-faint);
+  letter-spacing: var(--track-micro);
+  line-height: 1;
+  flex: none;
+}
+
+/* El nombre manda: es lo que se reconoce de un vistazo en un bloque de 2cm
+   de alto. Con `-webkit-line-clamp` en vez de `white-space: nowrap` porque
+   acá SÍ hay dos líneas para leerlo entero en un bloque de una hora o más —
+   cortarlo a la primera línea desperdiciaba el alto que el propio bloque ya
+   tiene. */
 .week__block-name {
   display: -webkit-box;
   -webkit-line-clamp: 2;

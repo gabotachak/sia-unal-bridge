@@ -5,6 +5,7 @@ import { usePlan } from '../hooks/usePlan';
 import { usePlanView } from '../hooks/usePlanView';
 import { useConfirm } from './Confirm';
 import { MeasureChip } from './MeasureChip';
+import { Tooltip } from './Tooltip';
 
 /**
  * Los tres controles de la lista del semestre: medir cupos, dejar solo los
@@ -83,33 +84,32 @@ export function PlanToolbar({
           misma pregunta —"¿qué puedo tomar hoy?"— hecha sobre grupos en
           vez de sobre asignaturas. Dibujarla distinto la hacía parecer
           otra cosa. */}
-      <button
-        className={`chip ${onlyOpen ? 'is-on' : ''}`}
-        onClick={toggleOnlyOpen}
-        aria-pressed={onlyOpen}
-        title="Deja solo los grupos que tienen cupo ahora mismo."
-      >
-        {onlyOpen ? (
-          <Check size={14} strokeWidth={2.5} aria-hidden="true" />
-        ) : (
-          <Ticket size={14} strokeWidth={1.75} aria-hidden="true" />
-        )}
-        con cupos
-      </button>
+      <Tooltip content={<p className="tt-body">Deja solo los grupos que tienen cupo ahora mismo.</p>}>
+        <button
+          className={`chip ${onlyOpen ? 'is-on' : ''}`}
+          onClick={toggleOnlyOpen}
+          aria-pressed={onlyOpen}
+        >
+          {onlyOpen ? (
+            <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+          ) : (
+            <Ticket size={14} strokeWidth={1.75} aria-hidden="true" />
+          )}
+          con cupos
+        </button>
+      </Tooltip>
 
       {/* Chip como los otros dos, y no el icono pelado de `.toolbar__clear`
           del catálogo: allá ese botón es un deshacer contextual —solo
           existe si hay filtros puestos, y anula los controles de su propia
           barra—, y esto es una acción por derecho propio que está siempre.
           Mismo rol que los vecinos, misma forma. */}
-      <button
-        className="chip chip--danger"
-        onClick={clearAll}
-        title="Quita las materias de la lista. Tu plan no se toca."
-      >
-        <Eraser size={14} strokeWidth={1.75} aria-hidden="true" />
-        vaciar
-      </button>
+      <Tooltip content={<p className="tt-body">Quita las materias de la lista. Tu plan no se toca.</p>}>
+        <button className="chip chip--danger" onClick={clearAll}>
+          <Eraser size={14} strokeWidth={1.75} aria-hidden="true" />
+          vaciar
+        </button>
+      </Tooltip>
     </div>
   );
 }

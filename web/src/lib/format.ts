@@ -126,6 +126,48 @@ export function formatScheduleSummary(sessions: ClassSession[]): string {
     .join(' · ');
 }
 
+export type ScheduleGroup = {
+  days: string;
+  time: string;
+  place?: string;
+};
+
+/**
+ * La versión sin comprimir de `formatScheduleSummary`, para el tooltip: días
+ * completos ('lunes · miércoles', no 'lu · mi'), la hora sin recortar el
+ * minuto en punto, y el salón — que el resumen de la fila ni carga, porque
+ * ahí no cabe. Misma agrupación por (inicio, fin) que la de arriba, así que
+ * las dos cuentan la misma historia a dos resoluciones distintas.
+ */
+export function groupSchedule(sessions: ClassSession[]): ScheduleGroup[] {
+  const order: string[] = [];
+  const groups = new Map<
+    string,
+    { start: string; end: string; days: number[]; room?: string; building?: string }
+  >();
+
+  for (const s of sessions) {
+    const key = `${s.start_time}-${s.end_time}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = { start: s.start_time, end: s.end_time, days: [], room: s.room, building: s.building };
+      groups.set(key, group);
+      order.push(key);
+    }
+    group.days.push(s.weekday);
+  }
+
+  return order.map((key) => {
+    const g = groups.get(key)!;
+    const place = [g.building, g.room].filter(Boolean).join(' · ');
+    return {
+      days: g.days.map((d) => WEEKDAYS_LONG[d]).join(' · '),
+      time: `${g.start}–${g.end}`,
+      place: place || undefined,
+    };
+  });
+}
+
 /**
  * Normaliza para comparar: ignora mayúsculas y tildes.
  *

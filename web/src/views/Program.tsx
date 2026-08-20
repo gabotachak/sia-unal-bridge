@@ -21,6 +21,7 @@ import { Empty, Fault, Loading } from '../components/States';
 import { SearchInput } from '../components/SearchInput';
 import { SeatsFigure } from '../components/Seats';
 import { TableHead } from '../components/TableHead';
+import { Tooltip } from '../components/Tooltip';
 import type { TableCol } from '../lib/table';
 import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
 import { useTableSort } from '../hooks/useTableSort';
@@ -270,19 +271,27 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
 
             {/* El filtro que más se usa va arriba y solo: es una pregunta de
                 sí o no —"¿puedo meterme hoy?"— y no compite con las otras. */}
-            <button
-              className={`chip ${onlyOpen ? 'is-on' : ''}`}
-              onClick={() => setOnlyOpen((v) => !v)}
-              aria-pressed={onlyOpen}
-              title="Deja solo las que tienen cupo. Las que nunca se han consultado también se quedan: es mejor que sobre una a que se pierda una con cupos."
+            <Tooltip
+              content={
+                <p className="tt-body">
+                  Deja solo las que tienen cupo. Las que nunca se han consultado también se
+                  quedan: es mejor que sobre una a que se pierda una con cupos.
+                </p>
+              }
             >
-              {onlyOpen ? (
-                <Check size={14} strokeWidth={2.5} aria-hidden="true" />
-              ) : (
-                <Ticket size={14} strokeWidth={1.75} aria-hidden="true" />
-              )}
-              con cupos
-            </button>
+              <button
+                className={`chip ${onlyOpen ? 'is-on' : ''}`}
+                onClick={() => setOnlyOpen((v) => !v)}
+                aria-pressed={onlyOpen}
+              >
+                {onlyOpen ? (
+                  <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+                ) : (
+                  <Ticket size={14} strokeWidth={1.75} aria-hidden="true" />
+                )}
+                con cupos
+              </button>
+            </Tooltip>
 
             {/* Solo se ve en el teléfono (CSS). El número es lo que evita que
                 plegar esconda información: dice cuántas facetas hay puestas
@@ -299,14 +308,11 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
             </button>
 
             {filtering && (
-              <button
-                className="toolbar__clear"
-                onClick={clearAll}
-                aria-label="Quitar los filtros"
-                title="Quitar los filtros"
-              >
-                <X size={15} strokeWidth={2} aria-hidden="true" />
-              </button>
+              <Tooltip content={<p className="tt-title">Quitar los filtros</p>}>
+                <button className="toolbar__clear" onClick={clearAll} aria-label="Quitar los filtros">
+                  <X size={15} strokeWidth={2} aria-hidden="true" />
+                </button>
+              </Tooltip>
             )}
           </div>
 
@@ -315,16 +321,24 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
               <span className="filters__label">tipología</span>
               <div className="chips">
                 {nonLibreTypologies.map((t) => (
-                  <button
+                  <Tooltip
                     key={t}
-                    className={`chip chip--sm ${typols.has(t) ? 'is-on' : ''}`}
-                    onClick={() => pickTypology((s) => toggle(s, t))}
-                    aria-pressed={typols.has(t)}
-                    title={t}
+                    content={
+                      <>
+                        <p className="tt-eyebrow">Tipología</p>
+                        <p className="tt-title">{t}</p>
+                      </>
+                    }
                   >
-                    {sentence(t.replace(/\s*\([^)]*\)\s*$/, ''))}
-                    <span className="chip__code tnum">{facets.byTypology.get(t)}</span>
-                  </button>
+                    <button
+                      className={`chip chip--sm ${typols.has(t) ? 'is-on' : ''}`}
+                      onClick={() => pickTypology((s) => toggle(s, t))}
+                      aria-pressed={typols.has(t)}
+                    >
+                      {sentence(t.replace(/\s*\([^)]*\)\s*$/, ''))}
+                      <span className="chip__code tnum">{facets.byTypology.get(t)}</span>
+                    </button>
+                  </Tooltip>
                 ))}
               </div>
             </div>
@@ -335,26 +349,39 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
               <span className="filters__label">electivas</span>
               <div className="chips">
                 {libreTypology && (
-                  <button
-                    className={`chip chip--sm ${typols.has(libreTypology) ? 'is-on' : ''}`}
-                    onClick={() => pickTypology((s) => toggle(s, libreTypology))}
-                    aria-pressed={typols.has(libreTypology)}
-                    title={libreTypology}
+                  <Tooltip
+                    content={
+                      <>
+                        <p className="tt-eyebrow">Tipología</p>
+                        <p className="tt-title">{libreTypology}</p>
+                      </>
+                    }
                   >
-                    {sentence(libreTypology.replace(/\s*\([^)]*\)\s*$/, ''))}
-                    <span className="chip__code tnum">{facets.byTypology.get(libreTypology)}</span>
-                  </button>
+                    <button
+                      className={`chip chip--sm ${typols.has(libreTypology) ? 'is-on' : ''}`}
+                      onClick={() => pickTypology((s) => toggle(s, libreTypology))}
+                      aria-pressed={typols.has(libreTypology)}
+                    >
+                      {sentence(libreTypology.replace(/\s*\([^)]*\)\s*$/, ''))}
+                      <span className="chip__code tnum">{facets.byTypology.get(libreTypology)}</span>
+                    </button>
+                  </Tooltip>
                 )}
                 {nonLibreTypologies.length > 0 && (
-                  <button
-                    className={`chip chip--sm ${notLibreActive ? 'is-on' : ''}`}
-                    onClick={toggleNotLibre}
-                    aria-pressed={notLibreActive}
-                    title="Todas las tipologías del plan menos libre elección."
+                  <Tooltip
+                    content={
+                      <p className="tt-body">Todas las tipologías del plan menos libre elección.</p>
+                    }
                   >
-                    Todas menos libre elección
-                    <span className="chip__code tnum">{notLibreCount}</span>
-                  </button>
+                    <button
+                      className={`chip chip--sm ${notLibreActive ? 'is-on' : ''}`}
+                      onClick={toggleNotLibre}
+                      aria-pressed={notLibreActive}
+                    >
+                      Todas menos libre elección
+                      <span className="chip__code tnum">{notLibreCount}</span>
+                    </button>
+                  </Tooltip>
                 )}
               </div>
             </div>
@@ -363,16 +390,19 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
               <span className="filters__label">créditos</span>
               <div className="chips">
                 {facets.credits.map((n) => (
-                  <button
+                  <Tooltip
                     key={n}
-                    className={`chip chip--sm ${creds.has(n) ? 'is-on' : ''}`}
-                    onClick={() => setCreds((s) => toggle(s, n))}
-                    aria-pressed={creds.has(n)}
-                    title={`${n} ${n === 1 ? 'crédito' : 'créditos'}`}
+                    content={<p className="tt-title">{n} {n === 1 ? 'crédito' : 'créditos'}</p>}
                   >
-                    <span className="tnum">{n}</span>
-                    <span className="chip__code tnum">{facets.byCredits.get(n)}</span>
-                  </button>
+                    <button
+                      className={`chip chip--sm ${creds.has(n) ? 'is-on' : ''}`}
+                      onClick={() => setCreds((s) => toggle(s, n))}
+                      aria-pressed={creds.has(n)}
+                    >
+                      <span className="tnum">{n}</span>
+                      <span className="chip__code tnum">{facets.byCredits.get(n)}</span>
+                    </button>
+                  </Tooltip>
                 ))}
               </div>
             </div>
@@ -398,13 +428,21 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                       to={{ name: 'course', selection: sel, code: c.code }}
                     >
                       <span className="row__code tnum col-code">{c.code}</span>
-                      <span className="row__name">{sentence(c.name)}</span>
-                      <span
-                        className={`tag tag--${slugTypology(c.typology)} col-typ`}
-                        title={c.typology}
+                      <Tooltip content={<p className="tt-title">{sentence(c.name)}</p>} onlyIfTruncated>
+                        <span className="row__name">{sentence(c.name)}</span>
+                      </Tooltip>
+                      <Tooltip
+                        content={
+                          <>
+                            <p className="tt-eyebrow">Tipología</p>
+                            <p className="tt-title">{c.typology}</p>
+                          </>
+                        }
                       >
-                        {shortTypology(c.typology)}
-                      </span>
+                        <span className={`tag tag--${slugTypology(c.typology)} col-typ`}>
+                          {shortTypology(c.typology)}
+                        </span>
+                      </Tooltip>
                       <span className="row__credits tnum col-cr">{c.credits}</span>
                       <SeatsCell seats={c.seats} askedAt={c.detail_fetched_at} />
                       <AddButton
@@ -461,13 +499,14 @@ function SeatsCell({
   if (!seats) {
     if (!askedAt) {
       return (
-        <span
-          className="row__seats is-unknown col-seats"
-          title="Nunca se le preguntó al SIA por esta asignatura. Ábrela para medir sus cupos."
+        <Tooltip
+          content={<p className="tt-body">Nunca se le preguntó al SIA por esta asignatura. Ábrela para medir sus cupos.</p>}
         >
-          <HelpCircle size={15} strokeWidth={2} aria-hidden="true" />
-          <span className="sr-only">Cupos sin consultar</span>
-        </span>
+          <span className="row__seats is-unknown col-seats">
+            <HelpCircle size={15} strokeWidth={2} aria-hidden="true" />
+            <span className="sr-only">Cupos sin consultar</span>
+          </span>
+        </Tooltip>
       );
     }
     // "Sin grupos" tampoco es para siempre: la UNAL puede programar oferta
@@ -475,28 +514,50 @@ function SeatsCell({
     // detalle, calculada acá porque el reloj del servidor solo sella los cupos.
     const age = formatAge((Date.now() - Date.parse(askedAt)) / 1000);
     return (
-      <span
-        className="row__seats is-none col-seats"
-        title={`Sin grupos programados · consultado ${new Date(askedAt).toLocaleString('es-CO')}`}
+      <Tooltip
+        content={
+          <>
+            <p className="tt-title">Sin grupos programados</p>
+            <p className="tt-body">Consultado el {new Date(askedAt).toLocaleString('es-CO')}.</p>
+          </>
+        }
       >
-        <SeatsFigure available={null} announce={false} />
-        <small>
-          sin grupos<span className="row__age tnum"> · {age}</span>
-        </small>
-      </span>
+        <span className="row__seats is-none col-seats">
+          <SeatsFigure available={null} announce={false} />
+          <small>
+            sin grupos<span className="row__age tnum"> · {age}</span>
+          </small>
+        </span>
+      </Tooltip>
     );
   }
   return (
-    <span
-      className={`row__seats col-seats ${seats.available === 0 ? 'is-zero' : 'is-open'}`}
-      title={`${seats.available} cupos en ${seats.sections} grupos · medido ${new Date(seats.measured_at).toLocaleString('es-CO')}`}
+    <Tooltip
+      content={
+        <ul className="tt-rows">
+          <li className="tt-row">
+            <span>Cupos</span>
+            <b className="tnum">{seats.available}</b>
+          </li>
+          <li className="tt-row">
+            <span>Grupos</span>
+            <b className="tnum">{seats.sections}</b>
+          </li>
+          <li className="tt-row">
+            <span>Medido</span>
+            <b>{new Date(seats.measured_at).toLocaleString('es-CO')}</b>
+          </li>
+        </ul>
+      }
     >
-      {/* Sin animar: en el catálogo el número no cambia después de cargar, y
-          313 filas aleteando en la primera pintura serían ruido y trabajo por
-          nada. La forma y el color sí son los mismos que en la ficha. */}
-      <SeatsFigure available={seats.available} tone={seats.available === 0 ? 'empty' : 'ok'} />
-      <small className="tnum">{formatAge(seats.age_seconds)}</small>
-    </span>
+      <span className={`row__seats col-seats ${seats.available === 0 ? 'is-zero' : 'is-open'}`}>
+        {/* Sin animar: en el catálogo el número no cambia después de cargar, y
+            313 filas aleteando en la primera pintura serían ruido y trabajo por
+            nada. La forma y el color sí son los mismos que en la ficha. */}
+        <SeatsFigure available={seats.available} tone={seats.available === 0 ? 'empty' : 'ok'} />
+        <small className="tnum">{formatAge(seats.age_seconds)}</small>
+      </span>
+    </Tooltip>
   );
 }
 

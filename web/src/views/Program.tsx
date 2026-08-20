@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
   Check,
@@ -9,8 +9,8 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { routes } from '../api/client';
-import type { CoursesResponse, CourseSummary } from '../api/types';
+import { get, routes } from '../api/client';
+import type { CourseDetail, CoursesResponse, CourseSummary, Section } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { useCatalogFilters } from '../hooks/useCatalogFilters';
 import { useCourseDetails } from '../hooks/useCourseDetails';
@@ -31,6 +31,7 @@ import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
 import { useTableSort } from '../hooks/useTableSort';
 import { fold, formatAge, sentence } from '../lib/format';
 import { courseConflictsWithChosen } from '../lib/conflicts';
+import { pooled } from '../lib/pooled';
 import { itemId, selectionId } from '../lib/storage';
 import type { Screen } from '../state/nav';
 import './Program.css';
@@ -90,6 +91,11 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
    */
   const plan = usePlan();
 
+  const courseId = useCallback(
+    (c: CourseSummary) => itemId({ level, campus, program, code: c.code }),
+    [level, campus, program],
+  );
+
   /**
    * Qué materias del catálogo chocan en horario con un grupo YA elegido en
    * Mi horario (issue #28: "Filtro por horario").
@@ -110,20 +116,80 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
   const { selection: scheduleSelection } = useScheduleSelection();
   const { blocks: chosenBlocks } = useScheduleConflicts(planRows, scheduleSelection);
 
+  /**
+   * El choque de horario también para materias que NI SIQUIERA están en el
+   * plan, con tal de que su detalle ya esté cacheado de una consulta
+   * anterior (`c.seats` puesto: alguien ya midió sus cupos, así que el
+   * back tiene sus grupos guardados en Postgres).
+   *
+   * Sin `c.seats` no se pide: eso es "nadie preguntó todavía" (el `?` de la
+   * columna CUPOS), y pedirlo dispararía un POST de verdad contra el SIA —
+   * hasta 40 a la vez si alguien limpia todos los filtros, un pool de 4
+   * conexiones no da abasto. CON `c.seats` puesto, en cambio, el pedido es
+   * un acierto de cache casi seguro: Postgres contesta, no el SIA.
+   *
+   * Nunca "activo" (rojo): estas materias no están en el plan, así que
+   * nunca tienen un grupo ELEGIDO — como mucho "potencial" (ocre), igual
+   * que una materia del plan todavía sin grupo.
+   */
+  const requestedExtra = useRef(new Set<string>());
+  const [extraSections, setExtraSections] = useState<Record<string, Section[]>>({});
+  useEffect(() => {
+    const CAP = 40;
+    const inPlan = new Set(plan.items.map((it) => itemId(it)));
+    const candidates = (data?.courses ?? [])
+      .filter((c) => c.seats && !inPlan.has(courseId(c)) && !requestedExtra.current.has(courseId(c)))
+      .slice(0, CAP);
+    if (candidates.length === 0) return;
+    for (const c of candidates) requestedExtra.current.add(courseId(c));
+
+    let cancelled = false;
+    void pooled(candidates, 4, async (c) => {
+      try {
+        const res = await get<CourseDetail>(routes.course({ level, campus, faculty }, program, c.code));
+        if (!cancelled) {
+          setExtraSections((prev) => ({ ...prev, [courseId(c)]: res.data.sections }));
+        }
+      } catch {
+        // Silencioso a propósito: esto es un aviso de más sobre una materia
+        // que nadie pidió ver en detalle todavía. Que falle no puede tumbar
+        // el catálogo — la fila se queda sin marcar, como si no se hubiera
+        // intentado.
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [data, plan.items, courseId, level, campus, faculty, program]);
+
+  /**
+   * Dos niveles, no uno — issue #28 ampliado: rojo si el grupo YA elegido
+   * choca (un bloqueo real, ya armado); ocre si la materia no tiene grupo
+   * elegido todavía pero alguno de sus grupos chocaría (un aviso, antes de
+   * comprometerse). Con un grupo ya elegido, el único que cuenta para "choca
+   * de verdad" es ESE — una alternativa suya que chocaría no vuelve a la
+   * materia un problema, porque nadie la eligió.
+   */
   const conflictCourseIds = useMemo(() => {
-    const ids = new Set<string>();
+    const active = new Set<string>();
+    const potential = new Set<string>();
     for (const row of planRows) {
       if (!row.detail) continue;
       const id = itemId(row.item);
-      if (courseConflictsWithChosen(id, row.detail.sections, chosenBlocks)) ids.add(id);
+      const pickedKey = scheduleSelection[id];
+      if (pickedKey) {
+        const chosenSection = row.detail.sections.filter((s) => s.key === pickedKey);
+        if (courseConflictsWithChosen(id, chosenSection, chosenBlocks)) active.add(id);
+      } else if (courseConflictsWithChosen(id, row.detail.sections, chosenBlocks)) {
+        potential.add(id);
+      }
     }
-    return ids;
-  }, [planRows, chosenBlocks]);
-
-  const courseId = useCallback(
-    (c: CourseSummary) => itemId({ level, campus, program, code: c.code }),
-    [level, campus, program],
-  );
+    for (const [id, sections] of Object.entries(extraSections)) {
+      if (active.has(id) || potential.has(id)) continue; // ya cubierta como materia del plan
+      if (courseConflictsWithChosen(id, sections, chosenBlocks)) potential.add(id);
+    }
+    return { active, potential };
+  }, [planRows, chosenBlocks, scheduleSelection, extraSections]);
 
   /**
    * Restaura el scroll UNA vez, apenas hay filas que pintar — antes de eso
@@ -191,7 +257,10 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
       if (typols.size && !typols.has(c.typology)) return false;
       if (creds.size && !creds.has(c.credits)) return false;
       if (onlyOpen && !hasRoom(c)) return false;
-      if (hideConflicts && conflictCourseIds.has(courseId(c))) return false;
+      if (hideConflicts) {
+        const id = courseId(c);
+        if (conflictCourseIds.active.has(id) || conflictCourseIds.potential.has(id)) return false;
+      }
       return true;
     });
     return sort ? sortBy(kept, (c) => sortKeyOf(c, sort.col), sort.dir) : kept;
@@ -507,11 +576,17 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
 
               <ul className="rows">
                 {shown.map((c) => {
-                  const inConflict = conflictCourseIds.has(courseId(c));
+                  const id = courseId(c);
+                  // Rojo: el grupo YA elegido choca — un bloqueo real. Ocre:
+                  // todavía no elegiste grupo, pero alguno de los que hay
+                  // chocaría — un aviso, antes de comprometerte.
+                  const isActiveConflict = conflictCourseIds.active.has(id);
+                  const isPotentialConflict = conflictCourseIds.potential.has(id);
+                  const inConflict = isActiveConflict || isPotentialConflict;
                   return (
                   <li key={c.code}>
                     <AppLink
-                      className={`row table__row ${inConflict ? 'is-conflict' : ''}`}
+                      className={`row table__row ${isActiveConflict ? 'is-conflict' : ''} ${isPotentialConflict ? 'is-conflict-potential' : ''}`}
                       to={{ name: 'course', selection: sel, code: c.code }}
                     >
                       <span className="row__code tnum col-code">{c.code}</span>
@@ -520,14 +595,20 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                           <Tooltip
                             content={
                               <p className="tt-body">
-                                Choca en horario con un grupo ya elegido en Mi horario.
+                                {isActiveConflict
+                                  ? 'El grupo elegido choca con tu horario actual.'
+                                  : 'Los horarios de esta materia chocan con tu horario actual.'}
                               </p>
                             }
                           >
                             <span
                               className="row__conflict-icon"
                               role="img"
-                              aria-label="Choca en horario con un grupo ya elegido en Mi horario"
+                              aria-label={
+                                isActiveConflict
+                                  ? 'El grupo elegido choca con tu horario actual'
+                                  : 'Los horarios de esta materia chocan con tu horario actual'
+                              }
                             >
                               <TriangleAlert size={13} strokeWidth={2} aria-hidden="true" />
                             </span>

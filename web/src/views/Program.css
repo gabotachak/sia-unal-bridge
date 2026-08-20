@@ -153,6 +153,19 @@
   );
 }
 
+/* Ocre y no óxido: acá todavía no hay grupo elegido, así que no hay bloqueo
+   armado — es un aviso de "si eliges alguno de estos, va a chocar", nada
+   más. Mismo gesto que `.slot.is-conflict-potential` (CourseCard.css). */
+.row.is-conflict-potential {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--warn-soft),
+    var(--warn-soft) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+
 .row__code {
   font-size: var(--t-micro);
   color: var(--text-faint);
@@ -184,8 +197,12 @@
   white-space: nowrap;
 }
 .row__conflict-icon {
+  display: inline-flex;
   flex: none;
   color: var(--bad);
+}
+.row.is-conflict-potential .row__conflict-icon {
+  color: var(--warn);
 }
 
 .row__credits {

@@ -34,5 +34,10 @@ export function useScheduleConflicts(rows: Row[], selection: ScheduleSelection) 
 
   const conflicts = useMemo(() => computeConflicts(blocksRaw), [blocksRaw]);
 
-  return { chosen, conflicts };
+  // Se expone junto con `chosen` y `conflicts`: el catálogo (Program.tsx)
+  // necesita los mismos bloques ya elegidos para saber si una materia que
+  // TODAVÍA no tiene grupo elegido chocaría con ellos (ver
+  // `courseConflictsWithChosen` en lib/conflicts.ts). Sin esto, Program.tsx
+  // tendría que rearmar `blocksRaw` a mano a partir de `chosen`.
+  return { chosen, conflicts, blocks: blocksRaw };
 }

@@ -137,6 +137,22 @@
   }
 }
 
+/* Choca en horario con un grupo ya elegido en Mi horario (issue #28). Mismo
+   rayado en óxido que `.slot.is-conflict` (CourseCard.css) y
+   `.week__block.is-conflict` (WeekCalendar.css): es la lectura de
+   "conflicto/error" que ya usa toda la app, no un color nuevo que aprender.
+   Declarado DESPUÉS de `.row:hover` para que gane con la misma
+   especificidad —dos clases— y el rayado no desaparezca al pasar el mouse. */
+.row.is-conflict {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--bad-soft),
+    var(--bad-soft) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+
 .row__code {
   font-size: var(--t-micro);
   color: var(--text-faint);
@@ -149,13 +165,27 @@
   color: var(--accent);
 }
 
-/* El único que cede ancho — y cede recortándose, no partiéndose. */
+/* El único que cede ancho — y cede recortándose, no partiéndose. Es flex y
+   no un bloque con `text-overflow` directo porque el icono de conflicto
+   entra como hermano del texto: como en `.slot__who` (CourseCard.css), el
+   recorte con puntos suspensivos solo funciona sobre un span de texto
+   propio, no mezclado con un ícono en línea. */
 .row__name {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  font-size: var(--t-body);
+}
+.row__name-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--t-body);
+}
+.row__conflict-icon {
+  flex: none;
+  color: var(--bad);
 }
 
 .row__credits {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeftRight,
   Check,
@@ -6,13 +6,17 @@ import {
   HelpCircle,
   SlidersHorizontal,
   Ticket,
+  TriangleAlert,
   X,
 } from 'lucide-react';
 import { routes } from '../api/client';
 import type { CoursesResponse, CourseSummary } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { useCatalogFilters } from '../hooks/useCatalogFilters';
+import { useCourseDetails } from '../hooks/useCourseDetails';
 import { usePlan } from '../hooks/usePlan';
+import { useScheduleConflicts } from '../hooks/useScheduleConflicts';
+import { useScheduleSelection } from '../hooks/useScheduleSelection';
 import { Layout } from '../components/Layout';
 import { AppLink } from '../components/AppLink';
 import { useConfirm } from '../components/Confirm';
@@ -26,7 +30,8 @@ import type { TableCol } from '../lib/table';
 import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
 import { useTableSort } from '../hooks/useTableSort';
 import { fold, formatAge, sentence } from '../lib/format';
-import { selectionId } from '../lib/storage';
+import { courseConflictsWithChosen } from '../lib/conflicts';
+import { itemId, selectionId } from '../lib/storage';
 import type { Screen } from '../state/nav';
 import './Program.css';
 
@@ -58,8 +63,67 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
    * ficha de una asignatura desmonta esta pantalla, y sin Context los
    * filtros —y el scroll— se perdían en el viaje de ida y vuelta.
    */
-  const { q, setQ, typols, setTypols, creds, setCreds, onlyOpen, setOnlyOpen, showFacets, setShowFacets, scrollY, setScrollY } =
-    useCatalogFilters();
+  const {
+    q,
+    setQ,
+    typols,
+    setTypols,
+    creds,
+    setCreds,
+    onlyOpen,
+    setOnlyOpen,
+    hideConflicts,
+    setHideConflicts,
+    showFacets,
+    setShowFacets,
+    scrollY,
+    setScrollY,
+  } = useCatalogFilters();
+
+  /**
+   * El plan elegido, para saber qué materias tienen grupo elegido en Mi
+   * horario (issue #28).
+   *
+   * Se trae acá arriba —y no más abajo, donde ya se usaba para "estás
+   * mirando otro plan"— porque hace falta antes: da los `plan.items` con los
+   * que se mide el choque de horario.
+   */
+  const plan = usePlan();
+
+  /**
+   * Qué materias del catálogo chocan en horario con un grupo YA elegido en
+   * Mi horario (issue #28: "Filtro por horario").
+   *
+   * Los grupos con su horario solo existen para las materias de Mi
+   * semestre —el catálogo en sí trae cupos agregados, no horario por
+   * grupo (`CourseSummary` vs. `CourseDetail`, ver api/types.ts)— así que
+   * el choque solo se puede saber para esas, como mucho diez
+   * (`MAX_ITEMS`). Es el MISMO `useCourseDetails` que usan Mi semestre y Mi
+   * horario, con el mismo pool y el mismo cooldown: entrar al catálogo no
+   * dispara nada que esas pantallas no disparen ya solas.
+   *
+   * `courseConflictsWithChosen` mira TODOS los grupos de la materia, no
+   * solo el elegido: acá puede no haber ninguno elegido todavía, y el punto
+   * es avisar ANTES de elegir que ninguno —o casi ninguno— va a encajar.
+   */
+  const { rows: planRows } = useCourseDetails(plan.items);
+  const { selection: scheduleSelection } = useScheduleSelection();
+  const { blocks: chosenBlocks } = useScheduleConflicts(planRows, scheduleSelection);
+
+  const conflictCourseIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const row of planRows) {
+      if (!row.detail) continue;
+      const id = itemId(row.item);
+      if (courseConflictsWithChosen(id, row.detail.sections, chosenBlocks)) ids.add(id);
+    }
+    return ids;
+  }, [planRows, chosenBlocks]);
+
+  const courseId = useCallback(
+    (c: CourseSummary) => itemId({ level, campus, program, code: c.code }),
+    [level, campus, program],
+  );
 
   /**
    * Restaura el scroll UNA vez, apenas hay filas que pintar — antes de eso
@@ -127,14 +191,15 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
       if (typols.size && !typols.has(c.typology)) return false;
       if (creds.size && !creds.has(c.credits)) return false;
       if (onlyOpen && !hasRoom(c)) return false;
+      if (hideConflicts && conflictCourseIds.has(courseId(c))) return false;
       return true;
     });
     return sort ? sortBy(kept, (c) => sortKeyOf(c, sort.col), sort.dir) : kept;
-  }, [data, q, typols, creds, onlyOpen, sort]);
+  }, [data, q, typols, creds, onlyOpen, hideConflicts, conflictCourseIds, courseId, sort]);
 
   const total = data?.courses.length ?? 0;
   const facetCount = typols.size + creds.size;
-  const filtering = !!q || facetCount > 0 || onlyOpen;
+  const filtering = !!q || facetCount > 0 || onlyOpen || hideConflicts;
 
   /**
    * Libre elección aparte del resto, con un atajo al lado.
@@ -180,6 +245,7 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
     setTypols(new Set());
     setCreds(new Set());
     setOnlyOpen(false);
+    setHideConflicts(false);
   }
 
   /**
@@ -190,8 +256,9 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
    * cambio: ahí `sel` es el plan que se está MIRANDO, y `plan.selection` sigue
    * siendo el de siempre. No se toca nada por las malas — se avisa y se deja
    * decidir, porque cambiar de verdad borra el semestre.
+   *
+   * `plan` en sí ya se trajo arriba, para el choque de horario.
    */
-  const plan = usePlan();
   const [ask, confirmDialog] = useConfirm();
   const { selection, select } = plan;
   const foreign = selection && selectionId(selection) !== selectionId(sel);
@@ -292,6 +359,24 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                 con cupos
               </button>
             </Tooltip>
+
+            {/* Al lado de "con cupos": la misma pregunta de sí o no, pero de
+                horario en vez de cupo. Destacar el choque (ver `.row.is-conflict`
+                más abajo) queda siempre puesto; este chip es solo para quien
+                además quiere que desaparezcan de la lista (issue #28). */}
+            <button
+              className={`chip ${hideConflicts ? 'is-on' : ''}`}
+              onClick={() => setHideConflicts((v) => !v)}
+              aria-pressed={hideConflicts}
+              title="Oculta las que chocan en horario con un grupo que ya elegiste en Mi horario. Las que chocan igual se destacan en la lista mientras este chip está apagado."
+            >
+              {hideConflicts ? (
+                <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+              ) : (
+                <TriangleAlert size={14} strokeWidth={1.75} aria-hidden="true" />
+              )}
+              sin choques
+            </button>
 
             {/* Solo se ve en el teléfono (CSS). El número es lo que evita que
                 plegar esconda información: dice cuántas facetas hay puestas
@@ -421,16 +506,37 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
               <TableHead sort={sort} onSort={onSort} />
 
               <ul className="rows">
-                {shown.map((c) => (
+                {shown.map((c) => {
+                  const inConflict = conflictCourseIds.has(courseId(c));
+                  return (
                   <li key={c.code}>
                     <AppLink
-                      className="row table__row"
+                      className={`row table__row ${inConflict ? 'is-conflict' : ''}`}
                       to={{ name: 'course', selection: sel, code: c.code }}
                     >
                       <span className="row__code tnum col-code">{c.code}</span>
-                      <Tooltip content={<p className="tt-title">{sentence(c.name)}</p>} onlyIfTruncated>
-                        <span className="row__name">{sentence(c.name)}</span>
-                      </Tooltip>
+                      <span className="row__name">
+                        {inConflict && (
+                          <Tooltip
+                            content={
+                              <p className="tt-body">
+                                Choca en horario con un grupo ya elegido en Mi horario.
+                              </p>
+                            }
+                          >
+                            <span
+                              className="row__conflict-icon"
+                              role="img"
+                              aria-label="Choca en horario con un grupo ya elegido en Mi horario"
+                            >
+                              <TriangleAlert size={13} strokeWidth={2} aria-hidden="true" />
+                            </span>
+                          </Tooltip>
+                        )}
+                        <Tooltip content={<p className="tt-title">{sentence(c.name)}</p>} onlyIfTruncated>
+                          <span className="row__name-text">{sentence(c.name)}</span>
+                        </Tooltip>
+                      </span>
                       <Tooltip
                         content={
                           <>
@@ -459,7 +565,8 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                       />
                     </AppLink>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </div>
           )}

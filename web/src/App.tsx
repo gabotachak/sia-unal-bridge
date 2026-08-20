@@ -9,6 +9,7 @@ import { Program } from './views/Program';
 import { Course } from './views/Course';
 import { Semester } from './views/Semester';
 import { Schedule } from './views/Schedule';
+import { Donate } from './views/Donate';
 
 /**
  * El árbol de pantallas.
@@ -31,6 +32,8 @@ function Screens() {
       return <Semester />;
     case 'schedule':
       return <Schedule />;
+    case 'donate':
+      return <Donate />;
   }
 }
 

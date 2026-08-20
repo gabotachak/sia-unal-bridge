@@ -1,59 +1,30 @@
-/* Misma píldora que `.chip` (styles/base.css) pero sin sus estados
-   interactivos: esto no se aprieta, solo informa. Los tres tonos son los
-   mismos de `SeatsFigure` (components/Seats.css) — bad/warn/ok de
-   styles/tokens.css — para que un rojo signifique lo mismo en toda la app. */
+/* Segundo renglón de `head__meta` (ver Semester.tsx): misma talla de texto,
+   mismo alineado a la derecha, solo cambia de color. Nada de píldora, borde
+   ni fondo — eso es lo que tenía antes y lo hacía leerse como un botón más
+   al lado de "medir cupos" / "con cupos" / "vaciar", cuando es un dato, no
+   una acción. Los tres tonos son los mismos de `SeatsFigure`
+   (components/Seats.css) — bad/warn/ok de styles/tokens.css — para que un
+   rojo signifique lo mismo en toda la app. El panel del desglose lo pone
+   `Tooltip` — ver Tooltip.css. */
 
-.credits-badge {
+.credits-status {
   display: inline-flex;
   align-items: center;
-  gap: var(--gap-xs);
-  padding: 0.45rem 0.85rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--text-dim);
+  gap: 0.3rem;
+  margin: 0;
   font-size: var(--t-small);
-  margin: 0 0 var(--gap) 0;
-  width: fit-content;
+  color: var(--text-dim);
+  cursor: default;
 }
 
-.credits-badge__note {
-  font-size: var(--t-micro);
-  color: var(--text-faint);
-}
-
-.credits-badge--danger {
-  border-color: var(--bad);
+.credits-status--danger {
   color: var(--bad);
-  background: var(--bad-soft);
-}
-.credits-badge--danger .credits-badge__note {
-  color: var(--bad);
-  opacity: 0.75;
 }
 
-.credits-badge--warning {
-  border-color: var(--warn);
+.credits-status--warning {
   color: var(--warn);
-  background: var(--warn-soft);
-}
-.credits-badge--warning .credits-badge__note {
-  color: var(--warn);
-  opacity: 0.75;
 }
 
-.credits-badge--ok {
-  border-color: var(--ok);
+.credits-status--ok {
   color: var(--ok);
-  background: var(--ok-soft);
-}
-.credits-badge--ok .credits-badge__note {
-  color: var(--ok);
-  opacity: 0.75;
-}
-
-@media (max-width: 32rem) {
-  .credits-badge__note {
-    display: none;
-  }
 }

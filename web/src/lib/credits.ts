@@ -29,3 +29,18 @@ export function creditsLevel(total: number): CreditsLevel {
   if (total < MIN_CREDITS_TO_CLOSE) return 'warning';
   return 'ok';
 }
+
+export type CreditsByTypology = { typology: string; credits: number };
+
+/** El total desglosado por tipología — 'LIBRE ELECCIÓN (L)', etc, tal cual
+ *  las devuelve el SIA. De mayor a menor crédito: es lo que más pesa en el
+ *  semestre lo primero que alguien quiere ver. */
+export function creditsByTypology(items: Pick<PlanItem, 'typology' | 'credits'>[]): CreditsByTypology[] {
+  const totals = new Map<string, number>();
+  for (const item of items) {
+    totals.set(item.typology, (totals.get(item.typology) ?? 0) + item.credits);
+  }
+  return [...totals.entries()]
+    .map(([typology, credits]) => ({ typology, credits }))
+    .sort((a, b) => b.credits - a.credits);
+}

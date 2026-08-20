@@ -40,22 +40,27 @@ export function Semester() {
           <h1 className="head__title">Mi semestre</h1>
         </div>
 
-        <p className="head__meta tnum">
-          {plan.items.length} de 10 materias
-          {totals.sections > 0 && (
-            <>
-              <span className="head__dot">·</span>
-              {totals.open} de {totals.sections} grupos con cupo
-            </>
-          )}
-        </p>
-      </header>
+        <div className="head__side">
+          {/* El "de 10" solo aparece cuando el plan está lleno: es el único
+              momento en que el tope importa — mientras hay espacio, decir
+              "4 de 10" no informa nada que "4" no diga ya. */}
+          <p className="head__meta tnum">
+            {plan.items.length}
+            {plan.full && ' de 10'} materia{plan.items.length === 1 ? '' : 's'}
+            {totals.measured > 0 && (
+              <>
+                <span className="head__dot">·</span>
+                {totals.open} con cupo
+              </>
+            )}
+          </p>
 
-      {/* Los estatutos exigen un mínimo de créditos para inscribir y otro,
-          más alto, para cerrar adiciones y cancelaciones. Es solo un aviso:
-          nunca deshabilita agregar ni quitar materias, así que va suelto
-          acá y no adentro de `PlanToolbar`, que sí trae acciones. */}
-      {!empty && <CreditsBadge items={plan.items} />}
+          {/* Los estatutos exigen un mínimo de créditos para inscribir y
+              otro, más alto, para cerrar adiciones y cancelaciones. Es solo
+              un aviso: nunca deshabilita agregar ni quitar materias. */}
+          {!empty && <CreditsBadge items={plan.items} />}
+        </div>
+      </header>
 
       {!empty && (
         <PlanToolbar
@@ -109,13 +114,13 @@ export function Semester() {
 }
 
 function summarize(rows: Row[]) {
-  let sections = 0;
+  let measured = 0;
   let open = 0;
   for (const r of rows) {
-    for (const s of r.detail?.sections ?? []) {
-      sections++;
-      if ((s.seats?.available ?? 0) > 0) open++;
-    }
+    const sections = r.detail?.sections ?? [];
+    if (sections.length === 0) continue;
+    measured++;
+    if (sections.some((s) => (s.seats?.available ?? 0) > 0)) open++;
   }
-  return { sections, open };
+  return { measured, open };
 }

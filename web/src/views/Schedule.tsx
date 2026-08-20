@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Download, PanelLeftClose, PanelLeftOpen, Share } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { AppLink } from '../components/AppLink';
 import { Empty } from '../components/States';
@@ -17,7 +17,7 @@ import { useViewportFit } from '../hooks/useViewportFit';
 import { STACK_BREAKPOINT_PX } from '../lib/breakpoints';
 import { blockId } from '../lib/conflicts';
 import { courseColorVar } from '../lib/courseColors';
-import { buildIcsCalendar, downloadIcsFile, icsFileName } from '../lib/ics';
+import { buildIcsCalendar, exportIcsFile, icsFileName, supportsFileShare } from '../lib/ics';
 import { itemId } from '../lib/storage';
 import './Schedule.css';
 
@@ -128,8 +128,17 @@ export function Schedule() {
       section,
     }));
     const ics = buildIcsCalendar(courses, plan.selection?.campusName);
-    downloadIcsFile(icsFileName(courses), ics);
+    void exportIcsFile(icsFileName(courses), ics, 'Mi horario UNAL');
   }
+
+  /**
+   * Solo decide el ÍCONO del botón (compartir vs. descargar) — el archivo en
+   * sí es el mismo en los dos casos, `exportIcsFile` decide de verdad cuál
+   * de los dos pasa al hacer click. Se calcula una vez: no cambia entre
+   * renders, y `navigator.share` no depende de nada que este componente
+   * observe.
+   */
+  const [canShareFile] = useState(supportsFileShare);
 
   /**
    * En mobile con materias, el calendario ya está calculado para llenar
@@ -189,10 +198,16 @@ export function Schedule() {
             title={
               exportable.length === 0
                 ? 'Elige al menos un grupo con horario para exportar.'
-                : 'Descarga un .ics con las materias elegidas: se importa en Google Calendar, Apple Calendar u Outlook.'
+                : canShareFile
+                  ? 'Agrega las materias elegidas a tu calendario.'
+                  : 'Descarga un .ics con las materias elegidas: se importa en Google Calendar, Apple Calendar u Outlook.'
             }
           >
-            <Download size={14} strokeWidth={1.75} aria-hidden="true" />
+            {canShareFile ? (
+              <Share size={14} strokeWidth={1.75} aria-hidden="true" />
+            ) : (
+              <Download size={14} strokeWidth={1.75} aria-hidden="true" />
+            )}
             exportar
           </button>
         </div>

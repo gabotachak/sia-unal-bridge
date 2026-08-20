@@ -262,3 +262,52 @@ export function downloadIcsFile(filename: string, content: string): void {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/** `true` si el navegador puede compartir ESTE archivo puntual —no solo si
+ *  existe `navigator.share`—: Safari/Chrome de escritorio a veces exponen la
+ *  API pero la rechazan para `text/calendar`, así que la única respuesta que
+ *  vale es la que da `canShare` con el archivo real en la mano. */
+function canShareIcsFile(file: File): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    typeof navigator.canShare === 'function' &&
+    navigator.canShare({ files: [file] })
+  );
+}
+
+/**
+ * Comparte el .ics por la hoja nativa del sistema si el navegador puede
+ * —en iOS/Android esa hoja trae un "Agregar a calendario" directo, sin que
+ * quien lo usa tenga que saber qué es un .ics— y si no, cae al `<a
+ * download>` de siempre. Es el mismo archivo en los dos casos: un solo
+ * VCALENDAR con todas las materias, nunca una materia a la vez.
+ *
+ * Cancelar la hoja de compartir (`AbortError`) NO cae a la descarga: quien
+ * cancela dijo que no, y una descarga disparándose sola después de eso se
+ * leería como que la cancelación no sirvió de nada. Cualquier OTRO error sí
+ * cae a la descarga —la hoja pudo fallar por una razón ajena a la decisión
+ * de quien la usa—.
+ */
+export async function exportIcsFile(filename: string, content: string, title: string): Promise<void> {
+  const file = new File([content], filename, { type: 'text/calendar' });
+
+  if (canShareIcsFile(file) && typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ files: [file], title });
+      return;
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      // Cualquier otro error: seguir abajo y caer a la descarga.
+    }
+  }
+
+  downloadIcsFile(filename, content);
+}
+
+/** Heurística barata para el ÍCONO del botón, antes de tener el archivo en
+ *  la mano: sin esto habría que construir el .ics en cada render solo para
+ *  decidir qué dibujar. `canShareIcsFile` (arriba, con el archivo real) es
+ *  la que de verdad decide qué pasa al hacer click. */
+export function supportsFileShare(): boolean {
+  return typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+}

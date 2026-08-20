@@ -78,8 +78,8 @@ export function AvailabilityFields({
           cubrir. Se encienden JUNTOS con `rangeIsOn`: es un filtro, no
           dos, aunque ahora se vean como dos chips. */}
       <div className="avail__range-group">
+        <Clock className="avail__range-icon" size={14} strokeWidth={1.75} aria-hidden="true" />
         <div className={`chip chip--sm avail__field avail__field--from ${rangeIsOn ? 'is-on' : ''}`}>
-          <Clock className="avail__field-icon" size={13} strokeWidth={1.75} aria-hidden="true" />
           <select
             className="avail__field-select"
             aria-label="Desde qué hora"

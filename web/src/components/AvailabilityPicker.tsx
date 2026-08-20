@@ -1,4 +1,4 @@
-import { ChevronDown, Clock, X } from 'lucide-react';
+import { CalendarDays, ChevronDown, Clock, X } from 'lucide-react';
 import {
   AVAIL_DAYS,
   AVAIL_END_MIN,
@@ -52,6 +52,9 @@ export function AvailabilityFields({
   return (
     <div className="avail-inline">
       <div className="chips">
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <CalendarDays className="avail__range-icon" size={14} strokeWidth={1.75} aria-hidden="true" />
+        </div>
         {AVAIL_DAYS.map((d) => {
           const on = value.days.has(d);
           return (

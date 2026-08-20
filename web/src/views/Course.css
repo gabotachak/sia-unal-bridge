@@ -120,10 +120,44 @@
 }
 
 .group__key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--accent);
   line-height: 1.2;
+}
+
+/* Mismas dos convenciones que en el catálogo y Mi semestre/horario
+   (`.slot.is-conflict` en CourseCard.css, `.row.is-conflict` en
+   Program.css): rojo si ESTE grupo está elegido y choca de verdad, ocre si
+   nadie lo eligió pero chocaría si se elige. */
+.group.is-conflict {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--bad-soft),
+    var(--bad-soft) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+.group.is-conflict-potential {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--warn-soft),
+    var(--warn-soft) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+.group__conflict-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--bad);
+}
+.group.is-conflict-potential .group__conflict-icon {
+  color: var(--warn);
 }
 
 .group__label,

@@ -1,15 +1,21 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowLeft, Clock, MapPin, RefreshCw, User } from 'lucide-react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, Clock, MapPin, RefreshCw, TriangleAlert, User } from 'lucide-react';
 import { FETCH_COOLDOWN, routes } from '../api/client';
 import type { ClassSession, CourseDetail, Section } from '../api/types';
 import { useApi } from '../hooks/useApi';
+import { useCourseDetails } from '../hooks/useCourseDetails';
+import { usePlan } from '../hooks/usePlan';
+import { useScheduleConflicts } from '../hooks/useScheduleConflicts';
+import { useScheduleSelection } from '../hooks/useScheduleSelection';
 import { Layout } from '../components/Layout';
 import { AppLink } from '../components/AppLink';
 import { AddButton } from '../components/AddButton';
 import { Empty, Fault, Loading } from '../components/States';
 import { Seats } from '../components/Seats';
 import { Tooltip } from '../components/Tooltip';
+import { candidateConflictKeys } from '../lib/conflicts';
 import { WEEKDAYS_LONG, formatClockTime, formatCountdown, sentence, titleCase } from '../lib/format';
+import { itemId } from '../lib/storage';
 import type { Screen } from '../state/nav';
 import './Course.css';
 
@@ -114,6 +120,29 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
    */
   const rateLimited = error?.status === 429 ? error : null;
   const fault = error && !rateLimited ? error : null;
+
+  /**
+   * Mismo choque de horario que el catálogo y Mi semestre/horario (issue
+   * #28), acá en la ficha: cada grupo contra lo YA elegido en OTRA materia.
+   *
+   * A diferencia de Program.tsx, acá NO hace falta el detalle de las diez
+   * materias del plan: solo importan las que ya tienen grupo elegido —son
+   * las únicas que aportan un bloque a `chosenBlocks`—, así que se le pide
+   * detalle solo a esas. Una materia del plan sin grupo elegido no cambia
+   * nada de lo que se marca en esta ficha, y pedirle el detalle igual sería
+   * una consulta de más que esta pantalla no necesita para nada.
+   */
+  const plan = usePlan();
+  const { selection: scheduleSelection } = useScheduleSelection();
+  const chosenPlanItems = useMemo(
+    () => plan.items.filter((it) => scheduleSelection[itemId(it)]),
+    [plan.items, scheduleSelection],
+  );
+  const { rows: planRows } = useCourseDetails(chosenPlanItems);
+  const { blocks: chosenBlocks } = useScheduleConflicts(planRows, scheduleSelection);
+  const thisCourseId = itemId({ level, campus, program, code });
+  const pickedKey = scheduleSelection[thisCourseId];
+  const conflictKeys = data ? candidateConflictKeys(thisCourseId, data.sections, chosenBlocks) : new Set<string>();
 
   return (
     <Layout>
@@ -231,7 +260,12 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
 
                 <ul className={`groups ${measuring ? 'is-measuring' : ''}`}>
                   {data.sections.map((s) => (
-                    <SectionRow key={s.key} section={s} />
+                    <SectionRow
+                      key={s.key}
+                      section={s}
+                      isActiveConflict={conflictKeys.has(s.key) && pickedKey === s.key}
+                      isPotentialConflict={conflictKeys.has(s.key) && pickedKey !== s.key}
+                    />
                   ))}
                 </ul>
               </>
@@ -289,13 +323,49 @@ function CourseDescription({ text }: { text: string }) {
   );
 }
 
-function SectionRow({ section }: { section: Section }) {
+function SectionRow({
+  section,
+  isActiveConflict,
+  isPotentialConflict,
+}: {
+  section: Section;
+  /** El grupo elegido de verdad y choca — un bloqueo real. */
+  isActiveConflict: boolean;
+  /** Nadie lo eligió, pero chocaría si se elige — un aviso. */
+  isPotentialConflict: boolean;
+}) {
+  const inConflict = isActiveConflict || isPotentialConflict;
   return (
-    <li className="group">
+    <li className={`group ${isActiveConflict ? 'is-conflict' : ''} ${isPotentialConflict ? 'is-conflict-potential' : ''}`}>
       <div className="group__id">
         {/* La clave, no el número: cinco grupos pueden llamarse "Grupo 1" y
             lo único que los distingue es este token. */}
-        <span className="group__key tnum">{section.key}</span>
+        <span className="group__key tnum">
+          {section.key}
+          {inConflict && (
+            <Tooltip
+              content={
+                <p className="tt-body">
+                  {isActiveConflict
+                    ? 'Este horario choca con tu horario actual.'
+                    : 'Si eliges este grupo, va a chocar con tu horario actual.'}
+                </p>
+              }
+            >
+              <span
+                className="group__conflict-icon"
+                role="img"
+                aria-label={
+                  isActiveConflict
+                    ? 'Este horario choca con tu horario actual'
+                    : 'Si eliges este grupo, va a chocar con tu horario actual'
+                }
+              >
+                <TriangleAlert size={13} strokeWidth={2} aria-hidden="true" />
+              </span>
+            </Tooltip>
+          )}
+        </span>
         <span className="group__label">{section.label ?? `Grupo ${section.number}`}</span>
         {section.site && <span className="group__site">{section.site}</span>}
       </div>

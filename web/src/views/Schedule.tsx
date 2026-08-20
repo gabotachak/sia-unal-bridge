@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Download, PanelLeftClose, PanelLeftOpen, Share } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { AppLink } from '../components/AppLink';
 import { Empty } from '../components/States';
@@ -17,6 +17,7 @@ import { useViewportFit } from '../hooks/useViewportFit';
 import { STACK_BREAKPOINT_PX } from '../lib/breakpoints';
 import { blockId } from '../lib/conflicts';
 import { courseColorVar } from '../lib/courseColors';
+import { buildIcsCalendar, exportIcsFile, icsFileName, supportsFileShare } from '../lib/ics';
 import { itemId } from '../lib/storage';
 import './Schedule.css';
 
@@ -115,6 +116,30 @@ export function Schedule() {
     plan.items.some((it) => itemId(it) === id),
   ).length;
 
+  // Lo que de verdad se puede exportar: grupos elegidos CON horario. Uno
+  // sin sesiones —`withoutSchedule`, arriba— no aporta ningún VEVENT, así
+  // que ni cuenta para encender el botón ni entra al .ics.
+  const exportable = chosen.filter(({ section }) => section.schedule.length > 0);
+
+  function exportToCalendar() {
+    const courses = exportable.map(({ row, section }) => ({
+      code: row.item.code,
+      name: row.item.name,
+      section,
+    }));
+    const ics = buildIcsCalendar(courses, plan.selection?.campusName);
+    void exportIcsFile(icsFileName(courses), ics, 'Mi horario UNAL');
+  }
+
+  /**
+   * Solo decide el ÍCONO del botón (compartir vs. descargar) — el archivo en
+   * sí es el mismo en los dos casos, `exportIcsFile` decide de verdad cuál
+   * de los dos pasa al hacer click. Se calcula una vez: no cambia entre
+   * renders, y `navigator.share` no depende de nada que este componente
+   * observe.
+   */
+  const [canShareFile] = useState(supportsFileShare);
+
   /**
    * En mobile con materias, el calendario ya está calculado para llenar
    * exactamente lo que hay entre la barra de arriba y `.tabbar` — el
@@ -142,10 +167,51 @@ export function Schedule() {
           <p className="eyebrow">planificador</p>
           <h1 className="head__title">Mi horario</h1>
         </div>
-        <p className="head__meta tnum">
-          {pickedCount} de {plan.items.length} materias con grupo elegido
-        </p>
+
+        {/* Mismo `.head__side` que Mi semestre: el conteo pegado al borde
+            derecho, en la fila del título. El botón ya no vive acá — ver
+            el `.toolbar` de abajo — así que esta cabecera es, hueso por
+            hueso, la misma de Mi semestre. */}
+        <div className="head__side">
+          <p className="head__meta tnum">
+            {pickedCount} de {plan.items.length} materias con grupo elegido
+          </p>
+        </div>
       </header>
+
+      {/* Fila de controles propia, debajo del header — el mismo lugar y la
+          misma clase (`.toolbar`) que el `PlanToolbar` de Mi semestre, para
+          que las dos cabeceras se lean como la misma app. Fuera de
+          `.sched__list-head` (donde están los controles de la lista)
+          porque exportar es del CALENDARIO, no de la lista: sigue haciendo
+          falta con la lista colapsada y en mobile, donde
+          `.sched__list-head` ni se dibuja. Escondida en vacío por la misma
+          razón que el `PlanToolbar` de Mi semestre: nada que exportar
+          todavía. */}
+      {!empty && (
+        <div className="toolbar">
+          <button
+            type="button"
+            className="btn"
+            onClick={exportToCalendar}
+            disabled={exportable.length === 0}
+            title={
+              exportable.length === 0
+                ? 'Elige al menos un grupo con horario para exportar.'
+                : canShareFile
+                  ? 'Agrega las materias elegidas a tu calendario.'
+                  : 'Descarga un .ics con las materias elegidas: se importa en Google Calendar, Apple Calendar u Outlook.'
+            }
+          >
+            {canShareFile ? (
+              <Share size={14} strokeWidth={1.75} aria-hidden="true" />
+            ) : (
+              <Download size={14} strokeWidth={1.75} aria-hidden="true" />
+            )}
+            exportar
+          </button>
+        </div>
+      )}
 
       {empty ? (
         <>

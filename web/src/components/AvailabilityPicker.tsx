@@ -1,4 +1,4 @@
-import { ChevronDown, Clock } from 'lucide-react';
+import { CalendarDays, ChevronDown, Clock, X } from 'lucide-react';
 import {
   AVAIL_DAYS,
   AVAIL_END_MIN,
@@ -7,6 +7,7 @@ import {
   type AvailabilityFilter,
 } from '../lib/availability';
 import { WEEKDAYS_LONG, WEEKDAYS_SHORT } from '../lib/format';
+import { Tooltip } from './Tooltip';
 import './AvailabilityPicker.css';
 
 const TIME_OPTIONS = availabilityTimeOptions();
@@ -51,6 +52,9 @@ export function AvailabilityFields({
   return (
     <div className="avail-inline">
       <div className="chips">
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <CalendarDays className="avail__range-icon" size={14} strokeWidth={1.75} aria-hidden="true" />
+        </div>
         {AVAIL_DAYS.map((d) => {
           const on = value.days.has(d);
           return (
@@ -68,39 +72,71 @@ export function AvailabilityFields({
         })}
       </div>
 
-      {/* Una píldora, no dos campos con caption: "desde"/"hasta" ya lo dice
-          el orden —la primera hora siempre es el inicio— así que escribirlo
-          además en letras era ruido. `aria-label` lo deja igual de claro
-          para quien usa lector de pantalla. */}
-      <div className={`chip chip--sm avail__range ${rangeIsOn ? 'is-on' : ''}`}>
-        <Clock size={13} strokeWidth={1.75} aria-hidden="true" />
-        <select
-          aria-label="Desde qué hora"
-          value={value.fromMin}
-          onChange={(e) => onChange({ ...value, fromMin: Number(e.target.value) })}
-        >
-          {TIME_OPTIONS.filter((t) => t.min < value.toMin).map((t) => (
-            <option key={t.min} value={t.min}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown className="avail__chevron" size={11} strokeWidth={2} aria-hidden="true" />
+      {/* Dos chips independientes —no una píldora partida a la mitad—,
+          cada uno el mismo patrón que un chip de día: un solo `<select>`
+          por chip, sin gap interno que compita por el click, así que su
+          hitbox es tan confiable como el de "L" o "M" arriba. Las dos
+          intentonas anteriores (label delegado, luego overlay dentro de
+          una píldora compartida) fallaban por el mismo motivo — meter dos
+          controles en un solo elemento visual siempre dejaba un borde sin
+          cubrir. Se encienden JUNTOS con `rangeIsOn`: es un filtro, no
+          dos, aunque ahora se vean como dos chips. */}
+      <div className="avail__range-group">
+        <Clock className="avail__range-icon" size={14} strokeWidth={1.75} aria-hidden="true" />
+        <div className={`chip chip--sm avail__field avail__field--from ${rangeIsOn ? 'is-on' : ''}`}>
+          <span className="avail__field-value" aria-hidden="true">
+            {TIME_OPTIONS.find((t) => t.min === value.fromMin)?.label}
+          </span>
+          <select
+            className="avail__field-select"
+            aria-label="Desde qué hora"
+            value={value.fromMin}
+            onChange={(e) => onChange({ ...value, fromMin: Number(e.target.value) })}
+          >
+            {TIME_OPTIONS.filter((t) => t.min < value.toMin).map((t) => (
+              <option key={t.min} value={t.min}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="avail__field-chevron" size={11} strokeWidth={2} aria-hidden="true" />
+        </div>
         <span className="avail__range-sep" aria-hidden="true">
           –
         </span>
-        <select
-          aria-label="Hasta qué hora"
-          value={value.toMin}
-          onChange={(e) => onChange({ ...value, toMin: Number(e.target.value) })}
-        >
-          {TIME_OPTIONS.filter((t) => t.min > value.fromMin).map((t) => (
-            <option key={t.min} value={t.min}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown className="avail__chevron" size={11} strokeWidth={2} aria-hidden="true" />
+        <div className={`chip chip--sm avail__field avail__field--to ${rangeIsOn ? 'is-on' : ''}`}>
+          <span className="avail__field-value" aria-hidden="true">
+            {TIME_OPTIONS.find((t) => t.min === value.toMin)?.label}
+          </span>
+          <select
+            className="avail__field-select"
+            aria-label="Hasta qué hora"
+            value={value.toMin}
+            onChange={(e) => onChange({ ...value, toMin: Number(e.target.value) })}
+          >
+            {TIME_OPTIONS.filter((t) => t.min > value.fromMin).map((t) => (
+              <option key={t.min} value={t.min}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="avail__field-chevron" size={11} strokeWidth={2} aria-hidden="true" />
+        </div>
+
+        {/* Aparte de los dos chips, no adentro de ninguno: solo aparece
+            cuando el filtro está activo. */}
+        {rangeIsOn && (
+          <Tooltip content={<p className="tt-title">Quitar filtro de horario</p>}>
+            <button
+              type="button"
+              className="toolbar__clear"
+              aria-label="Quitar filtro de horario"
+              onClick={() => onChange({ ...value, fromMin: AVAIL_START_MIN, toMin: AVAIL_END_MIN })}
+            >
+              <X size={15} strokeWidth={2} aria-hidden="true" />
+            </button>
+          </Tooltip>
+        )}
       </div>
     </div>
   );

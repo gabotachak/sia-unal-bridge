@@ -5,55 +5,73 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--gap-sm);
+  row-gap: var(--gap-sm);
+  column-gap: var(--gap);
   flex: 1;
 }
 
-/* El rango, como una píldora más al lado de los días de la semana —mismo
-   alto, mismo radio que `.chip--sm`— para que las dos mitades del filtro
-   ("qué días", "qué horas") se lean como parte de la misma familia y no
-   como un control de otro sistema. */
-/* `.avail__range` se agrega ENCIMA de `.chip.chip--sm` (ver
-   AvailabilityPicker.tsx) y no reimplementa su caja: pedirle el mismo
-   padding/radio/alto a mano es como se desalinearon la primera vez — un
-   `<select>` trae su propio relleno de fábrica que el padding del
-   contenedor no absorbe, así que "copiar los mismos números" no basta,
-   hace falta ser literalmente el mismo elemento. Acá solo el gap entre
-   ícono/selects/separador, que `.chip` no define porque nunca tuvo más de
-   un texto adentro. */
-.avail__range {
+/* Los dos chips de hora + la X, agrupados aparte para que el gap chico
+   entre ellos (0.3rem) los lea como una unidad y no como dos filtros
+   sueltos, aunque cada uno sea su propio elemento clickeable. */
+.avail__range-group {
+  display: flex;
+  align-items: center;
   gap: 0.3rem;
 }
 
-/* `appearance: none` le quita a `<select>` su relleno y alto de línea de
-   fábrica —lo que lo hacía más alto que el resto del pill—, así que la
-   flechita nativa se repone a mano con `ChevronDown`. */
-.avail__range select {
-  appearance: none;
-  border: none;
-  margin: 0;
-  padding: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  font-size: inherit;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-.avail__range select:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 2px;
+/* Un chip por hora —"desde" y "hasta"—, mismo patrón que un chip de día:
+   un solo `<select>` adentro, sin gap interno compitiendo por el click.
+   `padding: 0` porque el padding real lo pone `.avail__field-select`
+   (ver abajo) — así el `<select>` ES la caja entera del chip, borde a
+   borde, y no queda un anillo de padding del contenedor sin cubrir. Dos
+   intentos previos (label delegando el click, luego un overlay dentro de
+   una píldora compartida entre las dos horas) fallaban justo en ese
+   anillo. */
+.chip.chip--sm.avail__field {
+  position: relative;
+  /* El padding lo hereda de .chip--sm (0.2rem 0.6rem), así que su altura
+     será matemáticamente idéntica a los días de la semana. Solo agregamos
+     espacio a la derecha para el chevron. */
+  padding-right: 1.55rem;
 }
 
-.avail__range svg {
-  flex: none;
+.avail__field-value {
+  font-variant-numeric: tabular-nums;
 }
-.avail__range .avail__chevron {
+
+.avail__field-select {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  appearance: none;
+}
+.avail__range-icon {
+  color: var(--text-faint);
+  margin-right: 0.2rem;
+}
+
+.avail__field-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+
+.avail__field-chevron {
+  position: absolute;
+  right: 0.55rem;
+  top: 50%;
+  transform: translateY(-50%);
   opacity: 0.6;
-  margin-left: -0.15rem;
+  pointer-events: none;
 }
+
 .avail__range-sep {
-  color: inherit;
+  color: var(--text-dim);
   opacity: 0.7;
 }
+
+

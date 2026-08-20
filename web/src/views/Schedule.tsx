@@ -8,6 +8,7 @@ import { PlanList } from '../components/PlanList';
 import { PlanToolbar } from '../components/PlanToolbar';
 import { WeekCalendar, type CalendarBlock } from '../components/WeekCalendar';
 import { useCourseDetails } from '../hooks/useCourseDetails';
+import { usePanelWidth } from '../hooks/usePanelWidth';
 import { usePlan } from '../hooks/usePlan';
 import { useScheduleConflicts } from '../hooks/useScheduleConflicts';
 import { useScheduleSelection } from '../hooks/useScheduleSelection';
@@ -47,6 +48,11 @@ export function Schedule() {
   // dos sobrepase al otro. Sin opciones de mobile porque este panel no
   // existe en mobile: ver `isMobile` abajo.
   const [listRef, listMaxHeightRem] = useViewportFit<HTMLDivElement>();
+
+  // Ancho del panel, arrastrable. Ver usePanelWidth para el porqué del
+  // tope y el piso.
+  const { containerRef, widthRem, dragging, onPointerDown, onKeyDown, min, max } =
+    usePanelWidth();
 
   /**
    * Debajo de STACK_BREAKPOINT_PX, Mi horario es SOLO el calendario.
@@ -168,7 +174,9 @@ export function Schedule() {
         // lista de materias, y esa lista es Mi semestre, que tiene su barra
         // de siempre a un toque en `.tabbar`. Acá el alto que ocuparían es
         // lo único escaso que hay.
-        <div className="sched__body">
+        // El ref mide el ancho de ESTA fila, de donde sale el tope del
+        // panel: la mitad. Ver usePanelWidth.
+        <div className="sched__body" ref={containerRef}>
           {/* El ref y el alto van en `.sched__list`, no en lo de adentro: al
               colapsar/abrir (`listOpen`) esto no se desmonta —solo lo que
               hay dentro cambia entre la lista y el riel—, así que es lo
@@ -183,9 +191,12 @@ export function Schedule() {
               en la barra de abajo. */}
           {!isMobile && (
             <aside
-              className={`sched__list ${listOpen ? '' : 'is-collapsed'}`}
+              className={`sched__list ${listOpen ? '' : 'is-collapsed'} ${dragging ? 'is-dragging' : ''}`}
               ref={listRef}
-              style={Number.isFinite(listMaxHeightRem) ? { height: `${listMaxHeightRem}rem` } : undefined}
+              style={{
+                ...(Number.isFinite(listMaxHeightRem) ? { height: `${listMaxHeightRem}rem` } : undefined),
+                ...(listOpen ? { flexBasis: `${widthRem}rem` } : undefined),
+              }}
             >
               {listOpen ? (
                 <>
@@ -239,6 +250,25 @@ export function Schedule() {
                 </button>
               )}
             </aside>
+          )}
+
+          {/* Solo con la lista abierta: colapsada (`sched__rail`) no hay
+              ancho que redimensionar, y arrastrar el riel de 2.75rem no
+              tiene ningún sentido. */}
+          {!isMobile && listOpen && (
+            <div
+              className={`sched__resizer ${dragging ? 'is-dragging' : ''}`}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Redimensionar panel de materias"
+              aria-valuenow={Math.round(widthRem)}
+              aria-valuemin={min}
+              aria-valuemax={max}
+              aria-valuetext={`${Math.round(widthRem)} rem`}
+              tabIndex={0}
+              onPointerDown={onPointerDown}
+              onKeyDown={onKeyDown}
+            />
           )}
 
           <div className="sched__calendar">

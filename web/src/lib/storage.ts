@@ -19,6 +19,10 @@ const SORT_KEY = 'tablero.orden.v1';
 /** El grupo elegido por materia en Horario. Ver loadScheduleSelection. */
 const SCHEDULE_KEY = 'tablero.horario.v1';
 
+/** El ancho del panel de materias en Horario, si alguien lo arrastró.
+ *  Ver loadScheduleListWidth. */
+const SCHEDULE_WIDTH_KEY = 'tablero.horario.ancho.v1';
+
 export type PlanItem = {
   level: string; // 'pregrado' — el mismo código puede existir en otro nivel
   campus: string; // '1101'
@@ -157,6 +161,7 @@ export function clearStored(): void {
     localStorage.removeItem(PICK_KEY);
     localStorage.removeItem(SORT_KEY);
     localStorage.removeItem(SCHEDULE_KEY);
+    localStorage.removeItem(SCHEDULE_WIDTH_KEY);
   } catch {
     // Modo privado. Si no se puede escribir, tampoco había nada guardado.
   }
@@ -191,6 +196,28 @@ export function saveScheduleSelection(sel: ScheduleSelection): void {
   try {
     if (Object.keys(sel).length === 0) localStorage.removeItem(SCHEDULE_KEY);
     else localStorage.setItem(SCHEDULE_KEY, JSON.stringify(sel));
+  } catch {
+    // Cuota llena o modo privado: no vale la pena romper la app por esto.
+  }
+}
+
+/** `null` = nunca lo arrastró, o lo devolvió a su ancho original — en los
+ *  dos casos el panel usa el default del hook, no un número guardado. */
+export function loadScheduleListWidth(): number | null {
+  try {
+    const raw = localStorage.getItem(SCHEDULE_WIDTH_KEY);
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveScheduleListWidth(remWidth: number | null): void {
+  try {
+    if (remWidth === null) localStorage.removeItem(SCHEDULE_WIDTH_KEY);
+    else localStorage.setItem(SCHEDULE_WIDTH_KEY, String(remWidth));
   } catch {
     // Cuota llena o modo privado: no vale la pena romper la app por esto.
   }

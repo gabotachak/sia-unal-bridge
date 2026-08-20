@@ -8,10 +8,13 @@
 
    Suman 78rem y la página mide 82rem: a pantalla ancha entran los dos
    enteros. Más angosta, los dos se encogen a prorrata de lo que piden —
-   la lista hasta 16rem, el piso donde su tabla todavía se lee. La tabla
-   de adentro pierde columnas sola según el ancho que le quede
-   (`container: table`, styles/table.css), así que encogerse no la
-   rompe: la deja como la misma tabla en el teléfono.
+   la lista hasta 22rem, que era su ancho fijo de antes, y ahí para salvo
+   que alguien arrastre el resizer (`sched__resizer`, `usePanelWidth`):
+   ese es el único que puede llevarla hasta 16rem, un piso más apretado
+   que el de antes porque ahí ya es una elección, no algo que le impuso
+   la ventana. La tabla de adentro pierde columnas sola según el ancho
+   que le quede (`container: table`, styles/table.css), así que
+   encogerse no la rompe: la deja como la misma tabla en el teléfono.
 
    Bajo los 860px no caben lado a lado sin apretar ninguno de los dos, y
    apilados la lista sería Mi semestre por segunda vez: mismas tarjetas,
@@ -39,14 +42,19 @@
    mismo disponible sin coordinarse entre sí — ninguno sobrepasa al otro.
 
    El ancho sí anima (`.is-collapsed`), con `overflow: hidden` propio para
-   recortar el contenido mientras se achica. */
+   recortar el contenido mientras se achica. Arrastrando el resizer la
+   animación se apaga (`.is-dragging`): con ella puesta, el panel persigue
+   al mouse con `--slow` de retraso en vez de seguirlo pixel a pixel. */
 .sched__list {
   flex: 0 1 22rem;
   /* El piso: por debajo la tabla ya no tiene ni el nombre ni los cupos
-     legibles. */
+     legibles. `usePanelWidth` (MIN_REM) es la misma cota — repetida acá
+     por si el JS no llegó a correr todavía. */
   min-width: 16rem;
-  /* El techo: la mitad de la fila, el punto donde el panel y el
-     calendario miden lo mismo. */
+  /* El techo: la mitad de la fila, o sea el punto donde el panel y el
+     calendario miden lo mismo. `usePanelWidth` calcula esa mitad descontando
+     el gap —acá `50%` lo incluye, así que este tope es medio `--gap-lg` más
+     generoso— y es el que manda; este está por si el JS no llegó a correr. */
   max-width: 50%;
   overflow: hidden;
   /* Cabecera fija + área que scrollea: es lo que reparte el alto que
@@ -55,9 +63,53 @@
   flex-direction: column;
   transition: flex-basis var(--slow) var(--ease-out);
 }
+.sched__list.is-dragging {
+  transition: none;
+}
 .sched__list.is-collapsed {
   flex: 0 0 2.75rem;
   min-width: 0;
+}
+
+/* El resizer: una franja angosta entre la lista y el calendario, más
+   ancha de lo que se ve —el hit-area del mouse no puede depender de
+   acertarle a una línea de 2px— con la línea de verdad centrada adentro
+   por `::before`. Vive DENTRO del gap de `.sched__body` con márgenes
+   negativos: así no le suma ancho a la fila, solo ocupa el aire que ya
+   había entre los dos paneles. */
+.sched__resizer {
+  flex: none;
+  align-self: stretch;
+  width: 1rem;
+  margin: 0 calc(var(--gap-lg) * -0.5);
+  position: relative;
+  z-index: 1;
+  cursor: col-resize;
+  touch-action: none;
+}
+.sched__resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--rule);
+  border-radius: 999px;
+  transition: background-color var(--fast) var(--ease-out);
+}
+.sched__resizer:focus-visible {
+  outline: none;
+}
+.sched__resizer.is-dragging::before,
+.sched__resizer:focus-visible::before {
+  background: var(--accent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .sched__resizer:hover::before {
+    background: var(--accent);
+  }
 }
 
 /* `scrollbar-gutter: stable` más el padding a la derecha son la respuesta

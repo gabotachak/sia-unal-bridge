@@ -2,6 +2,7 @@ import { FETCH_COOLDOWN } from '../api/client';
 import { formatAge } from '../lib/format';
 import { Layout } from '../components/Layout';
 import { AppLink } from '../components/AppLink';
+import { CreditsBadge } from '../components/CreditsBadge';
 import { Empty } from '../components/States';
 import { PlanList } from '../components/PlanList';
 import { PlanToolbar } from '../components/PlanToolbar';
@@ -49,6 +50,12 @@ export function Semester() {
           )}
         </p>
       </header>
+
+      {/* Los estatutos exigen un mínimo de créditos para inscribir y otro,
+          más alto, para cerrar adiciones y cancelaciones. Es solo un aviso:
+          nunca deshabilita agregar ni quitar materias, así que va suelto
+          acá y no adentro de `PlanToolbar`, que sí trae acciones. */}
+      {!empty && <CreditsBadge items={plan.items} />}
 
       {!empty && (
         <PlanToolbar

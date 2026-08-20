@@ -17,6 +17,7 @@ export function CatalogFiltersProvider({ children }: { children: React.ReactNode
   const [typols, setTypols] = useState<ReadonlySet<string>>(new Set());
   const [creds, setCreds] = useState<ReadonlySet<number>>(new Set());
   const [onlyOpen, setOnlyOpen] = useState(false);
+  const [hideConflicts, setHideConflicts] = useState(false);
   const [showFacets, setShowFacets] = useState(false);
 
   // Ref y no estado: cambia en cada pixel de scroll, y CatalogFiltersProvider
@@ -35,6 +36,8 @@ export function CatalogFiltersProvider({ children }: { children: React.ReactNode
       setCreds,
       onlyOpen,
       setOnlyOpen,
+      hideConflicts,
+      setHideConflicts,
       showFacets,
       setShowFacets,
       get scrollY() {
@@ -44,7 +47,7 @@ export function CatalogFiltersProvider({ children }: { children: React.ReactNode
         scrollYRef.current = y;
       },
     }),
-    [q, typols, creds, onlyOpen, showFacets],
+    [q, typols, creds, onlyOpen, hideConflicts, showFacets],
   );
 
   return <CatalogFiltersContext value={api}>{children}</CatalogFiltersContext>;

@@ -9,6 +9,10 @@ export type CatalogFiltersApi = {
   setCreds: Dispatch<SetStateAction<ReadonlySet<number>>>;
   onlyOpen: boolean;
   setOnlyOpen: Dispatch<SetStateAction<boolean>>;
+  /** Oculta las materias que chocan en horario con un grupo ya elegido en
+   *  Mi horario, en vez de solo destacarlas (issue #28). */
+  hideConflicts: boolean;
+  setHideConflicts: Dispatch<SetStateAction<boolean>>;
   showFacets: boolean;
   setShowFacets: Dispatch<SetStateAction<boolean>>;
   /** Dónde estaba el scroll cuando se salió del catálogo hacia una ficha. */

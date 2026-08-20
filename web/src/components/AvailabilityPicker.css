@@ -74,28 +74,4 @@
   opacity: 0.7;
 }
 
-/* Botón aparte para apagar el filtro de horario: los dos chips ahora son
-   100% zona de `<select>`, así que oprimirlos adentro nunca podría
-   "apagar" nada sin abrir un desplegable de paso. Mismo alto que
-   `.chip--sm` para que se lea parte del mismo grupo. */
-.avail__range-clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
-  border: 1px solid var(--rule-strong);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--text-dim);
-  cursor: pointer;
-  transition:
-    color var(--fast) var(--ease-out),
-    border-color var(--fast) var(--ease-out),
-    background-color var(--fast) var(--ease-out);
-}
-.avail__range-clear:hover {
-  color: var(--text);
-  border-color: var(--text-dim);
-}
+

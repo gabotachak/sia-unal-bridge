@@ -7,6 +7,7 @@ import {
   type AvailabilityFilter,
 } from '../lib/availability';
 import { WEEKDAYS_LONG, WEEKDAYS_SHORT } from '../lib/format';
+import { Tooltip } from './Tooltip';
 import './AvailabilityPicker.css';
 
 const TIME_OPTIONS = availabilityTimeOptions();
@@ -116,14 +117,16 @@ export function AvailabilityFields({
         {/* Aparte de los dos chips, no adentro de ninguno: solo aparece
             cuando el filtro está activo. */}
         {rangeIsOn && (
-          <button
-            type="button"
-            className="avail__range-clear"
-            aria-label="Quitar filtro de horario"
-            onClick={() => onChange({ ...value, fromMin: AVAIL_START_MIN, toMin: AVAIL_END_MIN })}
-          >
-            <X size={12} strokeWidth={2} aria-hidden="true" />
-          </button>
+          <Tooltip content={<p className="tt-title">Quitar filtro de horario</p>}>
+            <button
+              type="button"
+              className="toolbar__clear"
+              aria-label="Quitar filtro de horario"
+              onClick={() => onChange({ ...value, fromMin: AVAIL_START_MIN, toMin: AVAIL_END_MIN })}
+            >
+              <X size={15} strokeWidth={2} aria-hidden="true" />
+            </button>
+          </Tooltip>
         )}
       </div>
     </div>

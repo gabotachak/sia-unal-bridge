@@ -9,79 +9,84 @@
   flex: 1;
 }
 
-/* El rango, como una píldora más al lado de los días de la semana —mismo
-   alto, mismo radio que `.chip--sm`— para que las dos mitades del filtro
-   ("qué días", "qué horas") se lean como parte de la misma familia y no
-   como un control de otro sistema. */
-/* `.avail__range` se agrega ENCIMA de `.chip.chip--sm` (ver
-   AvailabilityPicker.tsx) y no reimplementa su caja: pedirle el mismo
-   padding/radio/alto a mano es como se desalinearon la primera vez — un
-   `<select>` trae su propio relleno de fábrica que el padding del
-   contenedor no absorbe, así que "copiar los mismos números" no basta,
-   hace falta ser literalmente el mismo elemento. Acá solo el gap entre
-   ícono/selects/separador, que `.chip` no define porque nunca tuvo más de
-   un texto adentro. */
-.avail__range {
-  gap: 0.3rem;
-}
-
-/* Mitad del pill —ícono/select/chevron del lado "desde", o select/chevron
-   del lado "hasta"— estirada a `flex: 1` para que el área clickeable sea
-   el medio pill entero, no solo el ancho del texto de la hora. Un
-   `<label>` sin control propio delega el click al `<select>` que
-   contiene, así que el hueco entre ícono y select también abre el
-   desplegable. */
-.avail__half {
+/* Los dos chips de hora + la X, agrupados aparte para que el gap chico
+   entre ellos (0.3rem) los lea como una unidad y no como dos filtros
+   sueltos, aunque cada uno sea su propio elemento clickeable. */
+.avail__range-group {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  flex: 1;
-  min-width: 0;
-  cursor: pointer;
-}
-.avail__half select {
-  flex: 1;
-  min-width: 0;
-  cursor: pointer;
 }
 
-/* `appearance: none` le quita a `<select>` su relleno y alto de línea de
-   fábrica —lo que lo hacía más alto que el resto del pill—, así que la
-   flechita nativa se repone a mano con `ChevronDown`. */
-.avail__range select {
+/* Un chip por hora —"desde" y "hasta"—, mismo patrón que un chip de día:
+   un solo `<select>` adentro, sin gap interno compitiendo por el click.
+   `padding: 0` porque el padding real lo pone `.avail__field-select`
+   (ver abajo) — así el `<select>` ES la caja entera del chip, borde a
+   borde, y no queda un anillo de padding del contenedor sin cubrir. Dos
+   intentos previos (label delegando el click, luego un overlay dentro de
+   una píldora compartida entre las dos horas) fallaban justo en ese
+   anillo. */
+.chip.chip--sm.avail__field {
+  position: relative;
+  padding: 0;
+}
+
+.avail__field-select {
   appearance: none;
+  display: block;
+  width: 100%;
+  min-width: 5ch;
   border: none;
   margin: 0;
-  padding: 0;
   background: none;
   color: inherit;
   font: inherit;
   font-size: inherit;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  /* 0.2rem 0.6rem es el padding que `.chip--sm` normalmente pone en el
+     contenedor — se repite acá porque el contenedor ya no tiene padding
+     propio. 1.55rem a la derecha deja hueco para el chevron. */
+  padding: 0.2rem 1.55rem 0.2rem 0.6rem;
 }
-.avail__range select:focus-visible {
+.avail__field--from .avail__field-select {
+  padding-left: 1.65rem; /* + hueco para el ícono del reloj */
+}
+.avail__field-select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 2px;
 }
 
-.avail__range svg {
-  flex: none;
+/* Ícono y chevron van ENCIMA del select con `position: absolute` +
+   `pointer-events: none`: son puro adorno visual dentro del padding que
+   el select ya reservó para ellos, nunca se roban el click. */
+.avail__field-icon {
+  position: absolute;
+  left: 0.55rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
-.avail__range .avail__chevron {
+.avail__field-chevron {
+  position: absolute;
+  right: 0.55rem;
+  top: 50%;
+  transform: translateY(-50%);
   opacity: 0.6;
-  margin-left: -0.15rem;
+  pointer-events: none;
 }
+
 .avail__range-sep {
-  color: inherit;
+  color: var(--text-dim);
   opacity: 0.7;
 }
 
-/* Botón aparte para apagar el filtro de horario sin tener que tocar el
-   pill (que ahora es 100% zona de `<select>`): oprimirlo adentro nunca
-   iba a poder "no abrir un desplegable", así que la X vive afuera, al
-   lado. Mismo alto que `.chip--sm` para que se lea parte del mismo grupo. */
+/* Botón aparte para apagar el filtro de horario: los dos chips ahora son
+   100% zona de `<select>`, así que oprimirlos adentro nunca podría
+   "apagar" nada sin abrir un desplegable de paso. Mismo alto que
+   `.chip--sm` para que se lea parte del mismo grupo. */
 .avail__range-clear {
   display: inline-flex;
   align-items: center;

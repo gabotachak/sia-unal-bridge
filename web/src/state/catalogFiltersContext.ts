@@ -1,4 +1,5 @@
 import { createContext, type Dispatch, type SetStateAction } from 'react';
+import type { AvailabilityFilter } from '../lib/availability';
 
 export type CatalogFiltersApi = {
   q: string;
@@ -13,6 +14,12 @@ export type CatalogFiltersApi = {
    *  Mi horario, en vez de solo destacarlas (issue #28). */
   hideConflicts: boolean;
   setHideConflicts: Dispatch<SetStateAction<boolean>>;
+  /** Días + rango horario elegidos — "cuándo puedo tomar clase". `days`
+   *  vacío = filtro apagado, no "disponible en ningún horario". Vive como
+   *  una fila más de `showFacets`, no con su propio toggle: es un filtro
+   *  igual que tipología o créditos. */
+  availability: AvailabilityFilter;
+  setAvailability: Dispatch<SetStateAction<AvailabilityFilter>>;
   showFacets: boolean;
   setShowFacets: Dispatch<SetStateAction<boolean>>;
   /** Dónde estaba el scroll cuando se salió del catálogo hacia una ficha. */

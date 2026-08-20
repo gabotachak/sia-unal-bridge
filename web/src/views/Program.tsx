@@ -19,6 +19,7 @@ import { useScheduleConflicts } from '../hooks/useScheduleConflicts';
 import { useScheduleSelection } from '../hooks/useScheduleSelection';
 import { Layout } from '../components/Layout';
 import { AppLink } from '../components/AppLink';
+import { AvailabilityFields } from '../components/AvailabilityPicker';
 import { useConfirm } from '../components/Confirm';
 import { AddButton } from '../components/AddButton';
 import { Empty, Fault, Loading } from '../components/States';
@@ -31,6 +32,7 @@ import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
 import { useTableSort } from '../hooks/useTableSort';
 import { fold, formatAge, sentence } from '../lib/format';
 import { courseConflictsWithChosen } from '../lib/conflicts';
+import { DEFAULT_AVAILABILITY, courseFitsAvailability, isAvailabilityActive } from '../lib/availability';
 import { pooled } from '../lib/pooled';
 import { itemId, selectionId } from '../lib/storage';
 import type { Screen } from '../state/nav';
@@ -75,6 +77,8 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
     setOnlyOpen,
     hideConflicts,
     setHideConflicts,
+    availability,
+    setAvailability,
     showFacets,
     setShowFacets,
     scrollY,
@@ -192,6 +196,21 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
   }, [planRows, chosenBlocks, scheduleSelection, extraSections]);
 
   /**
+   * Todo el detalle que hay a mano, plan + cacheado, por id de materia — la
+   * misma fuente que arma `conflictCourseIds`, reusada acá para el filtro
+   * de disponibilidad (issue "cuándo puedo tomar clase"). Sin esto cada
+   * materia visible recalcularía su propio detalle con un `.find` sobre
+   * `planRows` en medio del filtro de las ~700 filas.
+   */
+  const sectionsByCourseId = useMemo(() => {
+    const map: Record<string, Section[]> = { ...extraSections };
+    for (const row of planRows) {
+      if (row.detail) map[itemId(row.item)] = row.detail.sections;
+    }
+    return map;
+  }, [planRows, extraSections]);
+
+  /**
    * Restaura el scroll UNA vez, apenas hay filas que pintar — antes de eso
    * la página mide menos alto que el que tenía cuando se guardó, y
    * `scrollTo` cae corto.
@@ -261,13 +280,33 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
         const id = courseId(c);
         if (conflictCourseIds.active.has(id) || conflictCourseIds.potential.has(id)) return false;
       }
+      if (isAvailabilityActive(availability)) {
+        // Sin detalle a mano no se puede saber si encaja — se cae del
+        // filtro en vez de mostrarse sin marcar, porque acá el punto ES
+        // filtrar: enseñar una materia que podría no encajar rompería la
+        // confianza en el resultado.
+        const sections = sectionsByCourseId[courseId(c)];
+        if (!sections || !courseFitsAvailability(sections, availability)) return false;
+      }
       return true;
     });
     return sort ? sortBy(kept, (c) => sortKeyOf(c, sort.col), sort.dir) : kept;
-  }, [data, q, typols, creds, onlyOpen, hideConflicts, conflictCourseIds, courseId, sort]);
+  }, [
+    data,
+    q,
+    typols,
+    creds,
+    onlyOpen,
+    hideConflicts,
+    conflictCourseIds,
+    availability,
+    sectionsByCourseId,
+    courseId,
+    sort,
+  ]);
 
   const total = data?.courses.length ?? 0;
-  const facetCount = typols.size + creds.size;
+  const facetCount = typols.size + creds.size + (isAvailabilityActive(availability) ? 1 : 0);
   const filtering = !!q || facetCount > 0 || onlyOpen || hideConflicts;
 
   /**
@@ -315,6 +354,7 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
     setCreds(new Set());
     setOnlyOpen(false);
     setHideConflicts(false);
+    setAvailability(DEFAULT_AVAILABILITY);
   }
 
   /**
@@ -433,19 +473,27 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                 horario en vez de cupo. Destacar el choque (ver `.row.is-conflict`
                 más abajo) queda siempre puesto; este chip es solo para quien
                 además quiere que desaparezcan de la lista (issue #28). */}
-            <button
-              className={`chip ${hideConflicts ? 'is-on' : ''}`}
-              onClick={() => setHideConflicts((v) => !v)}
-              aria-pressed={hideConflicts}
-              title="Oculta las que chocan en horario con un grupo que ya elegiste en Mi horario. Las que chocan igual se destacan en la lista mientras este chip está apagado."
+            <Tooltip
+              content={
+                <p className="tt-body">
+                  Oculta las que chocan en horario con un grupo que ya elegiste en Mi horario.
+                  Las que chocan igual se destacan en la lista mientras este chip está apagado.
+                </p>
+              }
             >
-              {hideConflicts ? (
-                <Check size={14} strokeWidth={2.5} aria-hidden="true" />
-              ) : (
-                <TriangleAlert size={14} strokeWidth={1.75} aria-hidden="true" />
-              )}
-              sin choques
-            </button>
+              <button
+                className={`chip ${hideConflicts ? 'is-on' : ''}`}
+                onClick={() => setHideConflicts((v) => !v)}
+                aria-pressed={hideConflicts}
+              >
+                {hideConflicts ? (
+                  <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+                ) : (
+                  <TriangleAlert size={14} strokeWidth={1.75} aria-hidden="true" />
+                )}
+                sin choques
+              </button>
+            </Tooltip>
 
             {/* Solo se ve en el teléfono (CSS). El número es lo que evita que
                 plegar esconda información: dice cuántas facetas hay puestas
@@ -559,6 +607,14 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                   </Tooltip>
                 ))}
               </div>
+            </div>
+
+            {/* "Cuándo puedo": la misma pregunta que tipología o créditos
+                —"¿qué se queda en la lista?"— aplicada al horario que se
+                está armando, no una caja aparte. */}
+            <div className="filters__row">
+              <span className="filters__label">horario</span>
+              <AvailabilityFields value={availability} onChange={setAvailability} />
             </div>
           </div>
 

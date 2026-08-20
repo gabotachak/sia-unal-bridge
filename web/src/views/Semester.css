@@ -1,3 +1,13 @@
+/* El lado derecho de la cabecera: el conteo de materias/cupos y, debajo, el
+   semáforo de créditos — los dos pegados al borde derecho, en la misma fila
+   del título, no en una fila propia de ancho completo. */
+.head__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+}
+
 /* La tabla entera vive en styles/table.css —`.table`, `.table--list`,
    `.table__cards`— y la tarjeta de cada materia en
    components/CourseCard.css. Las dos las comparte esta pantalla con Mi

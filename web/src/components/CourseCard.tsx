@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Clock, Trash2, TriangleAlert, User } from 'lucide-react';
+import type { ClassSession } from '../api/types';
 import type { Row } from '../hooks/useCourseDetails';
-import { formatAge, formatScheduleSummary, titleCase } from '../lib/format';
+import { formatAge, formatScheduleSummary, groupSchedule, titleCase } from '../lib/format';
 import { itemId } from '../lib/storage';
 import { AppLink } from './AppLink';
 import { IconButton } from './IconButton';
 import { SeatsFigure } from './Seats';
+import { Tooltip } from './Tooltip';
 import './CourseCard.css';
 
 /**
@@ -80,29 +82,31 @@ export function CourseCard({
     // la Selection son de relleno —esta lista solo guarda códigos— y no
     // hace falta que sean reales: la ficha nunca los lee cuando `from`
     // está puesto.
-    <AppLink
-      className="card__name"
-      // El nombre se recorta con puntos suspensivos casi siempre: los del
-      // SIA son largos y la columna cede ancho antes que nadie. El `title`
-      // es la única forma de leer el resto sin abrir la ficha.
-      title={item.name}
-      to={{
-        name: 'course',
-        selection: {
-          level: item.level,
-          campus: item.campus,
-          campusName: item.campus,
-          faculty: item.faculty,
-          facultyName: '',
-          program: item.program,
-          programName: item.program,
-        },
-        code: item.code,
-        from: linkFrom,
-      }}
-    >
-      {item.name}
-    </AppLink>
+    // El nombre se recorta con puntos suspensivos cuando la columna no le
+    // alcanza — los del SIA son largos. `onlyIfTruncated`: si entra
+    // completo, el tooltip no tiene nada que agregar y se queda callado.
+    <Tooltip content={<p className="tt-title">{item.name}</p>} onlyIfTruncated>
+
+      <AppLink
+        className="card__name"
+        to={{
+          name: 'course',
+          selection: {
+            level: item.level,
+            campus: item.campus,
+            campusName: item.campus,
+            faculty: item.faculty,
+            facultyName: '',
+            program: item.program,
+            programName: item.program,
+          },
+          code: item.code,
+          from: linkFrom,
+        }}
+      >
+        {item.name}
+      </AppLink>
+    </Tooltip>
   );
 
   const seatsTally = (
@@ -150,9 +154,18 @@ export function CourseCard({
       <header className="card__head table__row">
         <span className="card__code tnum col-code">{item.code}</span>
         {nameLink}
-        <span className={`tag tag--${slugTypology(item.typology)} col-typ`} title={item.typology}>
-          {shortTypology(item.typology)}
-        </span>
+        <Tooltip
+          content={
+            <>
+              <p className="tt-eyebrow">Tipología</p>
+              <p className="tt-title">{item.typology}</p>
+            </>
+          }
+        >
+          <span className={`tag tag--${slugTypology(item.typology)} col-typ`}>
+            {shortTypology(item.typology)}
+          </span>
+        </Tooltip>
         <span className="card__credits tnum col-cr" aria-label={`${item.credits} créditos`}>
           {item.credits}
         </span>
@@ -222,9 +235,17 @@ export function CourseCard({
                 className={`slot ${seats === 0 ? 'is-zero' : ''} ${inConflict ? 'is-conflict' : ''}`}
                 onClick={selectRow}
               >
-                <span className="slot__key tnum" title={s.key}>
-                  {s.key}
-                </span>
+                <Tooltip
+                  content={
+                    <>
+                      <p className="tt-eyebrow">Grupo</p>
+                      <p className="tt-title">{s.key}</p>
+                    </>
+                  }
+                  onlyIfTruncated
+                >
+                  <span className="slot__key tnum">{s.key}</span>
+                </Tooltip>
                 {/* El texto va en su propio <span> y no suelto al lado del
                     icono: `text-overflow` solo actúa sobre el contenido en
                     línea de un contenedor de bloque, y estos dos son
@@ -233,15 +254,28 @@ export function CourseCard({
                     desbordaba era una caja anónima de flex, no el span. */}
                 <span className="slot__who">
                   <User size={12} strokeWidth={1.75} aria-hidden="true" />
-                  <span className="slot__text" title={who}>
-                    {who}
-                  </span>
+                  <Tooltip
+                    content={
+                      <>
+                        <p className="tt-eyebrow">Docente</p>
+                        <p className="tt-title">{who}</p>
+                      </>
+                    }
+                    onlyIfTruncated
+                  >
+                    <span className="slot__text">{who}</span>
+                  </Tooltip>
                 </span>
                 <span className={`slot__when${s.schedule.length > 0 ? ' tnum' : ''}`}>
                   <Clock size={12} strokeWidth={1.75} aria-hidden="true" />
-                  <span className="slot__text" title={when}>
-                    {when}
-                  </span>
+                  {/* Sin `onlyIfTruncated`: a diferencia del nombre o el
+                      docente, este texto siempre es un resumen —días
+                      abreviados, hora sin el minuto en punto, sin salón—
+                      así que el tooltip siempre tiene algo que agregar,
+                      quepa o no quepa el resumen entero en la fila. */}
+                  <Tooltip content={<ScheduleTooltip when={when} schedule={s.schedule} />}>
+                    <span className="slot__text">{when}</span>
+                  </Tooltip>
                 </span>
                 <span className="slot__seats">
                   <SeatsFigure available={seats} tone={seats === 0 ? 'empty' : 'ok'} animate />
@@ -269,6 +303,35 @@ export function CourseCard({
         </button>
       )}
     </li>
+  );
+}
+
+/**
+ * El tooltip del horario de un grupo: la fila solo tiene espacio para el
+ * resumen comprimido ('lu · mi 11-13'), pero el dato completo trae días
+ * enteros, hora sin recortar y el salón — que el resumen ni carga. Un
+ * `.tt-row` por franja horaria, no una frase corrida: son datos, no prosa.
+ */
+function ScheduleTooltip({ when, schedule }: { when: string; schedule: ClassSession[] }) {
+  if (schedule.length === 0) return <p className="tt-title">{when}</p>;
+  const groups = groupSchedule(schedule);
+  return (
+    <ul className="tt-rows">
+      {groups.map((g) => (
+        <li className="tt-row" key={`${g.days}-${g.time}`}>
+          <span>
+            {g.days}
+            {g.place && (
+              <>
+                <br />
+                {g.place}
+              </>
+            )}
+          </span>
+          <b className="tnum">{g.time}</b>
+        </li>
+      ))}
+    </ul>
   );
 }
 

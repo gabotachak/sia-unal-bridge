@@ -1,0 +1,30 @@
+/* Segundo renglón de `head__meta` (ver Semester.tsx): misma talla de texto,
+   mismo alineado a la derecha, solo cambia de color. Nada de píldora, borde
+   ni fondo — eso es lo que tenía antes y lo hacía leerse como un botón más
+   al lado de "medir cupos" / "con cupos" / "vaciar", cuando es un dato, no
+   una acción. Los tres tonos son los mismos de `SeatsFigure`
+   (components/Seats.css) — bad/warn/ok de styles/tokens.css — para que un
+   rojo signifique lo mismo en toda la app. El panel del desglose lo pone
+   `Tooltip` — ver Tooltip.css. */
+
+.credits-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  font-size: var(--t-small);
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.credits-status--danger {
+  color: var(--bad);
+}
+
+.credits-status--warning {
+  color: var(--warn);
+}
+
+.credits-status--ok {
+  color: var(--ok);
+}

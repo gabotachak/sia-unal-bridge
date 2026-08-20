@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { formatAge } from '../lib/format';
+import { Tooltip } from './Tooltip';
 import './Seats.css';
 
 type Props = {
@@ -118,9 +119,16 @@ export function Seats({ available, measuredAt, ageSeconds }: Props) {
 
       <div className="seats__meta">
         <span className="seats__label">{empty ? 'sin cupos' : 'cupos'}</span>
-        <span className="seats__age tnum" title={new Date(measuredAt).toLocaleString('es-CO')}>
-          hace {formatAge(age)}
-        </span>
+        <Tooltip
+          content={
+            <>
+              <p className="tt-eyebrow">Medido</p>
+              <p className="tt-title">{new Date(measuredAt).toLocaleString('es-CO')}</p>
+            </>
+          }
+        >
+          <span className="seats__age tnum">hace {formatAge(age)}</span>
+        </Tooltip>
       </div>
 
       {/* Barra que se vacía a medida que el dato se acerca a su vencimiento. */}

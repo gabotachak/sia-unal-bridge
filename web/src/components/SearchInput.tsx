@@ -1,4 +1,5 @@
 import { Search, X } from 'lucide-react';
+import { Tooltip } from './Tooltip';
 
 /**
  * El buscador de PlanPicker y del catálogo: mismo `.search` (PlanPicker.css,
@@ -32,15 +33,16 @@ export function SearchInput({
         placeholder={placeholder}
       />
       {value && (
-        <button
-          type="button"
-          className="search__clear"
-          onClick={() => onChange('')}
-          aria-label="Borrar búsqueda"
-          title="Borrar búsqueda"
-        >
-          <X size={14} strokeWidth={2} aria-hidden="true" />
-        </button>
+        <Tooltip content={<p className="tt-title">Borrar búsqueda</p>}>
+          <button
+            type="button"
+            className="search__clear"
+            onClick={() => onChange('')}
+            aria-label="Borrar búsqueda"
+          >
+            <X size={14} strokeWidth={2} aria-hidden="true" />
+          </button>
+        </Tooltip>
       )}
     </label>
   );

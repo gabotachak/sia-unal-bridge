@@ -3,6 +3,7 @@ import type { ClassSession } from '../api/types';
 import { useViewportFit } from '../hooks/useViewportFit';
 import { MOBILE_NAV_CLEARANCE_PX, STACK_BREAKPOINT_PX } from '../lib/breakpoints';
 import { WEEKDAYS_SHORT, formatClockTime } from '../lib/format';
+import { Tooltip } from './Tooltip';
 import './WeekCalendar.css';
 
 export type CalendarBlock = {
@@ -188,25 +189,48 @@ export function WeekCalendar({
                 width: `calc(${width}% - 2px)`,
                 '--course-color': b.color,
               } as React.CSSProperties;
+              const place = [b.session.building, b.session.room].filter(Boolean).join(' · ');
+              const tooltip = (
+                <>
+                  <p className="tt-eyebrow tnum">{b.code}</p>
+                  <p className="tt-title">{b.name}</p>
+                  <ul className="tt-rows">
+                    <li className="tt-row">
+                      <span>Grupo</span>
+                      <b className="tnum">{b.sectionKey}</b>
+                    </li>
+                    <li className="tt-row">
+                      <span>Horario</span>
+                      <b className="tnum">
+                        {formatClockTime(b.session.start_time)}–{formatClockTime(b.session.end_time)}
+                      </b>
+                    </li>
+                    {place && (
+                      <li className="tt-row">
+                        <span>Lugar</span>
+                        <b>{place}</b>
+                      </li>
+                    )}
+                  </ul>
+                </>
+              );
               return (
-                <div
-                  key={b.id}
-                  className={`week__block ${b.conflict ? 'is-conflict' : ''}`}
-                  style={style}
-                  title={`${b.name} · grupo ${b.sectionKey} · ${b.session.start_time}–${b.session.end_time}${b.session.room ? ` · ${b.session.room}` : ''}`}
-                >
-                  {b.conflict && (
-                    <TriangleAlert className="week__block-conflict" size={12} strokeWidth={2.25} aria-hidden="true" />
-                  )}
-                  <span className="week__block-name">{b.name}</span>
-                  <span className="week__block-meta">
-                    <span className="week__block-key tnum">{b.sectionKey}</span>
-                    <span className="tnum">
-                      {formatClockTime(b.session.start_time)}–{formatClockTime(b.session.end_time)}
+                <Tooltip key={b.id} content={tooltip}>
+                  <div className={`week__block ${b.conflict ? 'is-conflict' : ''}`} style={style}>
+                    {b.conflict && (
+                      <TriangleAlert className="week__block-conflict" size={12} strokeWidth={2.25} aria-hidden="true" />
+                    )}
+                    <span className="week__block-code tnum">{b.code}</span>
+                    <span className="week__block-name">{b.name}</span>
+                    <span className="week__block-meta">
+                      <span className="week__block-key tnum">{b.sectionKey}</span>
+                      <span className="tnum">
+                        {formatClockTime(b.session.start_time)}–{formatClockTime(b.session.end_time)}
+                      </span>
                     </span>
-                  </span>
-                  {b.session.room && <span className="week__block-room">{b.session.room}</span>}
-                </div>
+                    {b.session.room && <span className="week__block-room">{b.session.room}</span>}
+                  </div>
+                </Tooltip>
               );
             })}
           </div>

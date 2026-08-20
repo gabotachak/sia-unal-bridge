@@ -81,6 +81,9 @@ export function AvailabilityFields({
       <div className="avail__range-group">
         <Clock className="avail__range-icon" size={14} strokeWidth={1.75} aria-hidden="true" />
         <div className={`chip chip--sm avail__field avail__field--from ${rangeIsOn ? 'is-on' : ''}`}>
+          <span className="avail__field-value" aria-hidden="true">
+            {TIME_OPTIONS.find((t) => t.min === value.fromMin)?.label}
+          </span>
           <select
             className="avail__field-select"
             aria-label="Desde qué hora"
@@ -99,6 +102,9 @@ export function AvailabilityFields({
           –
         </span>
         <div className={`chip chip--sm avail__field avail__field--to ${rangeIsOn ? 'is-on' : ''}`}>
+          <span className="avail__field-value" aria-hidden="true">
+            {TIME_OPTIONS.find((t) => t.min === value.toMin)?.label}
+          </span>
           <select
             className="avail__field-select"
             aria-label="Hasta qué hora"

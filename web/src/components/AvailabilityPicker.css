@@ -28,26 +28,25 @@
    anillo. */
 .chip.chip--sm.avail__field {
   position: relative;
-  padding: 0;
+  /* El padding lo hereda de .chip--sm (0.2rem 0.6rem), así que su altura
+     será matemáticamente idéntica a los días de la semana. Solo agregamos
+     espacio a la derecha para el chevron. */
+  padding-right: 1.55rem;
+}
+
+.avail__field-value {
+  font-variant-numeric: tabular-nums;
 }
 
 .avail__field-select {
-  appearance: none;
-  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  min-width: 5ch;
-  border: none;
-  margin: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  font-size: inherit;
-  font-variant-numeric: tabular-nums;
+  height: 100%;
+  opacity: 0;
   cursor: pointer;
-  /* 0.2rem 0.6rem es el padding que `.chip--sm` normalmente pone en el
-     contenedor — se repite acá porque el contenedor ya no tiene padding
-     propio. 1.55rem a la derecha deja hueco para el chevron. */
-  padding: 0.2rem 1.55rem 0.2rem 0.6rem;
+  appearance: none;
 }
 .avail__range-icon {
   color: var(--text-faint);

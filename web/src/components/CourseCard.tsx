@@ -10,23 +10,25 @@ import './CourseCard.css';
 
 /**
  * Una materia con sus grupos. Mi semestre y Mi horario pintan la MISMA
- * tarjeta —mismos datos, mismo radio de grupo elegido, conectado a la misma
- * selección (`useScheduleSelection`, Context)— y solo cambia cuánto detalle
- * muestran: Mi semestre es la vista completa (tabla con código, tipología,
- * créditos), Mi horario es la reducida (nombre, profe, horario) para dejarle
- * sitio al calendario. Esa diferencia es la prop `compact`.
+ * tarjeta: mismos datos, mismas columnas, mismo radio de grupo elegido
+ * conectado a la misma selección (`useScheduleSelection`, Context), misma
+ * caneca para quitarla de la lista.
+ *
+ * Hubo una prop `compact` —una versión reducida a nombre, profe y horario—
+ * para el panel de Mi horario. Se fue: dos dibujos distintos de la misma
+ * cosa hacían que el panel se leyera como un recorte deliberado, y lo que
+ * lo obligaba era el ancho del panel, que ahora la tabla resuelve sola
+ * (`container: table` en styles/table.css).
  */
 export function CourseCard({
   row,
   onlyOpen,
   onRemove,
   selection,
-  compact = false,
   linkFrom,
 }: {
   row: Row;
   onlyOpen: boolean;
-  /** Ausente en Mi horario: ahí no tiene sentido quitar de Mi semestre. */
   onRemove?: () => void;
   selection: {
     pickedKey: string | null;
@@ -34,9 +36,6 @@ export function CourseCard({
     /** section.key de esta materia que choca con otra ya elegida. */
     conflictKeys: Set<string>;
   };
-  /** Vista reducida: nombre, profe, horario. La usa Mi horario para dejarle
-   *  sitio al calendario. */
-  compact?: boolean;
   /** A qué pantalla vuelve la ficha de la materia al tocar el nombre. */
   linkFrom: 'semester' | 'schedule';
 }) {
@@ -83,6 +82,10 @@ export function CourseCard({
     // está puesto.
     <AppLink
       className="card__name"
+      // El nombre se recorta con puntos suspensivos casi siempre: los del
+      // SIA son largos y la columna cede ancho antes que nadie. El `title`
+      // es la única forma de leer el resto sin abrir la ficha.
+      title={item.name}
       to={{
         name: 'course',
         selection: {
@@ -143,35 +146,28 @@ export function CourseCard({
   );
 
   return (
-    <li className={`card ${compact ? 'card--compact' : ''} ${status === 'loading' ? 'is-loading' : ''}`}>
-      {compact ? (
-        <header className="card__head card__head--compact">
-          {nameLink}
-          {seatsTally}
-        </header>
-      ) : (
-        <header className="card__head table__row">
-          <span className="card__code tnum col-code">{item.code}</span>
-          {nameLink}
-          <span className={`tag tag--${slugTypology(item.typology)} col-typ`} title={item.typology}>
-            {shortTypology(item.typology)}
-          </span>
-          <span className="card__credits tnum col-cr" aria-label={`${item.credits} créditos`}>
-            {item.credits}
-          </span>
-          {seatsTally}
-          {onRemove && (
-            <IconButton
-              onClick={onRemove}
-              label="Quitar del semestre"
-              tip="left"
-              className="iconbtn--row iconbtn--danger"
-            >
-              <Trash2 size={16} strokeWidth={1.75} />
-            </IconButton>
-          )}
-        </header>
-      )}
+    <li className={`card ${status === 'loading' ? 'is-loading' : ''}`}>
+      <header className="card__head table__row">
+        <span className="card__code tnum col-code">{item.code}</span>
+        {nameLink}
+        <span className={`tag tag--${slugTypology(item.typology)} col-typ`} title={item.typology}>
+          {shortTypology(item.typology)}
+        </span>
+        <span className="card__credits tnum col-cr" aria-label={`${item.credits} créditos`}>
+          {item.credits}
+        </span>
+        {seatsTally}
+        {onRemove && (
+          <IconButton
+            onClick={onRemove}
+            label="Quitar del semestre"
+            tip="left"
+            className="iconbtn--row iconbtn--danger"
+          >
+            <Trash2 size={16} strokeWidth={1.75} />
+          </IconButton>
+        )}
+      </header>
 
       {status === 'error' && <p className="card__error">{error}</p>}
 
@@ -182,7 +178,7 @@ export function CourseCard({
       )}
 
       {sections.length > 0 && (
-        <ul className={compact ? 'slotsc' : 'slots'}>
+        <ul className="slots">
           {visibleSections.map((s) => {
             const seats = s.seats?.available ?? null;
             const inConflict = selection.conflictKeys.has(s.key);
@@ -220,50 +216,32 @@ export function CourseCard({
             // "quiero este grupo", nunca lo apaga.
             const selectRow = () => selection.onPick(s.key);
 
-            if (compact) {
-              return (
-                <li
-                  key={s.key}
-                  className={`slotc ${inConflict ? 'is-conflict' : ''}`}
-                  onClick={selectRow}
-                >
-                  <span className="slotc__radio">{radio}</span>
-                  <span className="slotc__body">
-                    <span className="slotc__line1">
-                      {inConflict && (
-                        <TriangleAlert
-                          className="slotc__conflict-icon"
-                          size={12}
-                          strokeWidth={2.25}
-                          aria-hidden="true"
-                        />
-                      )}
-                      <span className="slotc__key tnum">{s.key}</span>
-                      {who}
-                    </span>
-                    <span className={`slotc__line2${s.schedule.length > 0 ? ' tnum' : ''}`}>{when}</span>
-                  </span>
-                  <span className="slotc__seats">
-                    <SeatsFigure available={seats} tone={seats === 0 ? 'empty' : 'ok'} animate />
-                  </span>
-                </li>
-              );
-            }
-
             return (
               <li
                 key={s.key}
                 className={`slot ${seats === 0 ? 'is-zero' : ''} ${inConflict ? 'is-conflict' : ''}`}
                 onClick={selectRow}
               >
-                <span className="slot__key tnum">{s.key}</span>
+                <span className="slot__key tnum" title={s.key}>
+                  {s.key}
+                </span>
+                {/* El texto va en su propio <span> y no suelto al lado del
+                    icono: `text-overflow` solo actúa sobre el contenido en
+                    línea de un contenedor de bloque, y estos dos son
+                    `display: flex` por el icono. Suelto, el texto se
+                    recortaba a hachazo limpio —sin los puntos— porque quien
+                    desbordaba era una caja anónima de flex, no el span. */}
                 <span className="slot__who">
                   <User size={12} strokeWidth={1.75} aria-hidden="true" />
-                  {who}
+                  <span className="slot__text" title={who}>
+                    {who}
+                  </span>
                 </span>
                 <span className={`slot__when${s.schedule.length > 0 ? ' tnum' : ''}`}>
                   <Clock size={12} strokeWidth={1.75} aria-hidden="true" />
-                  {when}
+                  <span className="slot__text" title={when}>
+                    {when}
+                  </span>
                 </span>
                 <span className="slot__seats">
                   <SeatsFigure available={seats} tone={seats === 0 ? 'empty' : 'ok'} animate />

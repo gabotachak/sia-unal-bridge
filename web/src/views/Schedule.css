@@ -1,7 +1,20 @@
 /* ── Split view: lista de materias + calendario ─────────────────────
-   La lista fija un ancho —no es una tabla que quiera todo el espacio,
-   es la que sobra después del calendario, que es el protagonista— y el
-   calendario toma el resto.
+   Los dos piden un ancho y los dos ceden. La lista es la MISMA tabla de
+   Mi semestre —código, asignatura, tipología, créditos, cupos y caneca—,
+   así que ya no le sirve un ancho de barra lateral: pide 34rem, que es
+   lo que necesitan sus columnas fijas más un nombre legible. El
+   calendario pide 42rem, el mínimo con el que sus seis días se leen (el
+   mismo número que `.week` usa para decidir cuándo scrollear).
+
+   Suman 78rem y la página mide 82rem: a pantalla ancha entran los dos
+   enteros. Más angosta, los dos se encogen a prorrata de lo que piden —
+   la lista hasta 22rem, que era su ancho fijo de antes, y ahí para salvo
+   que alguien arrastre el resizer (`sched__resizer`, `usePanelWidth`):
+   ese es el único que puede llevarla hasta 16rem, un piso más apretado
+   que el de antes porque ahí ya es una elección, no algo que le impuso
+   la ventana. La tabla de adentro pierde columnas sola según el ancho
+   que le quede (`container: table`, styles/table.css), así que
+   encogerse no la rompe: la deja como la misma tabla en el teléfono.
 
    Bajo los 860px no caben lado a lado sin apretar ninguno de los dos, y
    apilados la lista sería Mi semestre por segunda vez: mismas tarjetas,
@@ -29,22 +42,82 @@
    mismo disponible sin coordinarse entre sí — ninguno sobrepasa al otro.
 
    El ancho sí anima (`.is-collapsed`), con `overflow: hidden` propio para
-   recortar el contenido mientras se achica. */
+   recortar el contenido mientras se achica. Arrastrando el resizer la
+   animación se apaga (`.is-dragging`): con ella puesta, el panel persigue
+   al mouse con `--slow` de retraso en vez de seguirlo pixel a pixel. */
 .sched__list {
-  flex: 0 0 22rem;
-  min-width: 0;
+  flex: 0 1 22rem;
+  /* El piso: por debajo la tabla ya no tiene ni el nombre ni los cupos
+     legibles. `usePanelWidth` (MIN_REM) es la misma cota — repetida acá
+     por si el JS no llegó a correr todavía. */
+  min-width: 16rem;
+  /* El techo: la mitad de la fila, o sea el punto donde el panel y el
+     calendario miden lo mismo. `usePanelWidth` calcula esa mitad descontando
+     el gap —acá `50%` lo incluye, así que este tope es medio `--gap-lg` más
+     generoso— y es el que manda; este está por si el JS no llegó a correr. */
+  max-width: 50%;
   overflow: hidden;
+  /* Cabecera fija + área que scrollea: es lo que reparte el alto que
+     `useViewportFit` calculó para el panel entero. */
+  display: flex;
+  flex-direction: column;
   transition: flex-basis var(--slow) var(--ease-out);
+}
+.sched__list.is-dragging {
+  transition: none;
 }
 .sched__list.is-collapsed {
   flex: 0 0 2.75rem;
+  min-width: 0;
+}
+
+/* El resizer: una franja angosta entre la lista y el calendario, más
+   ancha de lo que se ve —el hit-area del mouse no puede depender de
+   acertarle a una línea de 2px— con la línea de verdad centrada adentro
+   por `::before`. Vive DENTRO del gap de `.sched__body` con márgenes
+   negativos: así no le suma ancho a la fila, solo ocupa el aire que ya
+   había entre los dos paneles. */
+.sched__resizer {
+  flex: none;
+  align-self: stretch;
+  width: 1rem;
+  margin: 0 calc(var(--gap-lg) * -0.5);
+  position: relative;
+  z-index: 1;
+  cursor: col-resize;
+  touch-action: none;
+}
+.sched__resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--rule);
+  border-radius: 999px;
+  transition: background-color var(--fast) var(--ease-out);
+}
+.sched__resizer:focus-visible {
+  outline: none;
+}
+.sched__resizer.is-dragging::before,
+.sched__resizer:focus-visible::before {
+  background: var(--accent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .sched__resizer:hover::before {
+    background: var(--accent);
+  }
 }
 
 /* `scrollbar-gutter: stable` más el padding a la derecha son la respuesta
    a "la barra de scroll queda pegada a las tarjetas": sin aire, la barra
    nativa cae encima del borde redondeado y toca el contenido. */
 .sched__list-scroll {
-  height: 100%;
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
@@ -64,22 +137,41 @@
   border: 2px solid var(--bg);
 }
 
-/* La cabecera del panel: "medir cupos" y el botón de ocultar, pegados
-   arriba mientras las tarjetas scrollean debajo — mismo gesto que
-   `.week__header`, para que las dos columnas se lean como el mismo tipo
-   de superficie. */
+/* La cabecera del panel: los tres chips de `PlanToolbar` y el botón de
+   ocultar, quietos arriba mientras la tabla scrollea debajo — mismo gesto
+   que `.week__header`, para que las dos columnas se lean como el mismo
+   tipo de superficie.
+
+   Hermana del área que scrollea y no `sticky` dentro de ella: en un panel
+   angosto los chips envuelven a dos líneas, y flotando encima tapaban la
+   cabecera de la tabla justo cuando más falta hace ver de qué columna se
+   está ordenando.
+
+   `align-items: flex-start` porque el botón de ocultar tiene que quedarse
+   arriba cuando los chips ocupan dos líneas, no centrado contra ellas. */
 .sched__list-head {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  flex: none;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--gap-sm);
   padding-bottom: var(--gap-sm);
   margin-bottom: var(--gap-sm);
   background: var(--bg);
   border-bottom: 1px solid var(--rule);
+}
+
+/* La barra de chips dentro del panel: la misma de Mi semestre, pero acá
+   puede envolver — a 22rem los tres no caben en una línea y recortarlos
+   sería volver al panel recortado que esto vino a arreglar. */
+.sched__toolbar {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Más juntos que en la página y sin el margen de abajo: el aire debajo
+     ya lo pone `.sched__list-head`, y sumar los dos abría un hueco que en
+     un panel de alto contado se paga en tarjetas que no se ven. */
+  gap: var(--gap-sm);
+  margin-bottom: 0;
 }
 
 /* El riel de la lista colapsada. No es un botón flotante que aparece de la
@@ -89,8 +181,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 1 1 auto;
   width: 100%;
-  height: 100%;
   border-radius: var(--radius);
   border: 1px solid var(--rule);
   background: var(--surface);
@@ -106,17 +198,11 @@
   }
 }
 
-.sched__cards {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-sm);
-}
+/* La lista de tarjetas es `.table__cards` (styles/table.css), la misma de
+   Mi semestre. No hay nada propio que declarar acá. */
 
 .sched__calendar {
-  flex: 1 1 0;
+  flex: 1 1 42rem;
   min-width: 0;
 }
 

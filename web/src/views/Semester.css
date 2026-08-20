@@ -1,32 +1,10 @@
-/* ── Wrapper de tabla ────────────────────────────────────────────
-   Lleva `.table` de styles/table.css: la rejilla, la cabecera y la
-   etiqueta de tipología son literalmente las mismas del catálogo, y
-   estar declaradas en un solo sitio es lo que impide que una vista se
-   desalinee de la otra al tocar la otra.                          */
+/* La tabla entera vive en styles/table.css —`.table`, `.table--list`,
+   `.table__cards`— y la tarjeta de cada materia en
+   components/CourseCard.css. Las dos las comparte esta pantalla con Mi
+   horario, que pinta exactamente la misma tabla al lado del calendario:
+   por eso no queda nada de eso acá.
 
-.sem__table {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-/* ── Lista de materias ──────────────────────────────────────────── */
-
-.sem {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  /* El mismo hueco que entre los grupos de la ficha (.groups). Eran 1rem
-     acá y 0.6rem allá, para separar cosas que cumplen el mismo papel. */
-  gap: var(--gap-sm);
-}
-
-/* La tarjeta de cada materia (.card, .slots, .slot*) vive en
-   components/CourseCard.css: la comparte esta pantalla y Horario. */
-
-/* ── Pie ────────────────────────────────────────────────────────── */
+   ── Pie ────────────────────────────────────────────────────────── */
 
 .sem__note {
   margin: var(--gap-lg) 0 0;

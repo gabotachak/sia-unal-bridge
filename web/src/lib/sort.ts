@@ -1,3 +1,6 @@
+import type { Row } from '../hooks/useCourseDetails';
+import type { TableCol } from './table';
+
 export type SortDir = 'asc' | 'desc';
 export type Sort<K extends string> = { col: K; dir: SortDir };
 
@@ -51,4 +54,32 @@ export function sortBy<T>(items: readonly T[], keyOf: (t: T) => SortKey, dir: So
     // del alfabeto, que es donde lo mandaría comparar por código de carácter.
     return String(x).localeCompare(String(y), 'es', { sensitivity: 'base' }) * sign;
   });
+}
+
+/**
+ * La clave de orden de una materia de la lista del semestre, por columna.
+ *
+ * Vive acá y no en una vista porque Mi semestre y Mi horario pintan la misma
+ * tabla sobre las mismas filas: teniéndola dos veces, ordenar por cupos podía
+ * significar dos cosas distintas según desde dónde se pulsara.
+ *
+ * Misma escala de cupos que el catálogo: los cuatro estados en una recta.
+ */
+export function courseSortKey(r: Row, col: TableCol): SortKey {
+  switch (col) {
+    case 'code':
+      return r.item.code;
+    case 'name':
+      return r.item.name;
+    case 'typology':
+      return r.item.typology;
+    case 'credits':
+      return r.item.credits;
+    case 'seats': {
+      if (!r.detail) return SEATS_RANK.unknown;
+      if (r.detail.sections.length === 0) return SEATS_RANK.noOffer;
+      const n = r.detail.sections.reduce((sum, sec) => sum + (sec.seats?.available ?? 0), 0);
+      return n === 0 ? SEATS_RANK.full : n;
+    }
+  }
 }

@@ -2,6 +2,7 @@ import { useNav } from './state/nav';
 import { CatalogFiltersProvider } from './state/CatalogFiltersProvider';
 import { NavProvider } from './state/NavProvider';
 import { PlanProvider } from './state/PlanProvider';
+import { PlanViewProvider } from './state/PlanViewProvider';
 import { ScheduleProvider } from './state/ScheduleProvider';
 import { PlanPicker } from './views/PlanPicker';
 import { Program } from './views/Program';
@@ -41,14 +42,20 @@ export function App() {
           los dos por la misma razón que antes — la pantalla inicial depende
           del plan ya elegido. */}
       <ScheduleProvider>
-        {/* CatalogFiltersProvider no depende de nada de los otros dos —
-            entra donde sea, va acá por quedar junto a su hermano de
-            propósito similar. */}
-        <CatalogFiltersProvider>
-          <NavProvider>
-            <Screens />
-          </NavProvider>
-        </CatalogFiltersProvider>
+        {/* PlanViewProvider guarda cómo se está MIRANDO esa lista —filtro de
+            cupos y orden de la tabla—, que Mi semestre y Mi horario comparten
+            desde que las dos pintan la misma tabla. No depende de los otros
+            dos, pero va con ellos: los tres son el estado del plan. */}
+        <PlanViewProvider>
+          {/* CatalogFiltersProvider no depende de nada de los otros dos —
+              entra donde sea, va acá por quedar junto a su hermano de
+              propósito similar. */}
+          <CatalogFiltersProvider>
+            <NavProvider>
+              <Screens />
+            </NavProvider>
+          </CatalogFiltersProvider>
+        </PlanViewProvider>
       </ScheduleProvider>
     </PlanProvider>
   );

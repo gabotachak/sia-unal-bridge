@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { AppLink } from '../components/AppLink';
-import { CourseCard } from '../components/CourseCard';
 import { Empty } from '../components/States';
 import { IconButton } from '../components/IconButton';
-import { MeasureChip } from '../components/MeasureChip';
-import { MeasureProgress } from '../components/MeasureProgress';
+import { PlanList } from '../components/PlanList';
+import { PlanToolbar } from '../components/PlanToolbar';
 import { WeekCalendar, type CalendarBlock } from '../components/WeekCalendar';
 import { useCourseDetails } from '../hooks/useCourseDetails';
+import { usePanelWidth } from '../hooks/usePanelWidth';
 import { usePlan } from '../hooks/usePlan';
 import { useScheduleConflicts } from '../hooks/useScheduleConflicts';
 import { useScheduleSelection } from '../hooks/useScheduleSelection';
@@ -26,12 +26,20 @@ import './Schedule.css';
  * Mi semestre (`useScheduleSelection`, Context), así que marcar un radio acá
  * también lo marca allá. Lo único propio de esta pantalla es dónde cae eso
  * en la semana.
+ *
+ * El panel de la izquierda es Mi semestre, literalmente: la misma tabla
+ * (`TableHead` + `CourseCard`), la misma barra de chips (`PlanToolbar`), el
+ * mismo filtro y el mismo orden (`usePlanView`, Context). Antes era una
+ * versión reducida —tarjetas sin código, sin tipología, sin créditos, sin
+ * caneca y sin más control que "medir cupos"— y se leía como un recorte
+ * deliberado. Lo único que obligaba a recortar era el ancho del panel, y de
+ * eso ahora se encarga la propia tabla por consulta de contenedor.
  */
 export function Schedule() {
   const plan = usePlan();
   const [listOpen, setListOpen] = useState(true);
   const { rows, running, done, total, ready, measure, fetchAll } = useCourseDetails(plan.items);
-  const { selection, pick } = useScheduleSelection();
+  const { selection } = useScheduleSelection();
   const { chosen, conflicts } = useScheduleConflicts(rows, selection);
 
   // Mismo cálculo que usa el calendario al lado (`WeekCalendar.tsx`): los
@@ -40,6 +48,11 @@ export function Schedule() {
   // dos sobrepase al otro. Sin opciones de mobile porque este panel no
   // existe en mobile: ver `isMobile` abajo.
   const [listRef, listMaxHeightRem] = useViewportFit<HTMLDivElement>();
+
+  // Ancho del panel, arrastrable. Ver usePanelWidth para el porqué del
+  // tope y el piso.
+  const { containerRef, widthRem, dragging, onPointerDown, onKeyDown, min, max } =
+    usePanelWidth();
 
   /**
    * Debajo de STACK_BREAKPOINT_PX, Mi horario es SOLO el calendario.
@@ -151,17 +164,19 @@ export function Schedule() {
           )}
         </>
       ) : (
-        // Sin `.toolbar` propio arriba: "medir cupos" vive DENTRO del panel
-        // —es una acción sobre la lista, no sobre la pantalla— y eso deja al
-        // calendario empezar justo debajo del título, en vez de correrlo una
-        // fila entera hacia abajo por un botón que no le pertenece.
+        // Sin `.toolbar` a ancho de pantalla arriba: los tres chips —medir,
+        // con cupos, vaciar— viven DENTRO del panel, que es sobre lo que
+        // actúan. Puestos arriba correrían al calendario una fila entera
+        // hacia abajo por controles que no le pertenecen.
         //
-        // En mobile, sin panel, esta pantalla se queda sin "medir cupos": es
-        // el mismo razonamiento llevado hasta el final. Medir es una acción
-        // sobre la lista de materias, y esa lista es Mi semestre, que tiene
-        // el chip en su barra de siempre. Acá el alto que ocuparía es lo
-        // único escaso que hay.
-        <div className="sched__body">
+        // En mobile, sin panel, esta pantalla se queda sin los tres: es el
+        // mismo razonamiento llevado hasta el final. Son acciones sobre la
+        // lista de materias, y esa lista es Mi semestre, que tiene su barra
+        // de siempre a un toque en `.tabbar`. Acá el alto que ocuparían es
+        // lo único escaso que hay.
+        // El ref mide el ancho de ESTA fila, de donde sale el tope del
+        // panel: la mitad. Ver usePanelWidth.
+        <div className="sched__body" ref={containerRef}>
           {/* El ref y el alto van en `.sched__list`, no en lo de adentro: al
               colapsar/abrir (`listOpen`) esto no se desmonta —solo lo que
               hay dentro cambia entre la lista y el riel—, así que es lo
@@ -176,18 +191,27 @@ export function Schedule() {
               en la barra de abajo. */}
           {!isMobile && (
             <aside
-              className={`sched__list ${listOpen ? '' : 'is-collapsed'}`}
+              className={`sched__list ${listOpen ? '' : 'is-collapsed'} ${dragging ? 'is-dragging' : ''}`}
               ref={listRef}
-              style={Number.isFinite(listMaxHeightRem) ? { height: `${listMaxHeightRem}rem` } : undefined}
+              style={{
+                ...(Number.isFinite(listMaxHeightRem) ? { height: `${listMaxHeightRem}rem` } : undefined),
+                ...(listOpen ? { flexBasis: `${widthRem}rem` } : undefined),
+              }}
             >
               {listOpen ? (
-                <div className="sched__list-scroll">
+                <>
+                  {/* Fuera del scroll, no pegada con `sticky` dentro: la
+                      barra de chips ya envuelve a dos líneas en un panel
+                      angosto, y flotando sobre el contenido se comía el
+                      alto que las tarjetas necesitan. Como hermana del
+                      área que scrollea se queda quieta y no tapa nada. */}
                   <div className="sched__list-head">
-                    <MeasureChip
+                    <PlanToolbar
                       measure={measure}
                       running={running}
-                      disabled={running || ready.length === 0}
-                      onClick={() => void fetchAll(true, ready)}
+                      ready={ready}
+                      onMeasure={() => void fetchAll(true, ready)}
+                      className="toolbar sched__toolbar"
                     />
                     <IconButton
                       onClick={() => setListOpen(false)}
@@ -198,31 +222,17 @@ export function Schedule() {
                     </IconButton>
                   </div>
 
-                  <MeasureProgress running={running} done={done} total={total} />
-
-                  <ul className="sched__cards">
-                    {rows.map((r) => {
-                      const id = itemId(r.item);
-                      return (
-                        <CourseCard
-                          key={id}
-                          row={r}
-                          onlyOpen={false}
-                          compact
-                          linkFrom="schedule"
-                          selection={{
-                            pickedKey: selection[id] ?? null,
-                            onPick: (key) => pick(id, key),
-                            conflictKeys:
-                              selection[id] && conflicts.conflictItems.has(id)
-                                ? new Set([selection[id]])
-                                : new Set(),
-                          }}
-                        />
-                      );
-                    })}
-                  </ul>
-                </div>
+                  <div className="sched__list-scroll">
+                    <PlanList
+                      rows={rows}
+                      running={running}
+                      done={done}
+                      total={total}
+                      conflictItems={conflicts.conflictItems}
+                      linkFrom="schedule"
+                    />
+                  </div>
+                </>
               ) : (
                 // Con la lista oculta el calendario se queda con todo el
                 // ancho —útil en la semana con más materias amontonadas—,
@@ -240,6 +250,25 @@ export function Schedule() {
                 </button>
               )}
             </aside>
+          )}
+
+          {/* Solo con la lista abierta: colapsada (`sched__rail`) no hay
+              ancho que redimensionar, y arrastrar el riel de 2.75rem no
+              tiene ningún sentido. */}
+          {!isMobile && listOpen && (
+            <div
+              className={`sched__resizer ${dragging ? 'is-dragging' : ''}`}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Redimensionar panel de materias"
+              aria-valuenow={Math.round(widthRem)}
+              aria-valuemin={min}
+              aria-valuemax={max}
+              aria-valuetext={`${Math.round(widthRem)} rem`}
+              tabIndex={0}
+              onPointerDown={onPointerDown}
+              onKeyDown={onKeyDown}
+            />
           )}
 
           <div className="sched__calendar">

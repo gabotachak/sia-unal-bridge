@@ -19,6 +19,10 @@ const SORT_KEY = 'tablero.orden.v1';
 /** El grupo elegido por materia en Horario. Ver loadScheduleSelection. */
 const SCHEDULE_KEY = 'tablero.horario.v1';
 
+/** El ancho del panel de materias en Horario, si alguien lo arrastró.
+ *  Ver loadScheduleListWidth. */
+const SCHEDULE_WIDTH_KEY = 'tablero.horario.ancho.v1';
+
 export type PlanItem = {
   level: string; // 'pregrado' — el mismo código puede existir en otro nivel
   campus: string; // '1101'
@@ -157,6 +161,7 @@ export function clearStored(): void {
     localStorage.removeItem(PICK_KEY);
     localStorage.removeItem(SORT_KEY);
     localStorage.removeItem(SCHEDULE_KEY);
+    localStorage.removeItem(SCHEDULE_WIDTH_KEY);
   } catch {
     // Modo privado. Si no se puede escribir, tampoco había nada guardado.
   }
@@ -196,6 +201,28 @@ export function saveScheduleSelection(sel: ScheduleSelection): void {
   }
 }
 
+/** `null` = nunca lo arrastró, o lo devolvió a su ancho original — en los
+ *  dos casos el panel usa el default del hook, no un número guardado. */
+export function loadScheduleListWidth(): number | null {
+  try {
+    const raw = localStorage.getItem(SCHEDULE_WIDTH_KEY);
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveScheduleListWidth(remWidth: number | null): void {
+  try {
+    if (remWidth === null) localStorage.removeItem(SCHEDULE_WIDTH_KEY);
+    else localStorage.setItem(SCHEDULE_WIDTH_KEY, String(remWidth));
+  } catch {
+    // Cuota llena o modo privado: no vale la pena romper la app por esto.
+  }
+}
+
 /* ── El orden de las tablas ─────────────────────────────────────────
    Cómo ordenaste una tabla es una preferencia, no un estado de pantalla:
    ordenas por cupos, entras a mirar una asignatura, vuelves — y esperas
@@ -211,8 +238,14 @@ export function saveScheduleSelection(sel: ScheduleSelection): void {
    caso que esto viene a arreglar; y de dónde vienes ordenando no es parte
    de la identidad del catálogo, que es lo que se copia y se pega.        */
 
-/** Qué tabla. Son dos y cada una recuerda la suya. */
-export type SortScope = 'catalog' | 'semester';
+/** Qué tabla. Son dos y cada una recuerda la suya.
+ *
+ *  `plan` es UNA sola preferencia para Mi semestre y Mi horario, no una por
+ *  pantalla: las dos pintan la misma tabla sobre la misma lista, así que
+ *  ordenarla en una y encontrarla desordenada en la otra sería el mismo
+ *  desconcierto que motivó guardar el orden en primer lugar. El catálogo sí
+ *  va aparte — es otra lista, con otras razones para ordenarse. */
+export type SortScope = 'catalog' | 'plan';
 
 /** Lo guardado. `col` se valida contra la tabla que la usa, no acá: este
  *  módulo no sabe qué columnas existen y no tiene por qué saberlo. */

@@ -166,6 +166,46 @@
   }
 }
 
+/* ── El botón de donar ──────────────────────────────────────────────
+   La única pieza de la barra con color de fondo en reposo, a propósito:
+   es una invitación, no una utilidad, y entre iconos grises hay que
+   dársela ya servida en vez de esperar a que alguien pase el mouse por
+   todos para encontrarla. Ocre y no jade —jade ya significa "tocable" en
+   TODA la app (ver tokens.css); usarlo acá lo hubiera hecho indistinguible
+   de "Catálogo del plan" a primer golpe de vista. */
+.donatebtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: none;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  margin-right: var(--gap-xs);
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: var(--t-small);
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    color var(--fast) var(--ease-out),
+    background-color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .donatebtn:hover {
+    background: var(--warn);
+    color: var(--accent-ink);
+  }
+}
+.donatebtn:active {
+  transform: scale(0.96);
+}
+.donatebtn.is-on {
+  background: var(--warn);
+  color: var(--accent-ink);
+}
+
 /* ── Cómo se encoge ─────────────────────────────────────────────────
    El orden en que se van las cosas está pensado: primero la palabra de
    la marca (el logo ya identifica), después la sede (el código de plan
@@ -197,6 +237,18 @@
   }
   .planchip {
     max-width: none;
+  }
+
+  /* La palabra se va, no el botón: sin plan elegido esta es la única razón
+     para volver, y un ícono sin rótulo escrito se pierde en un teléfono sin
+     hover que lo explique. */
+  .donatebtn {
+    width: 2.25rem;
+    padding: 0;
+    justify-content: center;
+  }
+  .donatebtn__word {
+    display: none;
   }
 }
 

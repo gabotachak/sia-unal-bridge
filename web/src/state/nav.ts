@@ -28,7 +28,8 @@ export type Screen =
   | { name: 'program'; selection: Selection }
   | { name: 'course'; selection: Selection; code: string; from?: 'semester' | 'schedule' }
   | { name: 'semester' }
-  | { name: 'schedule' };
+  | { name: 'schedule' }
+  | { name: 'donate' };
 
 export type NavApi = {
   screen: Screen;

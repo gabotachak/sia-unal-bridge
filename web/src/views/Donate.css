@@ -1,0 +1,110 @@
+/* Una sola columna, centrada, corta: no es un catálogo, es un gesto. Nada
+   de `.head` de lado a lado —no hay acciones que pedir espacio al título—
+   así que todo se apila y se centra, como una tarjeta de agradecimiento. */
+.donate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 30rem;
+  margin: var(--gap) auto 0;
+  text-align: center;
+}
+
+.donate__back {
+  align-self: flex-start;
+  margin-bottom: var(--gap-lg);
+}
+
+.donate__icon {
+  color: var(--warn);
+  margin-bottom: var(--gap-sm);
+}
+
+.donate__title {
+  font-size: var(--t-display);
+  letter-spacing: var(--track-display);
+  margin: 0 0 var(--gap);
+}
+.donate__title em {
+  margin-left: -0.03em;
+}
+
+.donate__lead {
+  margin: 0;
+  font-size: var(--t-lead);
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+/* ── El QR y la llave ──────────────────────────────────────────────── */
+
+.donate__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap);
+  width: 100%;
+  margin: var(--gap-xl) 0 var(--gap);
+  padding: var(--gap-lg);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.donate__qr {
+  width: 100%;
+  max-width: 16rem;
+  height: auto;
+  border-radius: var(--radius);
+  /* El PNG del banco ya trae su propio marco blanco (ver llave.jpg): un
+     borde más encima solo lo hubiera duplicado. Este aro es para el modo
+     oscuro, donde ese blanco flota sin nada que lo contenga. */
+  outline: 1px solid var(--rule);
+  outline-offset: -1px;
+}
+
+.donate__key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.donate__key-label {
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* Botón y no <code> a secas: copiar la llave a mano en un teléfono, tocando
+   y arrastrando sobre `@NEQUIGAB107`, es exactamente el tipo de fricción
+   que hace que alguien abandone antes de donar. Un toque y ya está. */
+.donate__key-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--sunken);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  transition:
+    border-color var(--fast) var(--ease-out),
+    color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .donate__key-value:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+}
+.donate__key-value:active {
+  transform: scale(0.97);
+}

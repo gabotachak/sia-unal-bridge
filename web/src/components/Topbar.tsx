@@ -1,4 +1,4 @@
-import { CalendarDays, LayoutList, ListChecks, Monitor, Moon, Sun, Trash2 } from 'lucide-react';
+import { CalendarDays, Coffee, LayoutList, ListChecks, Monitor, Moon, Sun, Trash2 } from 'lucide-react';
 import { AppLink } from './AppLink';
 import { useConfirm } from './Confirm';
 import { useTheme } from '../hooks/useTheme';
@@ -149,6 +149,26 @@ export function Topbar() {
           >
             <CalendarDays size={ICON} strokeWidth={STROKE} />
           </IconButton>
+
+          {/* La única llamada a la acción de toda la barra: por eso no lleva
+              `iconbtn--dest` —se queda arriba también en el teléfono, en vez
+              de mudarse a `.tabbar` con los tres destinos de verdad— y por
+              eso es la única con color de fondo en reposo. Un icono gris más
+              nunca iba a competir por atención con el catálogo. */}
+          <AppLink
+            to={{ name: 'donate' }}
+            className={`donatebtn ${screen.name === 'donate' ? 'is-on' : ''}`}
+            aria-label="Invítame un café"
+            onClick={(e) => {
+              if (screen.name === 'donate') {
+                e.preventDefault();
+                window.history.back();
+              }
+            }}
+          >
+            <Coffee size={ICON} strokeWidth={STROKE} aria-hidden="true" />
+            <span className="donatebtn__word">Invítame un café</span>
+          </AppLink>
 
           <IconButton onClick={cycle} label={themeLabel} tip="left">
             {theme === 'system' ? (

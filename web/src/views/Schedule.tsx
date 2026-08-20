@@ -159,14 +159,28 @@ export function Schedule() {
           <h1 className="head__title">Mi horario</h1>
         </div>
 
-        {/* Un solo grupo con las dos piezas de la derecha —el conteo y el
-            botón— para que `.head` siga viendo dos hijos y el reparto de
-            `justify-content: space-between` no cambie. Vive en el header y
-            no en `.sched__list-head` (donde están los otros controles de la
-            lista) porque exportar es del CALENDARIO, no de la lista: sigue
-            haciendo falta con la lista colapsada y en mobile, donde
-            `.sched__list-head` ni se dibuja. */}
-        <div className="sched__head-actions">
+        {/* Mismo `.head__side` que Mi semestre: el conteo pegado al borde
+            derecho, en la fila del título. El botón ya no vive acá — ver
+            el `.toolbar` de abajo — así que esta cabecera es, hueso por
+            hueso, la misma de Mi semestre. */}
+        <div className="head__side">
+          <p className="head__meta tnum">
+            {pickedCount} de {plan.items.length} materias con grupo elegido
+          </p>
+        </div>
+      </header>
+
+      {/* Fila de controles propia, debajo del header — el mismo lugar y la
+          misma clase (`.toolbar`) que el `PlanToolbar` de Mi semestre, para
+          que las dos cabeceras se lean como la misma app. Fuera de
+          `.sched__list-head` (donde están los controles de la lista)
+          porque exportar es del CALENDARIO, no de la lista: sigue haciendo
+          falta con la lista colapsada y en mobile, donde
+          `.sched__list-head` ni se dibuja. Escondida en vacío por la misma
+          razón que el `PlanToolbar` de Mi semestre: nada que exportar
+          todavía. */}
+      {!empty && (
+        <div className="toolbar">
           <button
             type="button"
             className="btn"
@@ -179,13 +193,10 @@ export function Schedule() {
             }
           >
             <Download size={14} strokeWidth={1.75} aria-hidden="true" />
-            exportar a calendario
+            exportar
           </button>
-          <p className="head__meta tnum">
-            {pickedCount} de {plan.items.length} materias con grupo elegido
-          </p>
         </div>
-      </header>
+      )}
 
       {empty ? (
         <>

@@ -5,7 +5,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--gap-sm);
+  row-gap: var(--gap-sm);
+  column-gap: var(--gap);
   flex: 1;
 }
 

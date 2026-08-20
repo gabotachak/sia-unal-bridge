@@ -1,0 +1,59 @@
+/* Fila del panel de filtros (Program.tsx): días y rango en la MISMA línea
+   —como `.chips` de tipología o créditos—, no apilados. Solo se envuelve
+   si de verdad no entra (móvil angosto). */
+.avail-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-sm);
+  flex: 1;
+}
+
+/* El rango, como una píldora más al lado de los días de la semana —mismo
+   alto, mismo radio que `.chip--sm`— para que las dos mitades del filtro
+   ("qué días", "qué horas") se lean como parte de la misma familia y no
+   como un control de otro sistema. */
+/* `.avail__range` se agrega ENCIMA de `.chip.chip--sm` (ver
+   AvailabilityPicker.tsx) y no reimplementa su caja: pedirle el mismo
+   padding/radio/alto a mano es como se desalinearon la primera vez — un
+   `<select>` trae su propio relleno de fábrica que el padding del
+   contenedor no absorbe, así que "copiar los mismos números" no basta,
+   hace falta ser literalmente el mismo elemento. Acá solo el gap entre
+   ícono/selects/separador, que `.chip` no define porque nunca tuvo más de
+   un texto adentro. */
+.avail__range {
+  gap: 0.3rem;
+}
+
+/* `appearance: none` le quita a `<select>` su relleno y alto de línea de
+   fábrica —lo que lo hacía más alto que el resto del pill—, así que la
+   flechita nativa se repone a mano con `ChevronDown`. */
+.avail__range select {
+  appearance: none;
+  border: none;
+  margin: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.avail__range select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.avail__range svg {
+  flex: none;
+}
+.avail__range .avail__chevron {
+  opacity: 0.6;
+  margin-left: -0.15rem;
+}
+.avail__range-sep {
+  color: inherit;
+  opacity: 0.7;
+}

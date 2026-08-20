@@ -12,7 +12,7 @@ export function blockId(b: Block): string {
   return `${b.itemId}:${b.sectionKey}:${b.session.weekday}:${b.session.start_time}`;
 }
 
-function overlaps(a: ClassSession, b: ClassSession): boolean {
+export function overlaps(a: ClassSession, b: ClassSession): boolean {
   if (a.weekday !== b.weekday) return false;
   return a.start_time < b.end_time && b.start_time < a.end_time;
 }
@@ -45,4 +45,47 @@ export function computeConflicts(blocks: Block[]): {
   }
 
   return { conflictBlocks, conflictItems };
+}
+
+/**
+ * Qué CLAVES de grupo de esta materia —elegido o no— chocan con un bloque YA
+ * elegido de OTRA materia (issue #28, filtro por horario).
+ *
+ * A diferencia de `computeConflicts` —que solo compara grupos ya elegidos
+ * entre sí— esto mira grupo por grupo de una materia que puede no tener
+ * ninguno elegido todavía: sirve tanto para el catálogo (antes de
+ * comprometerse, "¿algo de esto va a chocar?") como para Mi semestre/Mi
+ * horario (marcar la fila EXACTA que choca, no la materia entera). Por eso
+ * es por grupo y no un booleano: una materia con un grupo ya elegido que NO
+ * choca sigue estando bien, aunque una alternativa suya sí chocaría —el
+ * grupo elegido es el único que importa una vez elegido.
+ */
+export function candidateConflictKeys(
+  itemId: string,
+  sections: readonly { key: string; schedule: readonly ClassSession[] }[],
+  chosenBlocks: readonly Block[],
+): Set<string> {
+  const keys = new Set<string>();
+  const otherBlocks = chosenBlocks.filter((b) => b.itemId !== itemId);
+  if (otherBlocks.length === 0) return keys;
+  for (const s of sections) {
+    if (s.schedule.some((session) => otherBlocks.some((b) => overlaps(session, b.session)))) {
+      keys.add(s.key);
+    }
+  }
+  return keys;
+}
+
+/**
+ * Si CUALQUIER grupo de esta materia choca en horario con un bloque YA
+ * elegido de OTRA materia — la versión de un solo booleano de
+ * `candidateConflictKeys`, para el catálogo, donde no hay filas de grupo
+ * que marcar una por una, solo la materia completa.
+ */
+export function courseConflictsWithChosen(
+  itemId: string,
+  sections: readonly { key: string; schedule: readonly ClassSession[] }[],
+  chosenBlocks: readonly Block[],
+): boolean {
+  return candidateConflictKeys(itemId, sections, chosenBlocks).size > 0;
 }

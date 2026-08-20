@@ -24,7 +24,7 @@ export function Semester() {
   // que calcular para el calendario: teniéndolo el padre, el componente
   // compartido recibe el resultado en vez de rehacerlo en cada pantalla.
   const { selection } = useScheduleSelection();
-  const { conflicts } = useScheduleConflicts(rows, selection);
+  const { blocks } = useScheduleConflicts(rows, selection);
 
   const totals = summarize(rows);
   const empty = plan.items.length === 0;
@@ -95,7 +95,7 @@ export function Semester() {
             running={running}
             done={done}
             total={total}
-            conflictItems={conflicts.conflictItems}
+            chosenBlocks={blocks}
             linkFrom="semester"
           />
 

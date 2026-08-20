@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { DEFAULT_AVAILABILITY, type AvailabilityFilter } from '../lib/availability';
 import { CatalogFiltersContext, type CatalogFiltersApi } from './catalogFiltersContext';
 
 /**
@@ -17,6 +18,8 @@ export function CatalogFiltersProvider({ children }: { children: React.ReactNode
   const [typols, setTypols] = useState<ReadonlySet<string>>(new Set());
   const [creds, setCreds] = useState<ReadonlySet<number>>(new Set());
   const [onlyOpen, setOnlyOpen] = useState(false);
+  const [hideConflicts, setHideConflicts] = useState(false);
+  const [availability, setAvailability] = useState<AvailabilityFilter>(DEFAULT_AVAILABILITY);
   const [showFacets, setShowFacets] = useState(false);
 
   // Ref y no estado: cambia en cada pixel de scroll, y CatalogFiltersProvider
@@ -35,6 +38,10 @@ export function CatalogFiltersProvider({ children }: { children: React.ReactNode
       setCreds,
       onlyOpen,
       setOnlyOpen,
+      hideConflicts,
+      setHideConflicts,
+      availability,
+      setAvailability,
       showFacets,
       setShowFacets,
       get scrollY() {
@@ -44,7 +51,7 @@ export function CatalogFiltersProvider({ children }: { children: React.ReactNode
         scrollYRef.current = y;
       },
     }),
-    [q, typols, creds, onlyOpen, showFacets],
+    [q, typols, creds, onlyOpen, hideConflicts, availability, showFacets],
   );
 
   return <CatalogFiltersContext value={api}>{children}</CatalogFiltersContext>;

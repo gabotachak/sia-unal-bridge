@@ -6,6 +6,7 @@ import { usePlan } from '../hooks/usePlan';
 import { usePlanView } from '../hooks/usePlanView';
 import { useScheduleSelection } from '../hooks/useScheduleSelection';
 import type { Row } from '../hooks/useCourseDetails';
+import { candidateConflictKeys, type Block } from '../lib/conflicts';
 import { courseSortKey, sortBy } from '../lib/sort';
 import { itemId } from '../lib/storage';
 
@@ -38,7 +39,7 @@ export function PlanList({
   running,
   done,
   total,
-  conflictItems,
+  chosenBlocks,
   linkFrom,
 }: {
   /** En el orden de `plan.items` — el de agregado. Ordenar es cosa de acá. */
@@ -46,9 +47,11 @@ export function PlanList({
   running: boolean;
   done: number;
   total: number;
-  /** Ids con choque de horario, de `useScheduleConflicts` en el padre, que
-   *  ya lo calculó para lo suyo. */
-  conflictItems: Set<string>;
+  /** Los bloques YA elegidos, de `useScheduleConflicts` en el padre, que ya
+   *  los armó para lo suyo (el calendario, en Mi horario). Con esto cada
+   *  tarjeta calcula qué filas propias —elegidas o no— chocan contra un
+   *  grupo elegido de OTRA materia. */
+  chosenBlocks: Block[];
   linkFrom: 'semester' | 'schedule';
 }) {
   const plan = usePlan();
@@ -81,6 +84,12 @@ export function PlanList({
         <ul className="table__cards">
           {shownRows.map((r) => {
             const id = itemId(r.item);
+            // Por grupo, no por materia: si el elegido no choca, la fila
+            // elegida queda tranquila aunque una alternativa suya sí
+            // chocaría — ver el comentario de `candidateConflictKeys`.
+            const conflictKeys = r.detail
+              ? candidateConflictKeys(id, r.detail.sections, chosenBlocks)
+              : new Set<string>();
             return (
               <CourseCard
                 key={id}
@@ -91,10 +100,7 @@ export function PlanList({
                 selection={{
                   pickedKey: selection[id] ?? null,
                   onPick: (key) => pick(id, key),
-                  conflictKeys:
-                    selection[id] && conflictItems.has(id)
-                      ? new Set([selection[id]])
-                      : new Set(),
+                  conflictKeys,
                 }}
               />
             );

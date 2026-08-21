@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
@@ -272,12 +273,24 @@ func findRow(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code, n
 // response the SIA serves (~240–320 KB, and libre elección courses are only
 // ever found there), so filtering just the regular half would leave most of
 // the bytes on the table.
+//
+// A failed regular-catalog fetch used to be swallowed here — any error fell
+// straight through to the electives search, and if THAT also came back empty
+// (certain, for a course that was never libre elección to begin with) the
+// caller got a plain catalog.ErrNotFound. That is a confident lie: the course
+// was never actually checked, a transient SIA hiccup was. Reported live
+// 2026-08-21 as a course the Store already had (real sections, freshly
+// crawled hours earlier) 404ing on every forced refresh — indistinguishable
+// from "doesn't exist" from the outside. Now a catalog-fetch failure is kept
+// and, if electives doesn't resolve it either, surfaced instead of masked.
 func findRowInListings(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code string) (Row, error) {
-	if body, err := conn.FetchCatalog(ctx, key); err == nil {
-		if rows, perr := ParseList(body); perr == nil {
-			if r, ok := rowWithCode(rows, code); ok {
-				return r, nil
-			}
+	body, catalogErr := conn.FetchCatalog(ctx, key)
+	if catalogErr == nil {
+		rows, perr := ParseList(body)
+		if perr != nil {
+			catalogErr = fmt.Errorf("sia: findRowInListings: ParseList: %w", perr)
+		} else if r, ok := rowWithCode(rows, code); ok {
+			return r, nil
 		}
 	}
 
@@ -288,7 +301,27 @@ func findRowInListings(ctx context.Context, conn *SIAConn, key catalog.ProgramKe
 	// picked out of the union clicks a row of whichever search ran last —
 	// which is how every doctorado course reachable only through libre
 	// elección failed with "no detail region id" (GOTCHAS §38).
-	return conn.FindElectiveRow(ctx, key, code)
+	row, electivesErr := conn.FindElectiveRow(ctx, key, code)
+	if electivesErr == nil {
+		return row, nil
+	}
+	if catalogErr == nil {
+		return Row{}, electivesErr
+	}
+
+	// Both checks came back empty-handed AND the regular one never actually
+	// completed — do not report a course as unknown on the strength of a
+	// search that broke. See the doc comment above.
+	if !errors.Is(electivesErr, catalog.ErrNotFound) {
+		slog.Warn("sia: findRowInListings: regular catalog fetch failed AND electives search itself failed",
+			"level", key.Level, "campus", key.Campus, "faculty", key.Faculty, "program", key.Program,
+			"code", code, "catalog_err", catalogErr, "electives_err", electivesErr)
+		return Row{}, electivesErr
+	}
+	slog.Warn("sia: findRowInListings: regular catalog fetch failed, electives came back empty — reporting the catalog failure instead of a false unknown_course",
+		"level", key.Level, "campus", key.Campus, "faculty", key.Faculty, "program", key.Program,
+		"code", code, "catalog_err", catalogErr)
+	return Row{}, fmt.Errorf("sia: findRowInListings: regular catalog check failed for %s: %w", code, catalogErr)
 }
 
 // checkDetailCode compares the code the detail page printed with the one we

@@ -40,8 +40,20 @@ var headerRe = regexp.MustCompile(`Imprimir(.+?)\(([^()\n]+)\)\s*Tipolog[ií]a:\
 // groupHeaderRe delimits a group block. Tolerant to PEAMA variants — GOTCHAS
 // §24. It also matches the leading component code that sits right before
 // the FIRST group's header (e.g. "(21000004) (10) Grupo 10"); extractGroupKey
-// resolves that by taking the LAST parenthesised token before "Grupo".
-var groupHeaderRe = regexp.MustCompile(`\([^)\n]{1,20}\)[^\n]{0,60}?Grupo\s*\S+`)
+// resolves that by taking the LAST parenthesised token in the header.
+//
+// Some electives don't say "Grupo" at all — a language course can label its
+// only section "(1) Aleman Electivo 1" (GOTCHAS §40, fixture
+// detalle_2022615_grupo_sin_palabra_grupo_2026-08-21.xml). The "Grupo" arm
+// stays first (and matches first, since Go's alternation with a lazy
+// quantifier tries the shorter expansion — "Grupo" sits before "Profesor:"
+// in every real header): the fallback only fires when a header never
+// contains it before the block hands off to "Profesor:". It consumes
+// "Profesor:" as its anchor since RE2 has no lookahead; the loop below
+// hands that back to the body.
+var groupHeaderRe = regexp.MustCompile(`\([^)\n]*\d[^)\n]*\)[^\n]{0,60}?(?:Grupo\s*\S+|Profesor:)`)
+
+const profesorAnchor = "Profesor:"
 
 var (
 	profesorRe = regexp.MustCompile(`Profesor:\s*(.*?)Facultad:`)
@@ -119,7 +131,15 @@ func ParseDetail(raw []byte, campusCode, code, term string) (Detail, error) {
 			blockEnd = locs[i+1][0]
 		}
 		header := text[loc[0]:loc[1]]
-		body := text[loc[1]:blockEnd]
+		bodyStart := loc[1]
+		// The fallback arm of groupHeaderRe consumes "Profesor:" as its
+		// anchor (RE2 has no lookahead) — hand it back to the body so
+		// profesorRe still finds it there.
+		if strings.HasSuffix(header, profesorAnchor) {
+			header = header[:len(header)-len(profesorAnchor)]
+			bodyStart -= len(profesorAnchor)
+		}
+		body := text[bodyStart:blockEnd]
 		sections = append(sections, parseSection(header, body, campusCode, code, term))
 	}
 	d.Sections = sections
@@ -131,21 +151,20 @@ func ParseDetail(raw []byte, campusCode, code, term string) (Detail, error) {
 	return d, nil
 }
 
-// extractGroupKey isolates the LAST parenthesised token before "Grupo" in a
-// matched header, so the component code that sometimes precedes the first
-// group ("(21000004) (10) Grupo 10") doesn't get mistaken for the key.
+// extractGroupKey isolates the LAST parenthesised token in a matched header,
+// so the component code that sometimes precedes the first group
+// ("(21000004) (10) Grupo 10") doesn't get mistaken for the key. Taking the
+// last paren works whether or not the label itself says "Grupo" — the key
+// is always the innermost, rightmost one ("(1) Aleman Electivo 1" — GOTCHAS
+// §40 — has no "Grupo" at all, but the same rule still isolates "(1)").
 func extractGroupKey(header string) (key, rest string) {
-	gi := strings.Index(header, "Grupo")
-	if gi < 0 {
-		return "", header
-	}
-	open := strings.LastIndex(header[:gi], "(")
+	open := strings.LastIndex(header, "(")
 	if open < 0 {
-		return "", header[gi:]
+		return "", strings.TrimSpace(header)
 	}
 	closeRel := strings.Index(header[open:], ")")
 	if closeRel < 0 {
-		return "", header[gi:]
+		return "", strings.TrimSpace(header)
 	}
 	key = header[open+1 : open+closeRel]
 	rest = strings.TrimSpace(header[open:])
@@ -167,6 +186,10 @@ func parseSection(header, body, campusCode, code, term string) catalog.Section {
 		if n, err := strconv.Atoi(m[1]); err == nil {
 			s.Number = n
 		}
+	} else if n, err := strconv.Atoi(key); err == nil {
+		// No "Grupo N" in the label (GOTCHAS §40) — for a plain (non-PEAMA)
+		// group the key already IS the number the student reads.
+		s.Number = n
 	}
 	if m := siteRe.FindStringSubmatch(key); m != nil {
 		s.Site = m[1]

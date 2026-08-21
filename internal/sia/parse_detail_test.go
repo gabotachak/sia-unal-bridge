@@ -38,6 +38,42 @@ func TestParseDetail_32GruposConPeama(t *testing.T) {
 	}
 }
 
+// TestParseDetail_GroupLabelWithoutGrupoWord is GOTCHAS §40: a language
+// elective can label its only group "(1) Aleman Electivo 1" with no
+// "Grupo" anywhere in the header. Before the fix, groupHeaderRe required
+// that literal word and this course parsed as 0 sections — indistinguishable
+// from GOTCHAS §18's genuine "sin oferta" — while SIA had a real group with
+// an instructor, a schedule and seats. Bug found live 2026-08-21 against
+// 2A74/2022615.
+func TestParseDetail_GroupLabelWithoutGrupoWord(t *testing.T) {
+	d, err := ParseDetail(fixture(t, "detalle_2022615_grupo_sin_palabra_grupo_2026-08-21.xml"), "1101", "2022615", "2026-2")
+	if err != nil {
+		t.Fatalf("ParseDetail: %v", err)
+	}
+	if d.HeaderCode != "2022615" {
+		t.Errorf("got HeaderCode %q, want 2022615", d.HeaderCode)
+	}
+	if len(d.Sections) != 1 {
+		t.Fatalf("got %d sections, want 1", len(d.Sections))
+	}
+	s := d.Sections[0]
+	if s.Key != "1" {
+		t.Errorf("got key %q, want 1", s.Key)
+	}
+	if s.Number != 1 {
+		t.Errorf("got number %d, want 1 (no 'Grupo N' in the label — falls back to the key)", s.Number)
+	}
+	if s.Instructor == "" {
+		t.Error("Instructor must not be empty")
+	}
+	if s.Seats == nil || s.Seats.Available != 23 {
+		t.Errorf("got seats %+v, want 23 (fixture: 'Cupos disponibles: 23')", s.Seats)
+	}
+	if len(s.Schedule) == 0 {
+		t.Error("expected at least one schedule session (LUNES/VIERNES 07:00-09:00 in the fixture)")
+	}
+}
+
 func TestParseDetail_2027641ZeroGroups(t *testing.T) {
 	d, err := ParseDetail(fixture(t, "detalle_2027641_0grupos_2026-08-15.xml"), "1101", "2027641", "2026-2")
 	// A course with no offering this term is VALID, not an error: the whole

@@ -53,12 +53,17 @@ export function computeConflicts(blocks: Block[]): {
  *
  * A diferencia de `computeConflicts` —que solo compara grupos ya elegidos
  * entre sí— esto mira grupo por grupo de una materia que puede no tener
- * ninguno elegido todavía: sirve tanto para el catálogo (antes de
- * comprometerse, "¿algo de esto va a chocar?") como para Mi semestre/Mi
- * horario (marcar la fila EXACTA que choca, no la materia entera). Por eso
- * es por grupo y no un booleano: una materia con un grupo ya elegido que NO
- * choca sigue estando bien, aunque una alternativa suya sí chocaría —el
- * grupo elegido es el único que importa una vez elegido.
+ * ninguno elegido todavía: sirve tanto para marcar la fila EXACTA que choca
+ * en Mi semestre/Mi horario y en el detalle de la materia, como de primitiva
+ * para la pregunta de nivel materia (`allSectionsConflict`).
+ *
+ * Es un set y no un booleano a propósito: una materia con un grupo ya
+ * elegido que NO choca sigue estando bien, aunque una alternativa suya sí
+ * chocaría —el grupo elegido es el único que importa una vez elegido.
+ *
+ * Un grupo con `schedule` vacío ("horario no informado" del SIA) nunca entra
+ * al set: `some` sobre `[]` es `false`. Cuenta como servible, que es la
+ * dirección conservadora —no marcar de más.
  */
 export function candidateConflictKeys(
   itemId: string,
@@ -77,15 +82,23 @@ export function candidateConflictKeys(
 }
 
 /**
- * Si CUALQUIER grupo de esta materia choca en horario con un bloque YA
- * elegido de OTRA materia — la versión de un solo booleano de
- * `candidateConflictKeys`, para el catálogo, donde no hay filas de grupo
- * que marcar una por una, solo la materia completa.
+ * Si a esta materia NO le queda ningún grupo servible: TODOS chocan con un
+ * bloque ya elegido de OTRA materia (issue #34).
+ *
+ * Es la pregunta de nivel MATERIA, no de nivel grupo, y tiene la misma forma
+ * que `courseFitsAvailability` en availability.ts: alcanza con que UN grupo
+ * sirva para que la materia siga en pie. Antes esto era "¿choca alguno?", y
+ * por eso una materia con cuatro grupos de los que uno solo chocaba salía
+ * marcada como inservible —el bug de #34.
+ *
+ * Sin grupos que evaluar → `false`: no hay nada que avisar, y "todos chocan"
+ * sobre una lista vacía sería vacuamente cierto.
  */
-export function courseConflictsWithChosen(
+export function allSectionsConflict(
   itemId: string,
   sections: readonly { key: string; schedule: readonly ClassSession[] }[],
   chosenBlocks: readonly Block[],
 ): boolean {
-  return candidateConflictKeys(itemId, sections, chosenBlocks).size > 0;
+  if (sections.length === 0) return false;
+  return candidateConflictKeys(itemId, sections, chosenBlocks).size === sections.length;
 }

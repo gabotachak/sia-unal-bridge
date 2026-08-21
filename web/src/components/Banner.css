@@ -1,0 +1,23 @@
+/* Aviso temporal, encima de todo.
+
+   No es `sticky`: se lee una vez y se va con el scroll. La barra (Topbar.css)
+   sí se queda pegada arriba, así que el banner tiene que ir ANTES en el DOM y
+   con menos `z-index` que ella — al desplazarse, la barra le pasa por encima
+   en vez de quedar media tapada. */
+.banner {
+  position: relative;
+  z-index: 40;
+  background: var(--bad);
+  /* La misma tinta que va sobre el jade sólido: clara sobre el óxido del tema
+     claro, oscura sobre el salmón del oscuro. Se voltea sola con el tema. */
+  color: var(--accent-ink);
+  text-align: center;
+  padding: var(--gap-sm) clamp(var(--gap-sm), 4vw, 3.5rem);
+  font-size: var(--t-small);
+  line-height: 1.45;
+}
+
+.banner p {
+  max-width: var(--measure);
+  margin: 0 auto;
+}

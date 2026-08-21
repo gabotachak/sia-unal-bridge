@@ -1,3 +1,4 @@
+import { Banner } from './Banner';
 import { TabBar } from './TabBar';
 import { Topbar } from './Topbar';
 import './Layout.css';
@@ -19,6 +20,10 @@ import './Layout.css';
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="shell">
+      {/* Antes que la barra, que es lo que lo pone en la primerísima línea de
+          la página. Temporal: se quita junto con Banner.tsx. */}
+      <Banner />
+
       <Topbar />
 
       <main className="content">{children}</main>

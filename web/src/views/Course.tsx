@@ -4,6 +4,7 @@ import { FETCH_COOLDOWN, routes } from '../api/client';
 import type { ClassSession, CourseDetail, Section } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { useCourseDetails } from '../hooks/useCourseDetails';
+import { putDetail } from '../lib/detailCache';
 import { usePlan } from '../hooks/usePlan';
 import { useScheduleConflicts } from '../hooks/useScheduleConflicts';
 import { useScheduleSelection } from '../hooks/useScheduleSelection';
@@ -141,6 +142,14 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
   const { rows: planRows } = useCourseDetails(chosenPlanItems);
   const { blocks: chosenBlocks } = useScheduleConflicts(planRows, scheduleSelection);
   const thisCourseId = itemId({ level, campus, program, code });
+
+  // Lo que se acaba de traer para pintar ESTA ficha le sirve al catálogo para
+  // marcar la fila de esta materia sin volver a pedir nada: mirar Turco I y
+  // volver atrás deja el catálogo sabiendo sus horarios (lib/detailCache.ts).
+  useEffect(() => {
+    if (data) putDetail(thisCourseId, data);
+  }, [data, thisCourseId]);
+
   const pickedKey = scheduleSelection[thisCourseId];
   const conflictKeys = data ? candidateConflictKeys(thisCourseId, data.sections, chosenBlocks) : new Set<string>();
 

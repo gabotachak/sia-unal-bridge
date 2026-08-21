@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeftRight,
   Check,
@@ -9,8 +9,8 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { get, routes } from '../api/client';
-import type { CourseDetail, CoursesResponse, CourseSummary, Section } from '../api/types';
+import { routes } from '../api/client';
+import type { CoursesResponse, CourseSummary } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { useCatalogFilters } from '../hooks/useCatalogFilters';
 import { useCourseDetails } from '../hooks/useCourseDetails';
@@ -31,9 +31,9 @@ import type { TableCol } from '../lib/table';
 import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
 import { useTableSort } from '../hooks/useTableSort';
 import { fold, formatAge, sentence } from '../lib/format';
-import { allSectionsConflict, candidateConflictKeys } from '../lib/conflicts';
+import { classifyConflict, type SectionLike } from '../lib/conflicts';
+import { useDetailCache } from '../lib/detailCache';
 import { DEFAULT_AVAILABILITY, courseFitsAvailability, isAvailabilityActive } from '../lib/availability';
-import { pooled } from '../lib/pooled';
 import { itemId, selectionId } from '../lib/storage';
 import type { Screen } from '../state/nav';
 import './Program.css';
@@ -49,7 +49,24 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
   const sel = screen.selection;
   const { level, campus, faculty, program } = sel;
 
-  const path = routes.courses({ level, campus, faculty }, program);
+  /**
+   * Los horarios de los grupos se piden en la MISMA respuesta del catálogo
+   * —y solo si hay un horario armado contra el que chocar.
+   *
+   * Antes esto era un prefetch aparte: hasta 40 peticiones de detalle, una
+   * por asignatura, elegidas por orden alfabético. Con 200 asignaturas
+   * medidas en un plan de Bogotá eso dejaba al 80% del catálogo sin marcar
+   * —Turco I entre ellas, la número 194— y pedir las 200 habría sido ~30 s
+   * de goteo. En la respuesta del catálogo son ~44 KB sobre 358 KB y cero
+   * peticiones de más.
+   *
+   * Sin nada elegido no se pide: no hay con qué chocar, así que no habría
+   * nada que marcar y sería peso puro.
+   */
+  const { selection: scheduleSelection } = useScheduleSelection();
+  const hasSchedule = Object.keys(scheduleSelection).length > 0;
+
+  const path = routes.courses({ level, campus, faculty }, program, hasSchedule ? 'schedules' : undefined);
   const { data, error, loading, elapsed, attempt, reload } =
     useApi<CoursesResponse>(path);
 
@@ -101,135 +118,71 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
   );
 
   /**
-   * Qué materias del catálogo chocan en horario con un grupo YA elegido en
-   * Mi horario (issue #28: "Filtro por horario").
+   * Mi horario: los bloques ya elegidos, que son contra lo que se mide todo
+   * choque del catálogo (issue #28: "Filtro por horario").
    *
-   * Los grupos con su horario solo existen para las materias de Mi
-   * semestre —el catálogo en sí trae cupos agregados, no horario por
-   * grupo (`CourseSummary` vs. `CourseDetail`, ver api/types.ts)— así que
-   * el choque solo se puede saber para esas, como mucho diez
-   * (`MAX_ITEMS`). Es el MISMO `useCourseDetails` que usan Mi semestre y Mi
-   * horario, con el mismo pool y el mismo cooldown: entrar al catálogo no
-   * dispara nada que esas pantallas no disparen ya solas.
-   *
-   * `allSectionsConflict` mira TODOS los grupos de la materia, no solo el
-   * elegido: acá puede no haber ninguno elegido todavía, y el punto es
-   * avisar ANTES de elegir que NINGUNO va a encajar. Que uno de cuatro
-   * choque no es noticia —quedan tres— y marcar por eso era el issue #34.
+   * Es el MISMO `useCourseDetails` que usan Mi semestre y Mi horario, con el
+   * mismo pool y el mismo cooldown: entrar al catálogo no dispara nada que
+   * esas pantallas no disparen ya solas.
    */
   const { rows: planRows } = useCourseDetails(plan.items);
-  const { selection: scheduleSelection } = useScheduleSelection();
   const { blocks: chosenBlocks } = useScheduleConflicts(planRows, scheduleSelection);
 
   /**
-   * El choque de horario también para materias que NI SIQUIERA están en el
-   * plan, con tal de que su detalle ya esté cacheado de una consulta
-   * anterior (`c.seats` puesto: alguien ya midió sus cupos, así que el
-   * back tiene sus grupos guardados en Postgres).
+   * Los grupos de cada materia que esta sesión conoce — del plan, de lo que
+   * trajo el prefetch, y de cualquier ficha que se haya abierto antes
+   * (lib/detailCache.ts). Es la MISMA fuente para el marcado de choques y
+   * para el filtro de disponibilidad: dos criterios sobre el mismo dato.
    *
-   * Sin `c.seats` no se pide: eso es "nadie preguntó todavía" (el `?` de la
-   * columna CUPOS), y pedirlo dispararía un POST de verdad contra el SIA —
-   * hasta 40 a la vez si alguien limpia todos los filtros, un pool de 4
-   * conexiones no da abasto. CON `c.seats` puesto, en cambio, el pedido es
-   * un acierto de cache casi seguro: Postgres contesta, no el SIA.
-   *
-   * Nunca "activo" (rojo): estas materias no están en el plan, así que
-   * nunca tienen un grupo ELEGIDO — como mucho "potencial" (ocre), igual
-   * que una materia del plan todavía sin grupo.
+   * Al volver al catálogo esto ya viene lleno, así que las marcas aparecen
+   * con la página, sin pedirle nada al back.
    */
-  const requestedExtra = useRef(new Set<string>());
-  const [extraSections, setExtraSections] = useState<Record<string, Section[]>>({});
-  useEffect(() => {
-    const CAP = 40;
-    const inPlan = new Set(plan.items.map((it) => itemId(it)));
-    const candidates = (data?.courses ?? [])
-      .filter((c) => c.seats && !inPlan.has(courseId(c)) && !requestedExtra.current.has(courseId(c)))
-      .slice(0, CAP);
-    if (candidates.length === 0) return;
-    for (const c of candidates) requestedExtra.current.add(courseId(c));
-
-    let cancelled = false;
-    void pooled(candidates, 4, async (c) => {
-      try {
-        const res = await get<CourseDetail>(routes.course({ level, campus, faculty }, program, c.code));
-        if (!cancelled) {
-          setExtraSections((prev) => ({ ...prev, [courseId(c)]: res.data.sections }));
-        }
-      } catch {
-        // Silencioso a propósito: esto es un aviso de más sobre una materia
-        // que nadie pidió ver en detalle todavía. Que falle no puede tumbar
-        // el catálogo — la fila se queda sin marcar, como si no se hubiera
-        // intentado.
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [data, plan.items, courseId, level, campus, faculty, program]);
-
-  /**
-   * Con "con cupos" puesto, un grupo lleno deja de ser escapatoria: la
-   * materia queda marcada si todos los que TODAVÍA tienen cupo chocan.
-   *
-   * Sin cupos medidos no se descarta nada —desconocido no es lleno—, al
-   * revés que `CourseCard.tsx`, que ahí sí oculta la fila. La diferencia es
-   * a propósito: allá se esconde UN grupo a pedido explícito, acá se marca
-   * y se oculta la materia ENTERA, y para eso conviene fallar abierto.
-   */
-  const viable = useCallback(
-    (sections: readonly Section[]) =>
-      onlyOpen ? sections.filter((s) => !s.seats || s.seats.available > 0) : sections,
-    [onlyOpen],
-  );
-
-  /**
-   * Dos niveles, no uno — issue #28 ampliado: rojo si el grupo YA elegido
-   * choca (un bloqueo real, ya armado); ocre si la materia no tiene grupo
-   * elegido todavía y NINGUNO de sus grupos le sirve (un aviso, antes de
-   * comprometerse). Con un grupo ya elegido, el único que cuenta para "choca
-   * de verdad" es ESE — una alternativa suya que chocaría no vuelve a la
-   * materia un problema, porque nadie la eligió.
-   *
-   * El ocre es "no te queda ningún grupo", no "alguno choca" (issue #34):
-   * una materia con cuatro grupos de los que tres te sirven no es un
-   * problema, y marcarla escondía las que sí lo eran.
-   */
-  const conflictCourseIds = useMemo(() => {
-    const active = new Set<string>();
-    const potential = new Set<string>();
-    for (const row of planRows) {
-      if (!row.detail) continue;
-      const id = itemId(row.item);
-      const pickedKey = scheduleSelection[id];
-      if (pickedKey) {
-        // El grupo elegido: choca o no choca. Las alternativas no lo salvan.
-        const chosenSection = row.detail.sections.filter((s) => s.key === pickedKey);
-        if (candidateConflictKeys(id, chosenSection, chosenBlocks).size > 0) active.add(id);
-      } else if (allSectionsConflict(id, viable(row.detail.sections), chosenBlocks)) {
-        potential.add(id);
-      }
+  const detailCache = useDetailCache();
+  const sectionsById = useMemo(() => {
+    const map: Record<string, SectionLike[]> = {};
+    // 1. Lo que vino en la respuesta del catálogo: todas las asignaturas
+    //    cuyo detalle alguien pidió alguna vez, con `?include=schedules`.
+    for (const c of data?.courses ?? []) {
+      if (c.section_schedules) map[courseId(c)] = c.section_schedules;
     }
-    for (const [id, sections] of Object.entries(extraSections)) {
-      if (active.has(id) || potential.has(id)) continue; // ya cubierta como materia del plan
-      if (allSectionsConflict(id, viable(sections), chosenBlocks)) potential.add(id);
-    }
-    return { active, potential };
-  }, [planRows, chosenBlocks, scheduleSelection, extraSections, viable]);
-
-  /**
-   * Todo el detalle que hay a mano, plan + cacheado, por id de materia — la
-   * misma fuente que arma `conflictCourseIds`, reusada acá para el filtro
-   * de disponibilidad (issue "cuándo puedo tomar clase"). Sin esto cada
-   * materia visible recalcularía su propio detalle con un `.find` sobre
-   * `planRows` en medio del filtro de las ~700 filas.
-   */
-  const sectionsByCourseId = useMemo(() => {
-    const map: Record<string, Section[]> = { ...extraSections };
+    // 2. Y encima, lo que esta sesión trajo con más detalle —cupos por
+    //    grupo incluidos, que es lo que mira el chip "con cupos"—: el plan,
+    //    y cualquier ficha que se haya abierto (lib/detailCache.ts).
+    for (const [id, detail] of detailCache) map[id] = detail.sections;
     for (const row of planRows) {
       if (row.detail) map[itemId(row.item)] = row.detail.sections;
     }
     return map;
-  }, [planRows, extraSections]);
+  }, [data, courseId, detailCache, planRows]);
+
+  /**
+   * Rojo, amarillo o nada para cada materia — una sola pasada, un solo
+   * criterio (`classifyConflict`, lib/conflicts.ts, testeado caso por caso).
+   *
+   * Antes esto eran dos ramas de un `useMemo` más un tercer bucle sobre las
+   * materias cacheadas, y ese tercer bucle podía marcar en amarillo una
+   * materia que YA tenía grupo elegido y sin choque. Ahora cada materia se
+   * clasifica una vez, con lo que se sepa de ella, venga de donde venga.
+   */
+  const conflictCourseIds = useMemo(() => {
+    const active = new Set<string>();
+    const potential = new Set<string>();
+    if (chosenBlocks.length === 0) return { active, potential };
+
+    for (const c of data?.courses ?? []) {
+      const id = courseId(c);
+      const mark = classifyConflict({
+        itemId: id,
+        sections: sectionsById[id],
+        pickedKey: scheduleSelection[id],
+        chosenBlocks,
+        onlyOpen,
+      });
+      if (mark === 'active') active.add(id);
+      else if (mark === 'potential') potential.add(id);
+    }
+    return { active, potential };
+  }, [data, courseId, sectionsById, scheduleSelection, chosenBlocks, onlyOpen]);
 
   /**
    * Restaura el scroll UNA vez, apenas hay filas que pintar — antes de eso
@@ -306,7 +259,7 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
         // filtro en vez de mostrarse sin marcar, porque acá el punto ES
         // filtrar: enseñar una materia que podría no encajar rompería la
         // confianza en el resultado.
-        const sections = sectionsByCourseId[courseId(c)];
+        const sections = sectionsById[courseId(c)];
         if (!sections || !courseFitsAvailability(sections, availability)) return false;
       }
       return true;
@@ -321,7 +274,7 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
     hideConflicts,
     conflictCourseIds,
     availability,
-    sectionsByCourseId,
+    sectionsById,
     courseId,
     sort,
   ]);

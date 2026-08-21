@@ -6,6 +6,12 @@ Fase 2) lee el mensaje que queda en `main` para decidir la versión (`vX.Y.Z`). 
 mensaje fuera de formato no rompe el build, simplemente **no genera Release**: el
 deploy corre igual, pero queda sin versión ni changelog asociado.
 
+El cuerpo del PR tiene plantilla: [`.github/pull_request_template.md`](../.github/pull_request_template.md),
+que GitHub rellena solo al abrirlo. Su sección de **Verificación** no es burocracia:
+el CI de este repo solo lintea el título y los commits —no corre tests ni build— y
+mergear a `main` despliega, así que el PR es el único sitio donde queda constancia de
+qué se probó.
+
 **El título del PR sigue el mismo formato que un commit.** Si el merge es por
 squash (habilitado en este repo), GitHub aplasta todos los commits del PR en uno
 solo y usa **el título del PR** como mensaje final en `main` — ahí es lo único que

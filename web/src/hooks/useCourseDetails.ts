@@ -4,6 +4,7 @@ import type { CourseDetail } from '../api/types';
 import { formatAge, formatCountdown } from '../lib/format';
 import { MAX_RETRIES, backoffMs, isTransient, sleep } from '../lib/retry';
 import { pooled } from '../lib/pooled';
+import { getDetail, putDetail } from '../lib/detailCache';
 import { itemId, type PlanItem } from '../lib/storage';
 
 /** El pool del back son 4 sesiones ADF. Pedir de a más no acelera nada. */
@@ -31,12 +32,18 @@ export type Row = {
 
 export type Measure = { text: string; code: string; title: string };
 
-const newRow = (item: PlanItem): Row => ({
-  item,
-  detail: null,
-  status: 'idle',
-  readyAt: 0,
-});
+// Nace con lo que la sesión ya sepa de esta materia: agregarla a Mi semestre
+// después de haberla mirado en el catálogo pinta sus grupos de una, sin el
+// parpadeo de una fila vacía esperando una petición que no hace falta.
+const newRow = (item: PlanItem): Row => {
+  const known = getDetail(itemId(item)) ?? null;
+  return {
+    item,
+    detail: known,
+    status: known ? 'done' : 'idle',
+    readyAt: known ? readyAtFrom(known) : 0,
+  };
+};
 
 /** Cuándo vuelve a estar disponible una materia según lo que respondió la API. */
 function readyAtFrom(detail: CourseDetail): number {
@@ -134,6 +141,9 @@ export function useCourseDetails(items: PlanItem[]) {
             const path = routes.course(scope, item.program, item.code, forceRetry ? 0 : undefined);
             try {
               const res = await get<CourseDetail>(path);
+              // Compartido con el resto de la app: el catálogo lo usa para
+              // marcar choques sin volver a pedirlo (lib/detailCache.ts).
+              putDetail(id, res.data);
               patch(id, { detail: res.data, status: 'done', readyAt: readyAtFrom(res.data) });
               return; // éxito → no seguir reintentando
             } catch (e) {

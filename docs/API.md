@@ -116,7 +116,7 @@ bootstrap que hay que hacer igual) y acotada.
 |---|---|
 | `GET` | `/v1/campuses/{campus}/programs/{program}/courses` |
 
-Filtros: `?q=` (nombre), `?credits=`, `?typology=`.
+Filtros: `?q=` (nombre), `?credits=`, `?typology=`. Extra: `?include=schedules`.
 
 `?typology=` no es un filtro más: en el SIA es `soc4`, y el valor *libre elección* no
 filtra el listado sino que **conmuta a otro buscador** de 9 pasos, por sede y no por
@@ -153,6 +153,38 @@ dos motivos distintos:
 
 Sin el sello, un catálogo recién traído y una asignatura sin oferta se ven idénticos, y
 el cliente termina pintando un guion en los dos casos.
+
+#### `?include=schedules`
+
+Agrega `section_schedules` a cada asignatura: sus grupos con el horario de cada uno.
+Sale del Store igual que `seats` — **no dispara nada contra el SIA** ni sella el
+catálogo como completo.
+
+Existe porque el listado no trae horarios y el choque de horario es una pregunta sobre
+el catálogo ENTERO. Sin esto, un cliente que quiera marcar "a esta asignatura ya no le
+sirve ningún grupo" necesita el detalle asignatura por asignatura: medidas **200
+peticiones** para un plan de Bogotá (313 asignaturas, 200 con detalle pedido), ~30 s de
+goteo. Acá son **~44 KB** sobre los 358 KB que la respuesta ya pesa, en la petición que
+el cliente hace igual. Es opcional porque solo lo necesita quien ya tenga un horario
+armado contra el que chocar.
+
+Es la forma REDUCIDA del grupo —`key` y `schedule`, nada más— y por eso no se llama
+`sections`: el detalle sirve grupos completos bajo ese nombre (instructor, aula, cupos,
+fechas), y reusar la palabra para dos formas distintas es la clase de ambigüedad que
+esta API no tiene en ningún otro sitio.
+
+La misma tabla de arriba aplica, con la misma razón:
+
+| `section_schedules` | Significa |
+|---|---|
+| ausente | nadie pidió el detalle todavía — **no sé** |
+| presente y vacío | se pidió y la asignatura no tiene grupos — **cero** |
+| presente con grupos | los grupos que ESTE plan ve, con su horario |
+
+Un grupo que no informa horario viene con `schedule: []`, nunca `null`, y **no se
+omite**. Omitirlo haría que un cliente concluyera "todos los grupos chocan" sobre un
+conjunto más chico que el real — un fallo silencioso, que es exactamente lo que el
+resto de este contrato se cuida de no producir.
 
 ### Detalle — granularidad asignatura
 

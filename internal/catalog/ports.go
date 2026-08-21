@@ -114,6 +114,13 @@ type Store interface {
 	UpsertCatalog(ctx context.Context, program Program, offerings []CourseOffering) error
 	ProgramCourses(ctx context.Context, programID int64) ([]CourseOffering, error)
 
+	// ProgramSchedules returns each visible course's group schedules, keyed
+	// by course code, reading only what is stored (never the SIA). It backs
+	// ?include=schedules on the catalog list: without it a client that wants
+	// to flag schedule clashes across the catalog needs one detail request
+	// per course.
+	ProgramSchedules(ctx context.Context, programID int64) (map[string][]SectionSchedule, error)
+
 	// Detail — course granularity, scoped by program (section_program
 	// visibility, decision 2/6 in DATA-MODEL.md).
 	Course(ctx context.Context, campusCode, code string) (Course, bool, error)

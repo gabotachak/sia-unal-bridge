@@ -395,6 +395,18 @@ const DefaultFreshness time.Duration = -1
 // fresh is the failure this project exists to avoid (GOTCHAS §21). maxAge
 // overrides FreshnessCatalog (docs/API.md "?max_age="); maxAge==0 forces a
 // SIA fetch.
+// Schedules returns the stored group schedules of every course visible from
+// this program, keyed by course code.
+//
+// A pure Store read: it never fetches from the SIA, and never completes the
+// catalog. A course missing from the map is one whose detail nobody pulled
+// yet — not one without groups, which comes back as an empty slice. That
+// distinction is the whole point: a client that cannot tell them apart
+// would flag "no group fits" on a course it knows nothing about.
+func (s *Service) Schedules(ctx context.Context, program Program) (map[string][]SectionSchedule, error) {
+	return s.store.ProgramSchedules(ctx, program.ID)
+}
+
 func (s *Service) Catalog(ctx context.Context, program Program, maxAge time.Duration) ([]CourseOffering, FetchResult, error) {
 	if maxAge < 0 {
 		maxAge = FreshnessCatalog

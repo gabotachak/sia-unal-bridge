@@ -218,3 +218,108 @@ func TestUpsertDetail_SeatSnapshotIsAppendOnly(t *testing.T) {
 		t.Errorf("got %d seats, want 28 (latest snapshot)", sections[0].Seats.Available)
 	}
 }
+
+// TestProgramSchedules is the bulk read behind ?include=schedules: one
+// round-trip that answers "when does every group of every course meet",
+// which the catalog list cannot answer on its own. The three cases it pins
+// down are the ones a schedule-clash client gets wrong if the query drops
+// them — a group with no informed schedule, a course with no groups at all,
+// and a course nobody ever pulled the detail for.
+func TestProgramSchedules(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	resetProgram(t, s, "9999", "2055", "2A76")
+
+	p, err := s.UpsertProgram(ctx, catalog.Program{
+		CampusCode: "9999", FacultyCode: "2055", Code: "2A76", LevelSlug: "pregrado", Name: "SISTEMAS",
+		CampusIdx: 2, FacultyIdx: 8, ProgramIdx: 3,
+	})
+	if err != nil {
+		t.Fatalf("UpsertProgram: %v", err)
+	}
+
+	// Turco I tal cual lo sirve producción: tres grupos, dos sesiones cada
+	// uno. Más un grupo sin horario informado, que el SIA sí produce.
+	turco := catalog.Course{
+		CampusCode: "9999", Code: "2015725", Name: "Turco I", Credits: 3,
+		Sections: []catalog.Section{
+			{
+				CampusCode: "9999", Code: "2015725", Term: "2026-2", Key: "1", Number: 1,
+				Schedule: []catalog.ClassSession{
+					{Weekday: time.Monday, StartTime: "14:00", EndTime: "16:00"},
+					{Weekday: time.Wednesday, StartTime: "14:00", EndTime: "16:00"},
+				},
+			},
+			{
+				CampusCode: "9999", Code: "2015725", Term: "2026-2", Key: "2", Number: 2,
+				Schedule: []catalog.ClassSession{
+					{Weekday: time.Tuesday, StartTime: "14:00", EndTime: "16:00"},
+					{Weekday: time.Thursday, StartTime: "14:00", EndTime: "16:00"},
+				},
+			},
+			// Sin horario informado. Tiene que salir igual: si desapareciera,
+			// un cliente concluiría "todos los grupos chocan" sobre dos de tres.
+			{CampusCode: "9999", Code: "2015725", Term: "2026-2", Key: "3", Number: 3},
+		},
+	}
+	if err := s.UpsertDetail(ctx, p.ID, catalog.CourseOffering{Course: turco, Typology: "LIBRE ELECCIÓN (L)"}); err != nil {
+		t.Fatalf("UpsertDetail turco: %v", err)
+	}
+
+	// Medida y sin grupos: el cero es un dato.
+	vacia := catalog.Course{CampusCode: "9999", Code: "2029512", Name: "Sin grupos", Credits: 3}
+	if err := s.UpsertDetail(ctx, p.ID, catalog.CourseOffering{Course: vacia, Typology: "LIBRE ELECCIÓN (L)"}); err != nil {
+		t.Fatalf("UpsertDetail vacia: %v", err)
+	}
+
+	got, err := s.ProgramSchedules(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("ProgramSchedules: %v", err)
+	}
+
+	secs, ok := got["2015725"]
+	if !ok {
+		t.Fatalf("falta Turco I: %+v", got)
+	}
+	if len(secs) != 3 {
+		t.Fatalf("Turco I: got %d grupos, want 3 (¿se cayó el que no informa horario?): %+v", len(secs), secs)
+	}
+	byKey := map[string][]catalog.ClassSession{}
+	for _, sec := range secs {
+		byKey[sec.Key] = sec.Schedule
+	}
+	if n := len(byKey["1"]); n != 2 {
+		t.Errorf("grupo 1: got %d sesiones, want 2", n)
+	}
+	if cs := byKey["1"]; len(cs) == 2 {
+		if cs[0].Weekday != time.Monday || cs[0].StartTime != "14:00" || cs[0].EndTime != "16:00" {
+			t.Errorf("grupo 1 sesión 0: got %+v", cs[0])
+		}
+		if cs[1].Weekday != time.Wednesday {
+			t.Errorf("grupo 1 sesión 1: got weekday %v, want miércoles", cs[1].Weekday)
+		}
+	}
+	if _, ok := byKey["3"]; !ok {
+		t.Errorf("falta el grupo sin horario informado: %+v", byKey)
+	}
+	if n := len(byKey["3"]); n != 0 {
+		t.Errorf("grupo 3: got %d sesiones, want 0", n)
+	}
+	// Vacío, NO nil: un slice nil sale como `null` en JSON y revienta a
+	// cualquier cliente que recorra el horario del grupo sin comprobar.
+	if byKey["3"] == nil {
+		t.Error("grupo sin horario: Schedule es nil, tiene que ser un slice vacío (JSON `[]`, no `null`)")
+	}
+
+	// Presente y vacío vs. ausente: es lo que separa "no tiene grupos" de
+	// "nadie preguntó", y sin esa distinción el cliente marca materias de las
+	// que no sabe nada.
+	if secs, ok := got["2029512"]; !ok {
+		t.Error("una asignatura medida sin grupos tiene que aparecer, con la lista vacía")
+	} else if len(secs) != 0 {
+		t.Errorf("got %d grupos, want 0", len(secs))
+	}
+	if _, ok := got["9999999"]; ok {
+		t.Error("una asignatura que nadie pidió no puede aparecer")
+	}
+}

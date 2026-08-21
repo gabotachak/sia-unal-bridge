@@ -44,11 +44,47 @@ func (a *api) programCourses(c *gin.Context) {
 	}
 	setFreshnessHeaders(c, res, age, resolveMaxAge(maxAge, catalog.FreshnessCatalog))
 
+	// ?include=schedules: los horarios de los grupos de cada asignatura, en
+	// la MISMA respuesta. Sin esto, un cliente que quiera marcar choques de
+	// horario sobre el catálogo necesita un detalle por asignatura — medidos
+	// 200 para un plan de Bogotá, contra ~44 KB acá. Es opcional porque solo
+	// lo necesita quien ya tenga un horario armado, y no hay por qué
+	// cobrárselo a quien entra a mirar.
+	//
+	// Sale del Store tal cual, igual que `seats`: no dispara nada contra el
+	// SIA ni sella el catálogo como completo.
+	var schedules map[string][]catalog.SectionSchedule
+	if wantsSchedules(c.Query("include")) {
+		schedules, err = a.svc.Schedules(c.Request.Context(), program)
+		if err != nil {
+			writeError(c, err, "unknown_program")
+			return
+		}
+	}
+
 	courses := make([]gin.H, len(offerings))
 	for i, o := range offerings {
 		courses[i] = courseSummaryJSON(o)
+		// Presente y vacío significa "se pidió el detalle y no tiene grupos".
+		// Ausente significa "nadie preguntó todavía" — la misma distinción
+		// que hacen detail_fetched_at y seats, y por el mismo motivo.
+		if sections, ok := schedules[o.Course.Code]; ok {
+			courses[i]["section_schedules"] = sections
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"courses": courses})
+}
+
+// wantsSchedules acepta ?include=schedules, solo o entre otros valores
+// separados por coma, para que agregar un segundo `include` más adelante no
+// rompa a quien ya manda este.
+func wantsSchedules(include string) bool {
+	for _, part := range strings.Split(include, ",") {
+		if strings.TrimSpace(part) == "schedules" {
+			return true
+		}
+	}
+	return false
 }
 
 func filterOfferings(offerings []catalog.CourseOffering, q, creditsStr, typology string) []catalog.CourseOffering {

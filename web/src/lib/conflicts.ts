@@ -102,3 +102,81 @@ export function allSectionsConflict(
   if (sections.length === 0) return false;
   return candidateConflictKeys(itemId, sections, chosenBlocks).size === sections.length;
 }
+
+/** Lo mínimo que hace falta de un grupo para clasificar la materia. */
+export type SectionLike = {
+  key: string;
+  schedule: readonly ClassSession[];
+  seats?: { available: number } | null;
+};
+
+/**
+ * Cómo hay que pintar una materia en el catálogo.
+ *
+ *   'active'    → rojo:     el grupo que YA elegiste choca. Un bloqueo real.
+ *   'potential' → amarillo: no elegiste grupo y NINGUNO te sirve.
+ *   null        → nada.
+ */
+export type ConflictMark = 'active' | 'potential' | null;
+
+/**
+ * Un grupo sigue siendo alternativa mientras no se sepa que está lleno.
+ *
+ * `seats` ausente es "nadie midió", no "cero" (ver la tabla de docs/API.md):
+ * descartarlo marcaría materias por un dato que no tenemos. Sin cupos
+ * medidos, la materia se salva.
+ */
+function stillOpen(s: SectionLike): boolean {
+  return !s.seats || s.seats.available > 0;
+}
+
+/**
+ * Rojo, amarillo o nada para UNA materia del catálogo — toda la decisión en
+ * un solo sitio, y por eso testeable caso por caso (issue #34).
+ *
+ * Antes esto estaba desparramado en dos ramas de un `useMemo` más un bucle
+ * sobre las materias cacheadas, y esa tercera pasada podía marcar en amarillo
+ * una materia que YA tenía grupo elegido y sin choque.
+ *
+ * El orden importa:
+ *
+ *  1. Sin detalle a mano no se sabe nada → nada. Falla abierto a propósito:
+ *     el catálogo llega con `seats` pero sin horarios, así que "no sé" es el
+ *     estado normal de la mayoría de las filas hasta que llega su detalle.
+ *  2. Con grupo elegido manda ESE y solo ese: choca (rojo) o no choca (nada).
+ *     Que una alternativa suya chocara no es un problema — nadie la eligió.
+ *  3. Sin grupo elegido, amarillo solo si NO queda ninguno servible. Que uno
+ *     de cuatro choque no es noticia: quedan tres.
+ */
+export function classifyConflict(input: {
+  itemId: string;
+  /** `undefined` = todavía no se conoce el detalle de esta materia. */
+  sections: readonly SectionLike[] | undefined;
+  /** La clave del grupo elegido en Mi horario, si hay. */
+  pickedKey?: string | null;
+  /** Todos los bloques ya elegidos, los de esta materia incluidos. */
+  chosenBlocks: readonly Block[];
+  /** El chip "con cupos": con él puesto, un grupo lleno no es escapatoria. */
+  onlyOpen?: boolean;
+}): ConflictMark {
+  const { itemId, sections, pickedKey, chosenBlocks, onlyOpen = false } = input;
+
+  if (!sections) return null;
+
+  if (pickedKey) {
+    const picked = sections.filter((s) => s.key === pickedKey);
+    // Una clave elegida que ya no está entre los grupos es una elección
+    // rancia (el SIA renombró el grupo): se trata como si no hubiera
+    // elección en vez de dar por bueno un grupo que no existe.
+    if (picked.length > 0) {
+      return candidateConflictKeys(itemId, picked, chosenBlocks).size > 0 ? 'active' : null;
+    }
+  }
+
+  const viable = onlyOpen ? sections.filter(stillOpen) : sections;
+  // Sin grupos —o sin ninguno con cupo— no hay nada que avisar: de eso ya
+  // habla la columna CUPOS y el chip "con cupos", no el aviso de horario.
+  if (viable.length === 0) return null;
+
+  return allSectionsConflict(itemId, viable, chosenBlocks) ? 'potential' : null;
+}

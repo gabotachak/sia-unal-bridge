@@ -167,6 +167,10 @@ func (f *fakeStore) UpsertCatalog(_ context.Context, program Program, offerings 
 	return nil
 }
 
+func (f *fakeStore) ProgramSchedules(_ context.Context, _ int64) (map[string][]SectionSchedule, error) {
+	return nil, nil
+}
+
 func (f *fakeStore) ProgramCourses(_ context.Context, programID int64) ([]CourseOffering, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

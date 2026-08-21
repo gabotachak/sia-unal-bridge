@@ -92,3 +92,12 @@ type Component struct {
 	Kind string `json:"kind"` // 'CLASE TEORICA', ...
 	Code string `json:"code"`
 }
+
+// SectionSchedule is a group reduced to what a schedule-clash check needs:
+// its identity and when it meets. It is what the catalog list carries under
+// ?include=schedules — the full Section (instructor, room, seats, dates)
+// would multiply that payload for data the check never reads.
+type SectionSchedule struct {
+	Key      string         `json:"key"`
+	Schedule []ClassSession `json:"schedule"`
+}

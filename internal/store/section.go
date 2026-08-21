@@ -289,3 +289,94 @@ func fromISOWeekday(iso int) time.Weekday {
 	}
 	return time.Weekday(iso)
 }
+
+// ProgramSchedules returns, for every course visible from programID, the
+// class schedule of each of its groups, keyed by course code.
+//
+// It is the bulk answer to the question the catalog list cannot answer on
+// its own: CourseOffering carries aggregate seats but no schedule, so a
+// client that wants to know which courses clash with a schedule it already
+// has would otherwise need one detail request per course — measured at 200
+// requests for a single Bogotá plan. This is one round-trip.
+//
+// Reads only what is already stored, exactly like CourseOffering.Seats: it
+// never reaches the SIA. Courses whose detail nobody ever pulled simply do
+// not appear in the map, which is what lets a caller tell "no groups" from
+// "not known yet".
+func (s *Store) ProgramSchedules(ctx context.Context, programID int64) (map[string][]catalog.SectionSchedule, error) {
+	// Se arranca de course_program y no de section, y todo lo demás cuelga
+	// por LEFT JOIN, para que una asignatura MEDIDA Y SIN GRUPOS salga igual
+	// —con la lista vacía— en vez de desaparecer. Ausente y vacío significan
+	// cosas distintas (docs/API.md, la tabla de detail_fetched_at/seats): sin
+	// esa diferencia, un cliente no puede separar "no tiene grupos" de "nadie
+	// preguntó todavía", y termina avisando sobre asignaturas de las que no
+	// sabe nada.
+	rows, err := s.pool.Query(ctx, `
+		SELECT cp.code, sec.id, sec.key, cs.weekday, cs.start_time, cs.end_time
+		FROM course_program cp
+		LEFT JOIN section sec
+		       ON sec.campus_code = cp.campus_code AND sec.code = cp.code
+		      AND EXISTS (
+		          SELECT 1 FROM section_program sp
+		          WHERE sp.section_id = sec.id AND sp.program_id = cp.program_id
+		      )
+		LEFT JOIN class_session cs ON cs.section_id = sec.id
+		WHERE cp.program_id = $1 AND cp.detail_fetched_at IS NOT NULL
+		ORDER BY cp.code, sec.number, sec.key, sec.id, cs.weekday, cs.start_time`,
+		programID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("store: ProgramSchedules: %w", err)
+	}
+	defer rows.Close()
+
+	// Se agrupa por sec.id, no por sec.key: la clave natural del grupo es
+	// (code, term, key), así que dos periodos del mismo grupo comparten key
+	// y agrupar por ella los fundiría en uno con los horarios de ambos
+	// mezclados. El id no miente nunca.
+	out := make(map[string][]catalog.SectionSchedule)
+	var curID int64
+	for rows.Next() {
+		var id *int64
+		var code string
+		var key *string
+		var weekday *int
+		var start, end *time.Time
+		if err := rows.Scan(&code, &id, &key, &weekday, &start, &end); err != nil {
+			return nil, fmt.Errorf("store: ProgramSchedules: scan: %w", err)
+		}
+		// La asignatura entra en el mapa por el solo hecho de tener el
+		// detalle pedido, tenga grupos o no.
+		if _, seen := out[code]; !seen {
+			out[code] = []catalog.SectionSchedule{}
+		}
+		if id == nil || key == nil {
+			continue // asignatura sin grupos visibles: la lista se queda vacía
+		}
+		if *id != curID {
+			curID = *id
+			// Schedule arranca vacío y no nil: un slice nil sale como `null`
+			// en JSON, y un cliente que haga `schedule.some(...)` sobre el
+			// grupo que no informa horario revienta. Vacío es además lo que
+			// significa de verdad — el grupo existe, no tiene sesiones.
+			out[code] = append(out[code], catalog.SectionSchedule{
+				Key:      *key,
+				Schedule: []catalog.ClassSession{},
+			})
+		}
+		// NULL en las tres = el LEFT JOIN no encontró horario. El grupo
+		// existe igual, y tiene que salir: si desapareciera, un cliente
+		// concluiría "todos los grupos chocan" sobre un conjunto más chico
+		// que el real.
+		if weekday != nil && start != nil && end != nil {
+			list := out[code]
+			cur := &list[len(list)-1]
+			cur.Schedule = append(cur.Schedule, catalog.ClassSession{
+				Weekday:   fromISOWeekday(*weekday),
+				StartTime: start.Format("15:04"),
+				EndTime:   end.Format("15:04"),
+			})
+		}
+	}
+	return out, rows.Err()
+}

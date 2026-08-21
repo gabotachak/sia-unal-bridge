@@ -176,8 +176,13 @@ export const routes = {
     `/campuses/${enc(s.campus)}/faculties${q({ level: s.level })}`,
   programs: (s: Scope) =>
     `/campuses/${enc(s.campus)}/programs${q({ faculty: s.faculty, level: s.level })}`,
-  courses: (s: Scope, program: string) =>
-    `/campuses/${enc(s.campus)}/programs/${enc(program)}/courses${q({ faculty: s.faculty, level: s.level })}`,
+  // `include: 'schedules'` agrega los horarios de los grupos de cada
+  // asignatura a la MISMA respuesta. Es lo que deja marcar choques de horario
+  // sobre el catálogo entero: sin eso harían falta ~200 peticiones de detalle
+  // para un plan de Bogotá, una por asignatura. Se pide solo cuando hay un
+  // horario armado contra el que chocar — quien entra a mirar no lo paga.
+  courses: (s: Scope, program: string, include?: 'schedules') =>
+    `/campuses/${enc(s.campus)}/programs/${enc(program)}/courses${q({ faculty: s.faculty, level: s.level, include })}`,
   course: (s: Scope, program: string, code: string, maxAge?: number) =>
     `/campuses/${enc(s.campus)}/programs/${enc(program)}/courses/${enc(code)}` +
     q({ faculty: s.faculty, level: s.level, max_age: maxAge }),

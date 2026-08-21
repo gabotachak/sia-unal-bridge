@@ -35,6 +35,7 @@ type fakeStore struct {
 		FetchedAt *time.Time
 	}
 	sections  map[string][]catalog.Section
+	schedules map[string][]catalog.SectionSchedule
 	reference map[string]time.Time
 	campuses  map[string][]catalog.Campus
 	levels    []catalog.Level
@@ -178,6 +179,12 @@ func (f *fakeStore) UpsertCatalog(_ context.Context, program catalog.Program, of
 	p.CatalogFetchedAt = &now
 	f.programs[program.ID] = p
 	return nil
+}
+
+func (f *fakeStore) ProgramSchedules(_ context.Context, _ int64) (map[string][]catalog.SectionSchedule, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.schedules, nil
 }
 
 func (f *fakeStore) ProgramCourses(_ context.Context, programID int64) ([]catalog.CourseOffering, error) {
@@ -631,5 +638,117 @@ func TestCooldown_ZeroDisablesTheThrottle(t *testing.T) {
 	}
 	if sia.detailCalls != 3 {
 		t.Errorf("got %d SIA detail calls, want 3 with the throttle off", sia.detailCalls)
+	}
+}
+
+// TestCatalog_IncludeSchedules covers the contract the web catalog's clash
+// marking relies on: without ?include=schedules the list is unchanged, with
+// it every course whose detail was pulled carries its groups' schedules, and
+// the difference between "no groups" and "not known yet" survives the trip.
+func TestCatalog_IncludeSchedules(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := catalog.NewService(store, sia, "2026-2")
+	ctx := context.Background()
+
+	program, err := store.UpsertProgram(ctx, catalog.Program{
+		CampusCode: "1101", FacultyCode: "2055", Code: "2A74", LevelSlug: "pregrado",
+		CampusIdx: 2, FacultyIdx: 8, ProgramIdx: 3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	program.CatalogFetchedAt = &now
+	store.programs[program.ID] = program
+	for code, name := range map[string]string{
+		"2015725": "Turco I",
+		"2029512": "Sin grupos",
+		"2016696": "Nadie preguntó",
+	} {
+		store.courses[ck("1101", code)] = catalog.Course{CampusCode: "1101", Code: code, Name: name, Credits: 3}
+		store.courseProg[cpk(program.ID, code)] = struct {
+			Typology  string
+			FetchedAt *time.Time
+		}{Typology: "LIBRE ELECCIÓN (L)"}
+	}
+	store.schedules = map[string][]catalog.SectionSchedule{
+		"2015725": {
+			{Key: "1", Schedule: []catalog.ClassSession{{Weekday: time.Monday, StartTime: "14:00", EndTime: "16:00"}}},
+			{Key: "2", Schedule: nil}, // grupo sin horario informado
+		},
+		"2029512": {}, // se pidió el detalle y no tiene grupos
+	}
+
+	router := NewRouter(svc, 0, testRateRPS, testRateBurst, 0, "test", "test")
+	base := "/v1/campuses/1101/programs/2A74/courses"
+
+	get := func(url string) map[string]map[string]any {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, url, nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("got status %d, body %s", w.Code, w.Body.String())
+		}
+		var body struct {
+			Courses []map[string]any `json:"courses"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("json: %v", err)
+		}
+		out := map[string]map[string]any{}
+		for _, c := range body.Courses {
+			out[c["code"].(string)] = c
+		}
+		return out
+	}
+
+	// ── sin el parámetro: nada cambia ──
+	for code, c := range get(base) {
+		if _, ok := c["section_schedules"]; ok {
+			t.Errorf("%s: section_schedules presente sin ?include=schedules", code)
+		}
+	}
+
+	// ── con el parámetro ──
+	withSched := get(base + "?include=schedules")
+
+	turco, ok := withSched["2015725"]["section_schedules"].([]any)
+	if !ok {
+		t.Fatalf("Turco I sin section_schedules: %+v", withSched["2015725"])
+	}
+	if len(turco) != 2 {
+		t.Fatalf("Turco I: got %d grupos, want 2", len(turco))
+	}
+	g1 := turco[0].(map[string]any)
+	if g1["key"] != "1" {
+		t.Errorf("got key %v, want 1", g1["key"])
+	}
+	sched, _ := g1["schedule"].([]any)
+	if len(sched) != 1 {
+		t.Fatalf("grupo 1: got %d sesiones, want 1", len(sched))
+	}
+	if s := sched[0].(map[string]any); s["start_time"] != "14:00" || s["end_time"] != "16:00" {
+		t.Errorf("got %v", s)
+	}
+
+	// Un grupo sin horario informado tiene que seguir estando: si desapareciera,
+	// un cliente concluiría "todos los grupos chocan" sobre un conjunto más
+	// chico que el real.
+	if g2 := turco[1].(map[string]any); g2["key"] != "2" {
+		t.Errorf("falta el grupo sin horario informado: %+v", turco)
+	}
+
+	// Presente y vacío = se preguntó y no tiene grupos.
+	sinGrupos, ok := withSched["2029512"]["section_schedules"]
+	if !ok {
+		t.Error("una asignatura medida sin grupos tiene que traer section_schedules vacío, no ausente")
+	} else if arr, _ := sinGrupos.([]any); len(arr) != 0 {
+		t.Errorf("got %v, want []", sinGrupos)
+	}
+
+	// Ausente = nadie preguntó todavía. Es lo que evita marcar "no te sirve
+	// ningún grupo" sobre una asignatura de la que no se sabe nada.
+	if _, ok := withSched["2016696"]["section_schedules"]; ok {
+		t.Error("una asignatura sin detalle pedido no puede traer section_schedules")
 	}
 }

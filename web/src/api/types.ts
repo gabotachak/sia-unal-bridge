@@ -52,6 +52,15 @@ export type CourseSummary = {
    *  es un dato. Sin esto, nadie preguntó todavía. */
   detail_fetched_at?: string | null;
   seats?: CourseSeats;
+  /**
+   * Los grupos con su horario, solo con `?include=schedules`.
+   *
+   * Ausente = nadie pidió el detalle de esta asignatura todavía, o no se
+   * pidieron los horarios. Presente y VACÍO = se pidió y no tiene grupos.
+   * La diferencia importa: sin ella se marcarían asignaturas de las que no
+   * se sabe nada (ver `classifyConflict` en lib/conflicts.ts).
+   */
+  section_schedules?: SectionSchedule[];
 };
 
 export type ClassSession = {
@@ -87,6 +96,13 @@ export type Section = {
 
 export type CourseDetail = CourseSummary & {
   sections: Section[];
+};
+
+/** Un grupo reducido a lo que necesita el marcado de choques: quién es y
+ *  cuándo se dicta. Es lo que trae el catálogo con `?include=schedules`. */
+export type SectionSchedule = {
+  key: string;
+  schedule: ClassSession[];
 };
 
 // Envolturas: la API devuelve las listas dentro de un objeto con nombre.

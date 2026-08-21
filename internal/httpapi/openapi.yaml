@@ -266,6 +266,22 @@ paths:
           in: query
           description: Literal del SIA, tal cual.
           schema: { type: string, examples: ["LIBRE ELECCIÓN (L)"] }
+        - name: include
+          in: query
+          description: |
+            `schedules` agrega `section_schedules` a cada asignatura: sus grupos con
+            el horario de cada uno, leído del Store igual que `seats` — **no dispara
+            nada contra el SIA** ni sella el catálogo como completo.
+
+            Es lo que permite marcar choques de horario sobre el catálogo entero sin
+            pedir el detalle asignatura por asignatura (medidas ~200 peticiones para
+            un plan de Bogotá, contra ~44 KB acá).
+
+            `section_schedules` **ausente** significa que nadie pidió el detalle de esa
+            asignatura todavía; **presente y vacío**, que se pidió y no tiene grupos —
+            la misma distinción que hacen `detail_fetched_at` y `seats`, y por el mismo
+            motivo: sin ella no se puede avisar sin mentir.
+          schema: { type: string, enum: [schedules] }
       responses:
         "200":
           description: Asignaturas del plan
@@ -694,6 +710,28 @@ components:
               format: date-time
               description: La medición MÁS VIEJA de las sumadas.
             age_seconds: { type: integer }
+        section_schedules:
+          description: |
+            Los grupos de la asignatura con su horario, SOLO con
+            `?include=schedules`. Es la forma reducida del grupo: identidad y
+            cuándo se dicta, nada más — instructor, aula, cupos y fechas viven
+            en el detalle (`sections`), que es otra cosa y por eso otro nombre.
+
+            Sale del Store igual que `seats`: nunca dispara una consulta al SIA.
+
+            **Ausente** = nadie pidió el detalle de esta asignatura todavía.
+            **Presente y vacío** = se pidió y no tiene grupos. Un grupo que no
+            informa horario viene con `schedule: []`, nunca `null`, y NO se
+            omite: si desapareciera, un cliente concluiría "todos los grupos
+            chocan" sobre un conjunto más chico que el real.
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string, examples: ["1", "AMAZ-07"] }
+              schedule:
+                type: array
+                items: { $ref: "#/components/schemas/ClassSession" }
 
     CourseDetail:
       type: object

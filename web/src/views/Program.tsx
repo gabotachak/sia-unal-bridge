@@ -9,8 +9,8 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { get, routes } from '../api/client';
-import type { CourseDetail, CoursesResponse, CourseSummary, Section } from '../api/types';
+import { routes } from '../api/client';
+import type { CoursesResponse, CourseSummary } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { useCatalogFilters } from '../hooks/useCatalogFilters';
 import { useCourseDetails } from '../hooks/useCourseDetails';
@@ -31,10 +31,9 @@ import type { TableCol } from '../lib/table';
 import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
 import { useTableSort } from '../hooks/useTableSort';
 import { fold, formatAge, sentence } from '../lib/format';
-import { classifyConflict } from '../lib/conflicts';
-import { hasDetail, putDetails, useDetailCache } from '../lib/detailCache';
+import { classifyConflict, type SectionLike } from '../lib/conflicts';
+import { useDetailCache } from '../lib/detailCache';
 import { DEFAULT_AVAILABILITY, courseFitsAvailability, isAvailabilityActive } from '../lib/availability';
-import { pooled } from '../lib/pooled';
 import { itemId, selectionId } from '../lib/storage';
 import type { Screen } from '../state/nav';
 import './Program.css';
@@ -50,7 +49,24 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
   const sel = screen.selection;
   const { level, campus, faculty, program } = sel;
 
-  const path = routes.courses({ level, campus, faculty }, program);
+  /**
+   * Los horarios de los grupos se piden en la MISMA respuesta del catálogo
+   * —y solo si hay un horario armado contra el que chocar.
+   *
+   * Antes esto era un prefetch aparte: hasta 40 peticiones de detalle, una
+   * por asignatura, elegidas por orden alfabético. Con 200 asignaturas
+   * medidas en un plan de Bogotá eso dejaba al 80% del catálogo sin marcar
+   * —Turco I entre ellas, la número 194— y pedir las 200 habría sido ~30 s
+   * de goteo. En la respuesta del catálogo son ~44 KB sobre 358 KB y cero
+   * peticiones de más.
+   *
+   * Sin nada elegido no se pide: no hay con qué chocar, así que no habría
+   * nada que marcar y sería peso puro.
+   */
+  const { selection: scheduleSelection } = useScheduleSelection();
+  const hasSchedule = Object.keys(scheduleSelection).length > 0;
+
+  const path = routes.courses({ level, campus, faculty }, program, hasSchedule ? 'schedules' : undefined);
   const { data, error, loading, elapsed, attempt, reload } =
     useApi<CoursesResponse>(path);
 
@@ -108,68 +124,9 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
    * Es el MISMO `useCourseDetails` que usan Mi semestre y Mi horario, con el
    * mismo pool y el mismo cooldown: entrar al catálogo no dispara nada que
    * esas pantallas no disparen ya solas.
-   *
-   * El catálogo en sí NO trae horarios —`CourseSummary` tiene cupos
-   * agregados y nada más, ver api/types.ts—, así que para marcar una fila
-   * hace falta el detalle de esa materia. De dónde sale, más abajo.
    */
   const { rows: planRows } = useCourseDetails(plan.items);
-  const { selection: scheduleSelection } = useScheduleSelection();
   const { blocks: chosenBlocks } = useScheduleConflicts(planRows, scheduleSelection);
-
-  /**
-   * El choque de horario también para materias que NI SIQUIERA están en el
-   * plan, con tal de que su detalle ya esté cacheado de una consulta
-   * anterior (`c.seats` puesto: alguien ya midió sus cupos, así que el
-   * back tiene sus grupos guardados en Postgres).
-   *
-   * Sin `c.seats` no se pide: eso es "nadie preguntó todavía" (el `?` de la
-   * columna CUPOS), y pedirlo dispararía un POST de verdad contra el SIA —
-   * hasta 40 a la vez si alguien limpia todos los filtros, un pool de 4
-   * conexiones no da abasto. CON `c.seats` puesto, en cambio, el pedido es
-   * un acierto de cache casi seguro: Postgres contesta, no el SIA.
-   *
-   * Nunca "activo" (rojo): estas materias no están en el plan, así que
-   * nunca tienen un grupo ELEGIDO — como mucho "potencial" (ocre), igual
-   * que una materia del plan todavía sin grupo.
-   */
-  const requestedExtra = useRef(new Set<string>());
-  useEffect(() => {
-    // Sin nada elegido en Mi horario no hay con qué chocar: ninguna fila se
-    // puede marcar, así que no hay nada que traer. Es el estado de quien
-    // entra por primera vez, y le ahorra la ronda entera.
-    if (chosenBlocks.length === 0) return;
-
-    const CAP = 40;
-    const inPlan = new Set(plan.items.map((it) => itemId(it)));
-    const candidates = (data?.courses ?? [])
-      .filter((c) => {
-        const id = courseId(c);
-        // `hasDetail`: lo que esta sesión ya trajo —acá, en Mi semestre o
-        // abriendo la ficha— no se vuelve a pedir. Volver al catálogo por
-        // segunda vez suele salir a cero peticiones.
-        return c.seats && !inPlan.has(id) && !hasDetail(id) && !requestedExtra.current.has(id);
-      })
-      .slice(0, CAP);
-    if (candidates.length === 0) return;
-    for (const c of candidates) requestedExtra.current.add(courseId(c));
-
-    let cancelled = false;
-    void pooled(candidates, 4, async (c) => {
-      try {
-        const res = await get<CourseDetail>(routes.course({ level, campus, faculty }, program, c.code));
-        if (!cancelled) putDetails([[courseId(c), res.data]]);
-      } catch {
-        // Silencioso a propósito: esto es un aviso de más sobre una materia
-        // que nadie pidió ver en detalle todavía. Que falle no puede tumbar
-        // el catálogo — la fila se queda sin marcar, como si no se hubiera
-        // intentado.
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [data, plan.items, courseId, level, campus, faculty, program, chosenBlocks.length]);
 
   /**
    * Los grupos de cada materia que esta sesión conoce — del plan, de lo que
@@ -182,13 +139,21 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
    */
   const detailCache = useDetailCache();
   const sectionsById = useMemo(() => {
-    const map: Record<string, Section[]> = {};
+    const map: Record<string, SectionLike[]> = {};
+    // 1. Lo que vino en la respuesta del catálogo: todas las asignaturas
+    //    cuyo detalle alguien pidió alguna vez, con `?include=schedules`.
+    for (const c of data?.courses ?? []) {
+      if (c.section_schedules) map[courseId(c)] = c.section_schedules;
+    }
+    // 2. Y encima, lo que esta sesión trajo con más detalle —cupos por
+    //    grupo incluidos, que es lo que mira el chip "con cupos"—: el plan,
+    //    y cualquier ficha que se haya abierto (lib/detailCache.ts).
     for (const [id, detail] of detailCache) map[id] = detail.sections;
     for (const row of planRows) {
       if (row.detail) map[itemId(row.item)] = row.detail.sections;
     }
     return map;
-  }, [detailCache, planRows]);
+  }, [data, courseId, detailCache, planRows]);
 
   /**
    * Rojo, amarillo o nada para cada materia — una sola pasada, un solo

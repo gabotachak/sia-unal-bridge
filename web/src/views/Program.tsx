@@ -31,7 +31,7 @@ import type { TableCol } from '../lib/table';
 import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
 import { useTableSort } from '../hooks/useTableSort';
 import { fold, formatAge, sentence } from '../lib/format';
-import { courseConflictsWithChosen } from '../lib/conflicts';
+import { allSectionsConflict, candidateConflictKeys } from '../lib/conflicts';
 import { DEFAULT_AVAILABILITY, courseFitsAvailability, isAvailabilityActive } from '../lib/availability';
 import { pooled } from '../lib/pooled';
 import { itemId, selectionId } from '../lib/storage';
@@ -112,9 +112,10 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
    * horario, con el mismo pool y el mismo cooldown: entrar al catálogo no
    * dispara nada que esas pantallas no disparen ya solas.
    *
-   * `courseConflictsWithChosen` mira TODOS los grupos de la materia, no
-   * solo el elegido: acá puede no haber ninguno elegido todavía, y el punto
-   * es avisar ANTES de elegir que ninguno —o casi ninguno— va a encajar.
+   * `allSectionsConflict` mira TODOS los grupos de la materia, no solo el
+   * elegido: acá puede no haber ninguno elegido todavía, y el punto es
+   * avisar ANTES de elegir que NINGUNO va a encajar. Que uno de cuatro
+   * choque no es noticia —quedan tres— y marcar por eso era el issue #34.
    */
   const { rows: planRows } = useCourseDetails(plan.items);
   const { selection: scheduleSelection } = useScheduleSelection();
@@ -167,12 +168,31 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
   }, [data, plan.items, courseId, level, campus, faculty, program]);
 
   /**
+   * Con "con cupos" puesto, un grupo lleno deja de ser escapatoria: la
+   * materia queda marcada si todos los que TODAVÍA tienen cupo chocan.
+   *
+   * Sin cupos medidos no se descarta nada —desconocido no es lleno—, al
+   * revés que `CourseCard.tsx`, que ahí sí oculta la fila. La diferencia es
+   * a propósito: allá se esconde UN grupo a pedido explícito, acá se marca
+   * y se oculta la materia ENTERA, y para eso conviene fallar abierto.
+   */
+  const viable = useCallback(
+    (sections: readonly Section[]) =>
+      onlyOpen ? sections.filter((s) => !s.seats || s.seats.available > 0) : sections,
+    [onlyOpen],
+  );
+
+  /**
    * Dos niveles, no uno — issue #28 ampliado: rojo si el grupo YA elegido
    * choca (un bloqueo real, ya armado); ocre si la materia no tiene grupo
-   * elegido todavía pero alguno de sus grupos chocaría (un aviso, antes de
+   * elegido todavía y NINGUNO de sus grupos le sirve (un aviso, antes de
    * comprometerse). Con un grupo ya elegido, el único que cuenta para "choca
    * de verdad" es ESE — una alternativa suya que chocaría no vuelve a la
    * materia un problema, porque nadie la eligió.
+   *
+   * El ocre es "no te queda ningún grupo", no "alguno choca" (issue #34):
+   * una materia con cuatro grupos de los que tres te sirven no es un
+   * problema, y marcarla escondía las que sí lo eran.
    */
   const conflictCourseIds = useMemo(() => {
     const active = new Set<string>();
@@ -182,18 +202,19 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
       const id = itemId(row.item);
       const pickedKey = scheduleSelection[id];
       if (pickedKey) {
+        // El grupo elegido: choca o no choca. Las alternativas no lo salvan.
         const chosenSection = row.detail.sections.filter((s) => s.key === pickedKey);
-        if (courseConflictsWithChosen(id, chosenSection, chosenBlocks)) active.add(id);
-      } else if (courseConflictsWithChosen(id, row.detail.sections, chosenBlocks)) {
+        if (candidateConflictKeys(id, chosenSection, chosenBlocks).size > 0) active.add(id);
+      } else if (allSectionsConflict(id, viable(row.detail.sections), chosenBlocks)) {
         potential.add(id);
       }
     }
     for (const [id, sections] of Object.entries(extraSections)) {
       if (active.has(id) || potential.has(id)) continue; // ya cubierta como materia del plan
-      if (courseConflictsWithChosen(id, sections, chosenBlocks)) potential.add(id);
+      if (allSectionsConflict(id, viable(sections), chosenBlocks)) potential.add(id);
     }
     return { active, potential };
-  }, [planRows, chosenBlocks, scheduleSelection, extraSections]);
+  }, [planRows, chosenBlocks, scheduleSelection, extraSections, viable]);
 
   /**
    * Todo el detalle que hay a mano, plan + cacheado, por id de materia — la
@@ -476,8 +497,9 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
             <Tooltip
               content={
                 <p className="tt-body">
-                  Oculta las que chocan en horario con un grupo que ya elegiste en Mi horario.
-                  Las que chocan igual se destacan en la lista mientras este chip está apagado.
+                  Oculta las materias a las que ya no les sirve ningún grupo, y aquellas cuyo
+                  grupo elegido choca con Mi horario. Se destacan igual en la lista mientras
+                  este chip está apagado.
                 </p>
               }
             >
@@ -634,8 +656,8 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                 {shown.map((c) => {
                   const id = courseId(c);
                   // Rojo: el grupo YA elegido choca — un bloqueo real. Ocre:
-                  // todavía no elegiste grupo, pero alguno de los que hay
-                  // chocaría — un aviso, antes de comprometerte.
+                  // todavía no elegiste grupo y NINGUNO de los que hay te
+                  // sirve — un aviso, antes de comprometerte.
                   const isActiveConflict = conflictCourseIds.active.has(id);
                   const isPotentialConflict = conflictCourseIds.potential.has(id);
                   const inConflict = isActiveConflict || isPotentialConflict;
@@ -653,7 +675,7 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                               <p className="tt-body">
                                 {isActiveConflict
                                   ? 'El grupo elegido choca con tu horario actual.'
-                                  : 'Los horarios de esta materia chocan con tu horario actual.'}
+                                  : 'Ningún grupo de esta materia te sirve: todos chocan con tu horario actual.'}
                               </p>
                             }
                           >
@@ -663,7 +685,7 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                               aria-label={
                                 isActiveConflict
                                   ? 'El grupo elegido choca con tu horario actual'
-                                  : 'Los horarios de esta materia chocan con tu horario actual'
+                                  : 'Ningún grupo de esta materia te sirve: todos chocan con tu horario actual'
                               }
                             >
                               <TriangleAlert size={13} strokeWidth={2} aria-hidden="true" />

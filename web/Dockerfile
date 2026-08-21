@@ -16,6 +16,11 @@ ENV FETCH_COOLDOWN=$FETCH_COOLDOWN
 # en caliente. Ver web/vite.config.ts.
 ARG GIT_TAG=dev
 ENV VITE_APP_VERSION=$GIT_TAG
+# El banner rojo de incidencia (src/components/Banner.tsx). Ausente = se pinta;
+# con cualquier valor no vacío, no. Vacío por defecto a propósito: una imagen
+# construida sin pasar nada avisa, en vez de callar por omisión.
+ARG VITE_INCIDENT_BANNER_OFF=
+ENV VITE_INCIDENT_BANNER_OFF=$VITE_INCIDENT_BANNER_OFF
 RUN npm run build
 
 # ── Runtime: nginx sirve los estáticos y proxea /v1 al backend ───────

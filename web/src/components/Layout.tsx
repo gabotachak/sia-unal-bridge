@@ -1,3 +1,4 @@
+import { Banner } from './Banner';
 import { TabBar } from './TabBar';
 import { Topbar } from './Topbar';
 import './Layout.css';
@@ -19,6 +20,12 @@ import './Layout.css';
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="shell">
+      {/* Antes que la barra, que es lo que lo pone en la primerísima línea de
+          la página. Se pinta o no según VITE_INCIDENT_BANNER_OFF — la decisión
+          vive dentro de Banner.tsx, no acá, para que apagarlo no sea editar el
+          marco de todas las pantallas. */}
+      <Banner />
+
       <Topbar />
 
       <main className="content">{children}</main>

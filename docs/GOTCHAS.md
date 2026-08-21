@@ -1046,3 +1046,41 @@ exige que el cuerpo **no** sea de tamaño no-op.
 
 `sia/conn.go`: `post`. `sia/noop.go`: `isSIAErrorPage`, `errSIAErrorPage`.
 `sia/source.go`: `FetchDetails`.
+
+---
+
+## 40. Un grupo puede no decir "Grupo" en absoluto
+
+`groupHeaderRe` asumía que todo header de grupo contiene la palabra `Grupo`
+literalmente — cierto en las 233 cabeceras que probaron el §24. Falso para
+`2022615` (Alemán I, libre elección): su único grupo se llama **"(1) Aleman
+Electivo 1"**, sin la palabra `Grupo` en ningún sitio.
+
+```
+CLASE TEORICA (2022615) (1) Aleman Electivo 1  Profesor: Paola Andrea Murillo
+Serrano. Facultad: FACULTAD DE CIENCIAS HUMANAS ... Cupos disponibles: 23
+```
+
+Con el regex viejo esto parseaba **0 secciones** — idéntico en forma a una
+asignatura sin oferta (§18), pero con un grupo real: profesor, horario, 23
+cupos. Encontrado en vivo 2026-08-21, verificado contra producción con
+`FindElectiveRow` + `FetchDetail` (página de 17.4 KB, no un no-op).
+
+Arreglo en `parse_detail.go`: `groupHeaderRe` acepta como cierre de cabecera
+`Grupo\s*\S+` **o**, si eso nunca aparece antes del siguiente bloque,
+`Profesor:` (el ancla fija que todo grupo tiene). RE2 no tiene lookahead, así
+que la rama de reserva se COME el `Profesor:` — el bucle en `ParseDetail` se
+lo devuelve al body antes de parsearlo. `extractGroupKey` dejó de buscar
+`Grupo` para ubicar la clave: toma el ÚLTIMO paréntesis del header, punto,
+que es la misma regla de siempre y ahora no depende de la palabra.
+
+Trampa dentro de la trampa: la rama `Profesor:` sin restricción cazaba
+paréntesis que **no** son cabeceras — `(Presencial)` aparece a veces pegado
+antes de `Profesor:` dentro del cuerpo de un grupo normal (ORIN-01/02 del
+fixture PEAMA), y de puro parecido inflaba 32 grupos a 34. Por eso el primer
+paréntesis del regex exige un dígito adentro (`\([^)\n]*\d[^)\n]*\)`): toda
+clave real es numérica o tiene un dígito (`1`, `10`, `TUMA-01`, `2022615`);
+`Presencial` no.
+
+Fixture: `detalle_2022615_grupo_sin_palabra_grupo_2026-08-21.xml`. Test:
+`TestParseDetail_GroupLabelWithoutGrupoWord`.

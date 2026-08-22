@@ -124,7 +124,8 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
    * pulsó dos veces seguidas.
    */
   const rateLimited = error?.status === 429 ? error : null;
-  const fault = error && !rateLimited ? error : null;
+  const isNoopWithData = error?.code === 'sia_noop' && data != null;
+  const fault = error && !rateLimited && !isNoopWithData ? error : null;
 
   /**
    * Mismo choque de horario que el catálogo y Mi semestre/horario (issue
@@ -171,6 +172,12 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
       )}
       {fault && <Fault error={fault} level={level} onRetry={() => reload()} />}
       {rateLimited && <p className="course__cooldown">{rateLimited.humane}</p>}
+      {isNoopWithData && (
+        <p className="course__warning">
+          <TriangleAlert size={16} strokeWidth={2} aria-hidden="true" />
+          <span>{error.humane}</span>
+        </p>
+      )}
 
       {data && (
         <>

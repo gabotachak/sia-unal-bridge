@@ -1,4 +1,8 @@
-.PHONY: run test migrate migrate-down migrate-test lint check-env
+.PHONY: run test migrate migrate-down migrate-test lint check-env deploy-web deploy-api deploy-jobs
+
+# Variables for deployment
+GIT_TAG ?= $(shell git describe --tags --always)
+GIT_SHA ?= $(shell git rev-parse --short HEAD)
 
 # Sin esto, DATABASE_URL llega vacío y goose cae al default de libpq: socket
 # unix local y usuario del sistema ("role robot does not exist").
@@ -31,3 +35,12 @@ migrate-test:
 lint:
 	go vet ./...
 	gofmt -l .
+
+deploy-web:
+	docker compose build web && docker compose up -d --no-deps web
+
+deploy-api:
+	docker compose build api && docker compose up -d --no-deps api
+
+deploy-jobs:
+	docker compose --profile jobs build refresher

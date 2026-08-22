@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -236,6 +237,179 @@ func TestDemandFeedsHotSet(t *testing.T) {
 	// The limit is the budget, honoured.
 	if hot, err = s.SeatsHotSet(ctx, "9996", 1); err != nil || len(hot) != 1 {
 		t.Fatalf("limit ignored: %d %v", len(hot), err)
+	}
+}
+
+// mkSeatedCourse writes one course, visible from programID, with a single
+// section whose seats were last checked checkedAgo in the past. It exists
+// only to give SeatsByDebt something to compute a debt over.
+//
+// term is the SIA term key for the section (e.g. "2026-2"). Tests that call
+// SeatsByDebt must pass an ISOLATED synthetic term (e.g. "tst-debt-hot") so
+// the query only sees rows belonging to that test — the test database is
+// shared, and other tests leave real sections under "2026-2".
+func mkSeatedCourse(t *testing.T, s *Store, programID int64, campusCode, code, term string, checkedAgo time.Duration) {
+	t.Helper()
+	ctx := context.Background()
+	checkedAt := time.Now().Add(-checkedAgo)
+	err := s.UpsertDetail(ctx, programID, term, catalog.CourseOffering{
+		Course: catalog.Course{
+			CampusCode: campusCode, Code: code, Name: code,
+			Sections: []catalog.Section{{
+				CampusCode: campusCode, Code: code, Term: term, Key: "1", Number: 1,
+				Seats: &catalog.SeatSnapshot{Available: 10, MeasuredAt: checkedAt},
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("mkSeatedCourse %s: %v", code, err)
+	}
+}
+
+// TestSeatsByDebt_HotBeatsCold is decisión 3's whole point: debt is one
+// comparable number across tiers, so a hot course outranks a cold one even
+// when the cold one has waited far longer in absolute terms.
+func TestSeatsByDebt_HotBeatsCold(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	resetCampus(t, s, "9997")
+	const term = "tst-debt-hot" // isolated: SeatsByDebt is global by campus_code
+
+	p, err := s.UpsertProgram(ctx, catalog.Program{
+		CampusCode: "9997", FacultyCode: "2055", Code: "2D05", LevelSlug: "pregrado", Name: "DEBT",
+		CampusIdx: 2, FacultyIdx: 8, ProgramIdx: 13,
+	})
+	if err != nil {
+		t.Fatalf("UpsertProgram: %v", err)
+	}
+
+	// HOT: requested in the last hour, target 5m, checked 20m ago -> debt 4.0.
+	mkSeatedCourse(t, s, p.ID, "9997", "HOT", term, 20*time.Minute)
+	if err := s.RecordDemand(ctx, "9997", "HOT"); err != nil {
+		t.Fatalf("RecordDemand: %v", err)
+	}
+	// COLD: no demand, target 6h, checked 7h ago -> debt ~1.17.
+	mkSeatedCourse(t, s, p.ID, "9997", "COLD", term, 7*time.Hour)
+
+	refs, err := s.SeatsByDebt(ctx, term, 5*time.Minute, 30*time.Minute, 6*time.Hour, 10)
+	if err != nil {
+		t.Fatalf("SeatsByDebt: %v", err)
+	}
+	if len(refs) != 2 {
+		t.Fatalf("got %d courses, want 2: %+v", len(refs), refs)
+	}
+	if refs[0].Code != "HOT" {
+		t.Errorf("debt order = %v, want HOT (higher debt) first", refs)
+	}
+}
+
+// TestSeatsByDebt_SkipsFresh is the other half: a course inside its tier's
+// target has nothing to do and must not show up at all.
+func TestSeatsByDebt_SkipsFresh(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	resetCampus(t, s, "9998")
+	const term = "tst-debt-fresh"
+
+	p, err := s.UpsertProgram(ctx, catalog.Program{
+		CampusCode: "9998", FacultyCode: "2055", Code: "2D06", LevelSlug: "pregrado", Name: "FRESH",
+		CampusIdx: 2, FacultyIdx: 8, ProgramIdx: 14,
+	})
+	if err != nil {
+		t.Fatalf("UpsertProgram: %v", err)
+	}
+	// Checked 1m ago against a 5m hot target: debt 0.2, well under 1.
+	mkSeatedCourse(t, s, p.ID, "9998", "FRESH", term, time.Minute)
+	if err := s.RecordDemand(ctx, "9998", "FRESH"); err != nil {
+		t.Fatalf("RecordDemand: %v", err)
+	}
+
+	refs, err := s.SeatsByDebt(ctx, term, 5*time.Minute, 30*time.Minute, 6*time.Hour, 10)
+	if err != nil {
+		t.Fatalf("SeatsByDebt: %v", err)
+	}
+	if len(refs) != 0 {
+		t.Fatalf("got %+v, want nothing: it is inside its target", refs)
+	}
+}
+
+// TestSeatsByDebt_StablePlan is decisión 6: the plan a course is measured
+// from must not change between calls, or UpsertDetail's per-plan
+// section_program reconciliation flaps real groups on and off.
+func TestSeatsByDebt_StablePlan(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	resetCampus(t, s, "9999")
+	const term = "tst-debt-stable"
+
+	mk := func(idx int) catalog.Program {
+		p, err := s.UpsertProgram(ctx, catalog.Program{
+			CampusCode: "9999", FacultyCode: "2055", Code: fmt.Sprintf("2D%02d", idx), LevelSlug: "pregrado", Name: "STABLE",
+			CampusIdx: 2, FacultyIdx: 8, ProgramIdx: idx,
+		})
+		if err != nil {
+			t.Fatalf("UpsertProgram: %v", err)
+		}
+		return p
+	}
+	a, b := mk(20), mk(21)
+	lower := a.ID
+	if b.ID < lower {
+		lower = b.ID
+	}
+
+	mkSeatedCourse(t, s, a.ID, "9999", "SHARED", term, 7*time.Hour)
+	mkSeatedCourse(t, s, b.ID, "9999", "SHARED", term, 7*time.Hour)
+
+	first, err := s.SeatsByDebt(ctx, term, 5*time.Minute, 30*time.Minute, 6*time.Hour, 10)
+	if err != nil {
+		t.Fatalf("SeatsByDebt (1st): %v", err)
+	}
+	second, err := s.SeatsByDebt(ctx, term, 5*time.Minute, 30*time.Minute, 6*time.Hour, 10)
+	if err != nil {
+		t.Fatalf("SeatsByDebt (2nd): %v", err)
+	}
+	if len(first) != 1 || len(second) != 1 {
+		t.Fatalf("got %d/%d rows, want 1/1: %+v %+v", len(first), len(second), first, second)
+	}
+	if first[0].ProgramID != second[0].ProgramID {
+		t.Fatalf("plan changed between calls: %d then %d", first[0].ProgramID, second[0].ProgramID)
+	}
+	if first[0].ProgramID != lower {
+		t.Errorf("plan = %d, want the lowest program_id %d", first[0].ProgramID, lower)
+	}
+}
+
+// TestSeatsByDebt_SkipsDisabled is the same guard every other scheduler
+// query in this file already respects: a course_program the reconciliation
+// turned off must not feed a fetch.
+func TestSeatsByDebt_SkipsDisabled(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	resetCampus(t, s, "9990")
+	const term = "tst-debt-disabled"
+
+	p, err := s.UpsertProgram(ctx, catalog.Program{
+		CampusCode: "9990", FacultyCode: "2055", Code: "2D07", LevelSlug: "pregrado", Name: "OFF",
+		CampusIdx: 2, FacultyIdx: 8, ProgramIdx: 15,
+	})
+	if err != nil {
+		t.Fatalf("UpsertProgram: %v", err)
+	}
+	mkSeatedCourse(t, s, p.ID, "9990", "GONE", term, 7*time.Hour)
+
+	if _, err := s.pool.Exec(ctx,
+		`UPDATE course_program SET disabled_at = now() WHERE program_id = $1 AND code = $2`,
+		p.ID, "GONE"); err != nil {
+		t.Fatalf("disable course_program: %v", err)
+	}
+
+	refs, err := s.SeatsByDebt(ctx, term, 5*time.Minute, 30*time.Minute, 6*time.Hour, 10)
+	if err != nil {
+		t.Fatalf("SeatsByDebt: %v", err)
+	}
+	if len(refs) != 0 {
+		t.Fatalf("got %+v, want nothing: the only plan that can see it is disabled", refs)
 	}
 }
 

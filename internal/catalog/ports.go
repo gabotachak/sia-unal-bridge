@@ -156,6 +156,11 @@ type Store interface {
 	// can. Ties break on recency.
 	SeatsHotSet(ctx context.Context, campusCode string, limit int) ([]CourseRef, error)
 
+	// SeatsByDebt is the live loop's work list (docs/PLAN-ULTIMATE-SYNC.md
+	// fase C.2): courses ordered by how overdue their seats are relative to
+	// their tier's target interval, one comparable number across tiers.
+	SeatsByDebt(ctx context.Context, term string, hot, warm, cold time.Duration, limit int) ([]CourseRef, error)
+
 	// RecordDemand counts that a CLIENT (never the job) asked for this
 	// course. Called by httpapi, the only adapter that knows there is a
 	// person on the other side.

@@ -252,6 +252,9 @@ func (f *fakeStore) CoursesNeedingVisibility(context.Context, int64, time.Durati
 	return nil, nil
 }
 func (f *fakeStore) SeatsHotSet(context.Context, string, int) ([]CourseRef, error) { return nil, nil }
+func (f *fakeStore) SeatsByDebt(context.Context, string, time.Duration, time.Duration, time.Duration, int) ([]CourseRef, error) {
+	return nil, nil
+}
 func (f *fakeStore) RecordDemand(context.Context, string, string) error            { return nil }
 func (f *fakeStore) StartRun(context.Context, string, string) (int64, error)       { return 1, nil }
 func (f *fakeStore) FinishRun(context.Context, RefreshRun) error                   { return nil }

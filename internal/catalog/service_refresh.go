@@ -95,6 +95,12 @@ func (s *Service) SeatsHotSet(ctx context.Context, campusCode string, limit int)
 	return s.store.SeatsHotSet(ctx, campusCode, limit)
 }
 
+// SeatsByDebt is the live daemon's work list, ordered by freshness debt
+// instead of raw hits (docs/PLAN-ULTIMATE-SYNC.md decisión 3).
+func (s *Service) SeatsByDebt(ctx context.Context, term string, hot, warm, cold time.Duration, limit int) ([]CourseRef, error) {
+	return s.store.SeatsByDebt(ctx, term, hot, warm, cold, limit)
+}
+
 // RecordDemand notes that a client asked for this course. Only the HTTP
 // adapter calls it — the job's own fetches must not feed the hot set it
 // derives its work from.

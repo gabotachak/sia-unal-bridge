@@ -438,7 +438,7 @@ func (s *Service) Catalog(ctx context.Context, program Program, maxAge time.Dura
 			return nil, err
 		}
 		combined := append(regular, electives...)
-		if err := s.suspectEmptyCatalog(ctx, program, combined); err != nil {
+		if err := s.suspectShrunkCatalog(ctx, program, combined); err != nil {
 			return nil, err
 		}
 		if err := s.store.UpsertCatalog(ctx, program, combined); err != nil {

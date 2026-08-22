@@ -845,11 +845,16 @@ function SeatsCell({
     const ageSeconds = (Date.now() - Date.parse(askedAt)) / 1000;
 
     if (ageSeconds > STALE_SEATS_SECONDS) {
+      const staleTimeText =
+        STALE_SEATS_SECONDS >= 3600
+          ? `${Math.floor(STALE_SEATS_SECONDS / 3600)} ${Math.floor(STALE_SEATS_SECONDS / 3600) === 1 ? "hora" : "horas"}`
+          : `${Math.floor(STALE_SEATS_SECONDS / 60)} ${Math.floor(STALE_SEATS_SECONDS / 60) === 1 ? "minuto" : "minutos"}`;
+
       return (
         <Tooltip
           content={
             <p className="tt-body">
-              Hace más de 2 horas que se midieron los cupos. Ábrela para volver
+              Hace más de {staleTimeText} que se midieron los cupos. Ábrela para volver
               a preguntar.
             </p>
           }

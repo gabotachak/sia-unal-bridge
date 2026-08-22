@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeftRight,
   Check,
@@ -8,42 +8,42 @@ import {
   Ticket,
   TriangleAlert,
   X,
-} from "lucide-react";
-import { routes } from "../api/client";
-import type { CoursesResponse, CourseSummary } from "../api/types";
-import { useApi } from "../hooks/useApi";
-import { useCatalogFilters } from "../hooks/useCatalogFilters";
-import { useCourseDetails } from "../hooks/useCourseDetails";
-import { usePlan } from "../hooks/usePlan";
-import { useScheduleConflicts } from "../hooks/useScheduleConflicts";
-import { useScheduleSelection } from "../hooks/useScheduleSelection";
-import { Layout } from "../components/Layout";
-import { AppLink } from "../components/AppLink";
-import { AvailabilityFields } from "../components/AvailabilityPicker";
-import { useConfirm } from "../components/Confirm";
-import { AddButton } from "../components/AddButton";
-import { Empty, Fault, Loading } from "../components/States";
-import { SearchInput } from "../components/SearchInput";
-import { SeatsFigure } from "../components/Seats";
-import { TableHead } from "../components/TableHead";
-import { Tooltip } from "../components/Tooltip";
-import type { TableCol } from "../lib/table";
-import { SEATS_RANK, sortBy, type SortKey } from "../lib/sort";
+} from 'lucide-react';
+import { routes } from '../api/client';
+import type { CoursesResponse, CourseSummary } from '../api/types';
+import { useApi } from '../hooks/useApi';
+import { useCatalogFilters } from '../hooks/useCatalogFilters';
+import { useCourseDetails } from '../hooks/useCourseDetails';
+import { usePlan } from '../hooks/usePlan';
+import { useScheduleConflicts } from '../hooks/useScheduleConflicts';
+import { useScheduleSelection } from '../hooks/useScheduleSelection';
+import { Layout } from '../components/Layout';
+import { AppLink } from '../components/AppLink';
+import { AvailabilityFields } from '../components/AvailabilityPicker';
+import { useConfirm } from '../components/Confirm';
+import { AddButton } from '../components/AddButton';
+import { Empty, Fault, Loading } from '../components/States';
+import { SearchInput } from '../components/SearchInput';
+import { SeatsFigure } from '../components/Seats';
+import { TableHead } from '../components/TableHead';
+import { Tooltip } from '../components/Tooltip';
+import type { TableCol } from '../lib/table';
+import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
 
 const STALE_SEATS_SECONDS =
   Number(import.meta.env.VITE_STALE_SEATS_SECONDS) || 7200;
-import { useTableSort } from "../hooks/useTableSort";
-import { fold, formatAge, sentence } from "../lib/format";
-import { classifyConflict, type SectionLike } from "../lib/conflicts";
-import { useDetailCache } from "../lib/detailCache";
+import { useTableSort } from '../hooks/useTableSort';
+import { fold, formatAge, sentence } from '../lib/format';
+import { classifyConflict, type SectionLike } from '../lib/conflicts';
+import { useDetailCache } from '../lib/detailCache';
 import {
   DEFAULT_AVAILABILITY,
   courseFitsAvailability,
   isAvailabilityActive,
-} from "../lib/availability";
-import { itemId, selectionId } from "../lib/storage";
-import type { Screen } from "../state/nav";
-import "./Program.css";
+} from '../lib/availability';
+import { itemId, selectionId } from '../lib/storage';
+import type { Screen } from '../state/nav';
+import './Program.css';
 
 /**
  * El catálogo de un plan. Hasta ~700 asignaturas (Medellín: 694).
@@ -55,7 +55,7 @@ import "./Program.css";
 export function Program({
   screen,
 }: {
-  screen: Extract<Screen, { name: "program" }>;
+  screen: Extract<Screen, { name: 'program' }>;
 }) {
   const sel = screen.selection;
   const { level, campus, faculty, program } = sel;
@@ -80,7 +80,7 @@ export function Program({
   const path = routes.courses(
     { level, campus, faculty },
     program,
-    hasSchedule ? "schedules" : undefined,
+    hasSchedule ? 'schedules' : undefined,
   );
   const { data, error, loading, elapsed, attempt, reload } =
     useApi<CoursesResponse>(path);
@@ -196,8 +196,8 @@ export function Program({
         chosenBlocks,
         onlyOpen,
       });
-      if (mark === "active") active.add(id);
-      else if (mark === "potential") potential.add(id);
+      if (mark === 'active') active.add(id);
+      else if (mark === 'potential') potential.add(id);
     }
     return { active, potential };
   }, [data, courseId, sectionsById, scheduleSelection, chosenBlocks, onlyOpen]);
@@ -234,9 +234,9 @@ export function Program({
         setScrollY(window.scrollY);
       });
     };
-    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
-      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener('scroll', onScroll);
       if (raf) cancelAnimationFrame(raf);
     };
   }, [setScrollY]);
@@ -253,7 +253,7 @@ export function Program({
     }
     return {
       typologies: [...byTypology.keys()].sort((a, b) =>
-        a.localeCompare(b, "es"),
+        a.localeCompare(b, 'es'),
       ),
       credits: [...byCredits.keys()].sort((a, b) => a - b),
       byTypology,
@@ -262,7 +262,7 @@ export function Program({
   }, [data]);
 
   /** Se recuerda entre visitas. `null` = como lo mandó el SIA, ya alfabético. */
-  const { sort, onSort } = useTableSort("catalog");
+  const { sort, onSort } = useTableSort('catalog');
 
   const shown = useMemo(() => {
     const needle = fold(q);
@@ -326,9 +326,9 @@ export function Program({
    * alternarlo compone con el resto de chips igual que cualquier selección
    * manual.
    */
-  const libreTypology = facets.typologies.find((t) => t.startsWith("LIBRE"));
+  const libreTypology = facets.typologies.find((t) => t.startsWith('LIBRE'));
   const nonLibreTypologies = facets.typologies.filter(
-    (t) => !t.startsWith("LIBRE"),
+    (t) => !t.startsWith('LIBRE'),
   );
   const notLibreActive =
     nonLibreTypologies.length > 0 &&
@@ -356,7 +356,7 @@ export function Program({
       | ((prev: ReadonlySet<string>) => ReadonlySet<string>),
   ) {
     setTypols((prev) => {
-      const resolved = typeof next === "function" ? next(prev) : next;
+      const resolved = typeof next === 'function' ? next(prev) : next;
       return resolved.size === facets.typologies.length &&
         facets.typologies.length > 0
         ? new Set()
@@ -365,7 +365,7 @@ export function Program({
   }
 
   function clearAll() {
-    setQ("");
+    setQ('');
     setTypols(new Set());
     setCreds(new Set());
     setOnlyOpen(false);
@@ -394,13 +394,13 @@ export function Program({
       const ok = await ask({
         title: `Cambiar al plan ${program}`,
         danger: true,
-        confirmLabel: "Cambiar de plan",
+        confirmLabel: 'Cambiar de plan',
         body: (
           <>
             <p>
-              Se va a borrar{" "}
-              {n === 1 ? "la materia guardada" : `las ${n} materias guardadas`}{" "}
-              en Mi semestre, porque {n === 1 ? "es" : "son"} del plan{" "}
+              Se va a borrar{' '}
+              {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`}{' '}
+              en Mi semestre, porque {n === 1 ? 'es' : 'son'} del plan{' '}
               <b>{selection?.programName}</b>.
             </p>
             <p>Sus grupos y su tipología son de ese plan, no de este.</p>
@@ -418,12 +418,12 @@ export function Program({
       {foreign && selection && (
         <div className="stray" role="status">
           <p className="stray__text">
-            Estás mirando el plan <b>{program}</b>, y el tuyo es{" "}
+            Estás mirando el plan <b>{program}</b>, y el tuyo es{' '}
             <b>{selection.programName}</b>. Puedes mirar todo lo que quieras,
             pero para agregar materias al semestre tienes que estar en tu plan.
           </p>
           <div className="stray__actions">
-            <AppLink className="btn" to={{ name: "program", selection }}>
+            <AppLink className="btn" to={{ name: 'program', selection }}>
               <CornerUpLeft size={15} strokeWidth={1.75} aria-hidden="true" />
               volver al mío
             </AppLink>
@@ -481,7 +481,7 @@ export function Program({
               }
             >
               <button
-                className={`chip ${onlyOpen ? "is-on" : ""}`}
+                className={`chip ${onlyOpen ? 'is-on' : ''}`}
                 onClick={() => setOnlyOpen((v) => !v)}
                 aria-pressed={onlyOpen}
               >
@@ -508,7 +508,7 @@ export function Program({
               }
             >
               <button
-                className={`chip ${hideConflicts ? "is-on" : ""}`}
+                className={`chip ${hideConflicts ? 'is-on' : ''}`}
                 onClick={() => setHideConflicts((v) => !v)}
                 aria-pressed={hideConflicts}
               >
@@ -529,7 +529,7 @@ export function Program({
                 plegar esconda información: dice cuántas facetas hay puestas
                 sin tener que abrir a mirar. */}
             <button
-              className={`chip filters__toggle ${facetCount ? "is-on" : ""}`}
+              className={`chip filters__toggle ${facetCount ? 'is-on' : ''}`}
               onClick={() => setShowFacets((v) => !v)}
               aria-expanded={showFacets}
               aria-controls="facetas"
@@ -559,7 +559,7 @@ export function Program({
           </div>
 
           <div
-            className={`filters ${showFacets ? "is-open" : ""}`}
+            className={`filters ${showFacets ? 'is-open' : ''}`}
             id="facetas"
           >
             <div className="filters__row">
@@ -576,11 +576,11 @@ export function Program({
                     }
                   >
                     <button
-                      className={`chip chip--sm ${typols.has(t) ? "is-on" : ""}`}
+                      className={`chip chip--sm ${typols.has(t) ? 'is-on' : ''}`}
                       onClick={() => pickTypology((s) => toggle(s, t))}
                       aria-pressed={typols.has(t)}
                     >
-                      {sentence(t.replace(/\s*\([^)]*\)\s*$/, ""))}
+                      {sentence(t.replace(/\s*\([^)]*\)\s*$/, ''))}
                       <span className="chip__code tnum">
                         {facets.byTypology.get(t)}
                       </span>
@@ -605,13 +605,13 @@ export function Program({
                     }
                   >
                     <button
-                      className={`chip chip--sm ${typols.has(libreTypology) ? "is-on" : ""}`}
+                      className={`chip chip--sm ${typols.has(libreTypology) ? 'is-on' : ''}`}
                       onClick={() =>
                         pickTypology((s) => toggle(s, libreTypology))
                       }
                       aria-pressed={typols.has(libreTypology)}
                     >
-                      {sentence(libreTypology.replace(/\s*\([^)]*\)\s*$/, ""))}
+                      {sentence(libreTypology.replace(/\s*\([^)]*\)\s*$/, ''))}
                       <span className="chip__code tnum">
                         {facets.byTypology.get(libreTypology)}
                       </span>
@@ -627,7 +627,7 @@ export function Program({
                     }
                   >
                     <button
-                      className={`chip chip--sm ${notLibreActive ? "is-on" : ""}`}
+                      className={`chip chip--sm ${notLibreActive ? 'is-on' : ''}`}
                       onClick={toggleNotLibre}
                       aria-pressed={notLibreActive}
                     >
@@ -647,12 +647,12 @@ export function Program({
                     key={n}
                     content={
                       <p className="tt-title">
-                        {n} {n === 1 ? "crédito" : "créditos"}
+                        {n} {n === 1 ? 'crédito' : 'créditos'}
                       </p>
                     }
                   >
                     <button
-                      className={`chip chip--sm ${creds.has(n) ? "is-on" : ""}`}
+                      className={`chip chip--sm ${creds.has(n) ? 'is-on' : ''}`}
                       onClick={() => setCreds((s) => toggle(s, n))}
                       aria-pressed={creds.has(n)}
                     >
@@ -703,8 +703,8 @@ export function Program({
                   return (
                     <li key={c.code}>
                       <AppLink
-                        className={`row table__row ${isActiveConflict ? "is-conflict" : ""} ${isPotentialConflict ? "is-conflict-potential" : ""}`}
-                        to={{ name: "course", selection: sel, code: c.code }}
+                        className={`row table__row ${isActiveConflict ? 'is-conflict' : ''} ${isPotentialConflict ? 'is-conflict-potential' : ''}`}
+                        to={{ name: 'course', selection: sel, code: c.code }}
                       >
                         <span className="row__code tnum col-code">
                           {c.code}
@@ -715,8 +715,8 @@ export function Program({
                               content={
                                 <p className="tt-body">
                                   {isActiveConflict
-                                    ? "El grupo elegido choca con tu horario actual."
-                                    : "Ningún grupo de esta materia te sirve: todos chocan con tu horario actual."}
+                                    ? 'El grupo elegido choca con tu horario actual.'
+                                    : 'Ningún grupo de esta materia te sirve: todos chocan con tu horario actual.'}
                                 </p>
                               }
                             >
@@ -725,8 +725,8 @@ export function Program({
                                 role="img"
                                 aria-label={
                                   isActiveConflict
-                                    ? "El grupo elegido choca con tu horario actual"
-                                    : "Ningún grupo de esta materia te sirve: todos chocan con tu horario actual"
+                                    ? 'El grupo elegido choca con tu horario actual'
+                                    : 'Ningún grupo de esta materia te sirve: todos chocan con tu horario actual'
                                 }
                               >
                                 <TriangleAlert
@@ -818,7 +818,7 @@ function SeatsCell({
   seats,
   askedAt,
 }: {
-  seats?: CourseSummary["seats"];
+  seats?: CourseSummary['seats'];
   askedAt?: string | null;
 }) {
   if (!seats) {
@@ -847,8 +847,8 @@ function SeatsCell({
     if (ageSeconds > STALE_SEATS_SECONDS) {
       const staleTimeText =
         STALE_SEATS_SECONDS >= 3600
-          ? `${Math.floor(STALE_SEATS_SECONDS / 3600)} ${Math.floor(STALE_SEATS_SECONDS / 3600) === 1 ? "hora" : "horas"}`
-          : `${Math.floor(STALE_SEATS_SECONDS / 60)} ${Math.floor(STALE_SEATS_SECONDS / 60) === 1 ? "minuto" : "minutos"}`;
+          ? `${Math.floor(STALE_SEATS_SECONDS / 3600)} ${Math.floor(STALE_SEATS_SECONDS / 3600) === 1 ? 'hora' : 'horas'}`
+          : `${Math.floor(STALE_SEATS_SECONDS / 60)} ${Math.floor(STALE_SEATS_SECONDS / 60) === 1 ? 'minuto' : 'minutos'}`;
 
       return (
         <Tooltip
@@ -874,7 +874,7 @@ function SeatsCell({
           <>
             <p className="tt-title">Sin grupos programados</p>
             <p className="tt-body">
-              Consultado el {new Date(askedAt).toLocaleString("es-CO")}.
+              Consultado el {new Date(askedAt).toLocaleString('es-CO')}.
             </p>
           </>
         }
@@ -902,20 +902,20 @@ function SeatsCell({
           </li>
           <li className="tt-row">
             <span>Medido</span>
-            <b>{new Date(seats.measured_at).toLocaleString("es-CO")}</b>
+            <b>{new Date(seats.measured_at).toLocaleString('es-CO')}</b>
           </li>
         </ul>
       }
     >
       <span
-        className={`row__seats col-seats ${seats.available === 0 ? "is-zero" : "is-open"}`}
+        className={`row__seats col-seats ${seats.available === 0 ? 'is-zero' : 'is-open'}`}
       >
         {/* Sin animar: en el catálogo el número no cambia después de cargar, y
             313 filas aleteando en la primera pintura serían ruido y trabajo por
             nada. La forma y el color sí son los mismos que en la ficha. */}
         <SeatsFigure
           available={seats.available}
-          tone={seats.available === 0 ? "empty" : "ok"}
+          tone={seats.available === 0 ? 'empty' : 'ok'}
         />
         <small className="tnum">{formatAge(seats.age_seconds)}</small>
       </span>
@@ -929,15 +929,15 @@ function SeatsCell({
  */
 function sortKeyOf(c: CourseSummary, col: TableCol): SortKey {
   switch (col) {
-    case "code":
+    case 'code':
       return c.code;
-    case "name":
+    case 'name':
       return c.name;
-    case "typology":
+    case 'typology':
       return c.typology;
-    case "credits":
+    case 'credits':
       return c.credits;
-    case "seats":
+    case 'seats':
       if (!c.seats) {
         // El sello del detalle es lo único que separa 'no hay grupos' de
         // 'nadie preguntó': sin cupos y sin sello, no se midió nunca.
@@ -986,8 +986,8 @@ function shortTypology(t: string): string {
 }
 
 function slugTypology(t: string): string {
-  if (t.startsWith("LIBRE")) return "libre";
-  if (t.includes("OBLIGATORIA")) return "obligatoria";
-  if (t.includes("OPTATIVA")) return "optativa";
-  return "otra";
+  if (t.startsWith('LIBRE')) return 'libre';
+  if (t.includes('OBLIGATORIA')) return 'obligatoria';
+  if (t.includes('OPTATIVA')) return 'optativa';
+  return 'otra';
 }

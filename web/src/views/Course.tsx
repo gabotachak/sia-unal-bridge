@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Clock, MapPin, RefreshCw, TriangleAlert, User } from 'lucide-react';
-import { FETCH_COOLDOWN, routes } from '../api/client';
+import { FETCH_COOLDOWN, routes, STALE_SEATS_SECONDS } from '../api/client';
 import type { ClassSession, CourseDetail, Section } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { useCourseDetails } from '../hooks/useCourseDetails';
@@ -20,14 +20,16 @@ import { itemId } from '../lib/storage';
 import type { Screen } from '../state/nav';
 import './Course.css';
 
-const STALE_SEATS_SECONDS = Number(import.meta.env.VITE_STALE_SEATS_SECONDS) || 7200;
-
 export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }> }) {
   const { selection: sel, code, from } = screen;
   const { level, campus, faculty, program } = sel;
 
   const scope = { level, campus, faculty };
-  const path = routes.course(scope, program, code);
+  // max_age=STALE_SEATS_SECONDS, no el default del servidor: es lo que el
+  // tooltip de cupos ya promete ("Ábrela para volver a preguntar"). El
+  // read-through decide si eso significa cache o SIA — no hay un segundo
+  // useEffect peleando con el cooldown por su cuenta (docs/PLAN-SIACHANGES.md A3).
+  const path = routes.course(scope, program, code, STALE_SEATS_SECONDS);
   const { data, error, loading, elapsed, attempt, reload } = useApi<CourseDetail>(path);
 
   /**
@@ -114,20 +116,6 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
     setCooldownUntil(Date.now() + FETCH_COOLDOWN * 1000);
     reload(routes.course(scope, program, code, 0));
   }
-
-  // Auto-actualizar si lleva mucho tiempo sin grupos
-  useEffect(() => {
-    if (!data) return;
-    if (data.sections.length > 0) return;
-    
-    const at = Date.parse(data.fetched_at);
-    if (!Number.isFinite(at)) return;
-    
-    const ageSeconds = (Date.now() - at) / 1000;
-    if (ageSeconds > STALE_SEATS_SECONDS && cooldownUntil <= Date.now()) {
-      measureAll();
-    }
-  }, [data, cooldownUntil, scope, program, code, reload]);
 
   /**
    * Un 429 del cooldown no es un fallo: la asignatura sigue en pantalla y el

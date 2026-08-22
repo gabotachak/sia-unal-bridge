@@ -885,6 +885,30 @@ function SeatsCell({
       </Tooltip>
     );
   }
+  const seatsAgeSeconds = (Date.now() - Date.parse(seats.measured_at)) / 1000;
+  if (seatsAgeSeconds > STALE_SEATS_SECONDS) {
+    const staleTimeText =
+      STALE_SEATS_SECONDS >= 3600
+        ? `${Math.floor(STALE_SEATS_SECONDS / 3600)} ${Math.floor(STALE_SEATS_SECONDS / 3600) === 1 ? 'hora' : 'horas'}`
+        : `${Math.floor(STALE_SEATS_SECONDS / 60)} ${Math.floor(STALE_SEATS_SECONDS / 60) === 1 ? 'minuto' : 'minutos'}`;
+
+    return (
+      <Tooltip
+        content={
+          <p className="tt-body">
+            Hace más de {staleTimeText} que se midieron los cupos. Ábrela para volver
+            a preguntar.
+          </p>
+        }
+      >
+        <span className="row__seats is-unknown col-seats">
+          <HelpCircle size={15} strokeWidth={2} aria-hidden="true" />
+          <span className="sr-only">Cupos desactualizados</span>
+        </span>
+      </Tooltip>
+    );
+  }
+
   return (
     <Tooltip
       content={
@@ -947,6 +971,13 @@ function sortKeyOf(c: CourseSummary, col: TableCol): SortKey {
         }
         return SEATS_RANK.noOffer;
       }
+      // Con grupos pero info desactualizada → incógnita también.
+      if (
+        (Date.now() - Date.parse(c.seats.measured_at)) / 1000 >
+        STALE_SEATS_SECONDS
+      ) {
+        return SEATS_RANK.unknown;
+      }
       return c.seats.available === 0 ? SEATS_RANK.full : c.seats.available;
   }
 }
@@ -970,7 +1001,16 @@ function toggle<T>(set: ReadonlySet<T>, v: T): ReadonlySet<T> {
  * de esas la respuesta ya se sabe.
  */
 function hasRoom(c: CourseSummary): boolean {
-  if (c.seats) return c.seats.available > 0;
+  if (c.seats) {
+    // Si el dato está desactualizado, no sabemos el estado real → incógnita.
+    if (
+      (Date.now() - Date.parse(c.seats.measured_at)) / 1000 >
+      STALE_SEATS_SECONDS
+    ) {
+      return true;
+    }
+    return c.seats.available > 0;
+  }
   return (
     !c.detail_fetched_at ||
     (Date.now() - Date.parse(c.detail_fetched_at)) / 1000 > STALE_SEATS_SECONDS

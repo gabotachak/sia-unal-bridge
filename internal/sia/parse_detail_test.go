@@ -188,3 +188,34 @@ func TestParseSchedule_GroupWithScheduleHasSessions(t *testing.T) {
 	}
 	t.Fatal("group with key '10' not found")
 }
+
+// TestParseDetail_ProfesorAnchorMatchesGroupCount is A1
+// (docs/PLAN-SIACHANGES.md): every detail fixture in testdata/ must parse a
+// number of sections equal to its "Profesor:" count. A future fixture that
+// breaks this invariant fails the build instead of shipping a silent
+// under- or over-count.
+func TestParseDetail_ProfesorAnchorMatchesGroupCount(t *testing.T) {
+	names := []string{
+		"detalle_1000003-B_con_prerrequisitos_2026-08-15.xml",
+		"detalle_1000003-B_grupo_sin_horario_2026-08-15.xml",
+		"detalle_1000004-B_32grupos_peama_2026-08-15.xml",
+		"detalle_2022615_grupo_sin_palabra_grupo_2026-08-21.xml",
+		"detalle_2027641_0grupos_2026-08-15.xml",
+		"detalle_2do_de_sesion_region2_2026-08-15.xml",
+	}
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			d, err := ParseDetail(fixture(t, name), "1101", "TEST", "2026-2")
+			if err != nil {
+				t.Fatalf("ParseDetail: %v", err)
+			}
+			text, err := ParseDetailText(fixture(t, name))
+			if err != nil {
+				t.Fatalf("ParseDetailText: %v", err)
+			}
+			if n := strings.Count(text, profesorAnchor); n != len(d.Sections) {
+				t.Errorf("got %d sections, %d %q anchors", len(d.Sections), n, profesorAnchor)
+			}
+		})
+	}
+}

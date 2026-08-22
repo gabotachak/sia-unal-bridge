@@ -15,6 +15,10 @@ import (
 // electives set, never just one half. A partial catalog marked "fresh" is
 // exactly the silent failure this project exists to avoid (docs/GOTCHAS.md
 // §21, docs/ARCH.md "El catálogo de un plan son dos consultas").
+// Catalog() siempre llama con `combined` (regular + electivas) en una sola
+// pasada (service.go) — nunca partir esa llamada en dos: la reconciliación
+// de abajo apagaría las regulares en la mitad que no trae electivas, y
+// viceversa.
 func (s *Store) UpsertCatalog(ctx context.Context, program catalog.Program, offerings []catalog.CourseOffering) error {
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		for _, o := range offerings {
@@ -35,10 +39,28 @@ func (s *Store) UpsertCatalog(ctx context.Context, program catalog.Program, offe
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO course_program (program_id, campus_code, code, typology)
 				VALUES ($1, $2, $3, $4)
-				ON CONFLICT (program_id, code) DO UPDATE SET typology = EXCLUDED.typology`,
+				ON CONFLICT (program_id, code) DO UPDATE SET typology = EXCLUDED.typology, disabled_at = NULL`,
 				program.ID, c.CampusCode, c.Code, o.Typology,
 			); err != nil {
 				return fmt.Errorf("store: UpsertCatalog: course_program %s: %w", c.Code, err)
+			}
+		}
+
+		// len(offerings) == 0 no llega hasta acá cuando había catálogo
+		// previo: suspectShrunkCatalog lo rechaza antes (catalog package).
+		// La guarda queda igual porque este upsert es público y no todos sus
+		// caminos pasan por el Service.
+		if len(offerings) > 0 {
+			codes := make([]string, len(offerings))
+			for i, o := range offerings {
+				codes[i] = o.Course.Code
+			}
+			if _, err := tx.Exec(ctx, `
+				UPDATE course_program SET disabled_at = now()
+				WHERE program_id = $1 AND code != ALL($2) AND disabled_at IS NULL`,
+				program.ID, codes,
+			); err != nil {
+				return fmt.Errorf("store: UpsertCatalog: reconcile: %w", err)
 			}
 		}
 
@@ -72,6 +94,7 @@ func (s *Store) ProgramCourses(ctx context.Context, programID int64) ([]catalog.
 			       count(*)                                                AS n
 			FROM section sec
 			JOIN section_program sp ON sp.section_id = sec.id AND sp.program_id = cp.program_id
+			                       AND sp.disabled_at IS NULL
 			JOIN LATERAL (
 				SELECT available_seats, measured_at
 				FROM seat_snapshot ss
@@ -81,7 +104,7 @@ func (s *Store) ProgramCourses(ctx context.Context, programID int64) ([]catalog.
 			) latest ON true
 			WHERE sec.campus_code = cp.campus_code AND sec.code = cp.code
 		) seats ON true
-		WHERE cp.program_id = $1
+		WHERE cp.program_id = $1 AND cp.disabled_at IS NULL
 		ORDER BY c.name`,
 		programID,
 	)
@@ -112,7 +135,11 @@ func (s *Store) Course(ctx context.Context, campusCode, code string) (catalog.Co
 	var c catalog.Course
 	err := s.pool.QueryRow(ctx, `
 		SELECT campus_code, code, name, credits, description, fetched_at
-		FROM course WHERE campus_code = $1 AND code = $2`,
+		FROM course
+		WHERE campus_code = $1 AND code = $2
+		  AND EXISTS (SELECT 1 FROM course_program cp
+		              WHERE cp.campus_code = course.campus_code AND cp.code = course.code
+		                AND cp.disabled_at IS NULL)`,
 		campusCode, code,
 	).Scan(&c.CampusCode, &c.Code, &c.Name, &c.Credits, &c.Description, &c.FetchedAt)
 	if err == pgx.ErrNoRows {
@@ -132,6 +159,9 @@ func (s *Store) SearchCourses(ctx context.Context, campusCode, q string) ([]cata
 		SELECT campus_code, code, name, credits, description, fetched_at
 		FROM course
 		WHERE name ILIKE '%' || $2 || '%' AND ($1 = '' OR campus_code = $1)
+		  AND EXISTS (SELECT 1 FROM course_program cp
+		              WHERE cp.campus_code = course.campus_code AND cp.code = course.code
+		                AND cp.disabled_at IS NULL)
 		ORDER BY name LIMIT 100`,
 		campusCode, q,
 	)
@@ -165,7 +195,7 @@ func (s *Store) SearchCourses(ctx context.Context, campusCode, q string) ([]cata
 func (s *Store) ProgramCoverage(ctx context.Context, campusCode string) (known, withCatalog int, err error) {
 	err = s.pool.QueryRow(ctx, `
 		SELECT count(*), count(*) FILTER (WHERE catalog_fetched_at IS NOT NULL)
-		FROM program WHERE ($1 = '' OR campus_code = $1)`,
+		FROM program WHERE ($1 = '' OR campus_code = $1) AND disabled_at IS NULL`,
 		campusCode,
 	).Scan(&known, &withCatalog)
 	if err != nil {

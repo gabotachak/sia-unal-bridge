@@ -144,6 +144,18 @@ func ParseDetail(raw []byte, campusCode, code, term string) (Detail, error) {
 	}
 	d.Sections = sections
 
+	// Every group has exactly one "Profesor:" — the anchor e1267b3 already
+	// relies on for its fallback branch. If the count doesn't match,
+	// groupHeaderRe under- or over-matched, and both failures are SILENT:
+	// too few looks like "no offering" (§18), too many invents groups. This
+	// is the check that would have caught §40 the day it appeared, and the
+	// one that keeps reconciliation from disabling real groups on a bad
+	// parse.
+	if n := strings.Count(text[:groupsEnd], profesorAnchor); n != len(sections) {
+		return Detail{}, fmt.Errorf("%w: %s parsed %d groups but the page has %d %q anchors",
+			catalog.ErrParseMismatch, code, len(sections), n, profesorAnchor)
+	}
+
 	if prereqStart >= 0 {
 		d.Prerequisites = parsePrerequisites(text[prereqStart:])
 	}

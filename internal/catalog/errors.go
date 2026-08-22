@@ -17,6 +17,13 @@ var (
 	// expose is a bug the API already had.
 	ErrTruncated  = errors.New("listing hit the SIA's 1000-row cap: truncated, not a result")
 	ErrSuspectRun = errors.New("sanity assertion failed: refusing to persist")
+
+	// ErrParseMismatch: groupHeaderRe found a different number of groups than
+	// there are "Profesor:" anchors in the page. Both directions are silent
+	// otherwise — too few reads as "no offering" (§18), too many invents
+	// groups — docs/PLAN-SIACHANGES.md A1. Transient/retryable, never
+	// ErrNotFound.
+	ErrParseMismatch = errors.New("sia: parsed group count doesn't match Profesor: anchor count")
 )
 
 // AmbiguousError carries the candidates for ErrAmbiguous. Two different

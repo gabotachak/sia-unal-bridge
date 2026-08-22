@@ -200,7 +200,7 @@ func (f *fakeStore) CourseProgramFetchedAt(_ context.Context, programID int64, c
 	return row.FetchedAt, true, nil
 }
 
-func (f *fakeStore) UpsertDetail(_ context.Context, programID int64, offering CourseOffering) error {
+func (f *fakeStore) UpsertDetail(_ context.Context, programID int64, _ string, offering CourseOffering) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	c := offering.Course
@@ -583,7 +583,7 @@ func TestSectionSeats_StaleSeatsRefetchThoughDetailIsFresh(t *testing.T) {
 	// Detail fetched just now (fresh for 24 h), seats measured 10 min ago
 	// (stale past the 5 min seats TTL).
 	stale := time.Now().Add(-10 * time.Minute)
-	if err := store.UpsertDetail(ctx, program.ID, CourseOffering{Course: Course{
+	if err := store.UpsertDetail(ctx, program.ID, "2026-2", CourseOffering{Course: Course{
 		CampusCode: "1101", Code: "1000004-B",
 		Sections: []Section{{CampusCode: "1101", Code: "1000004-B", Term: "2026-2", Key: "1",
 			Seats: &SeatSnapshot{Available: 5, MeasuredAt: stale}}},
@@ -628,7 +628,7 @@ func TestSectionSeats_FreshSeatsServeFromStore(t *testing.T) {
 	ctx := context.Background()
 	program, _ := store.UpsertProgram(ctx, testProgram(0))
 
-	if err := store.UpsertDetail(ctx, program.ID, CourseOffering{Course: Course{
+	if err := store.UpsertDetail(ctx, program.ID, "2026-2", CourseOffering{Course: Course{
 		CampusCode: "1101", Code: "1000004-B",
 		Sections: []Section{{CampusCode: "1101", Code: "1000004-B", Term: "2026-2", Key: "1",
 			Seats: &SeatSnapshot{Available: 5, MeasuredAt: time.Now().Add(-30 * time.Second)}}},
@@ -660,7 +660,7 @@ func TestSectionSeats_MaxAgeZeroForcesFetch(t *testing.T) {
 	ctx := context.Background()
 	program, _ := store.UpsertProgram(ctx, testProgram(0))
 
-	if err := store.UpsertDetail(ctx, program.ID, CourseOffering{Course: Course{
+	if err := store.UpsertDetail(ctx, program.ID, "2026-2", CourseOffering{Course: Course{
 		CampusCode: "1101", Code: "1000004-B",
 		Sections: []Section{{CampusCode: "1101", Code: "1000004-B", Term: "2026-2", Key: "1",
 			Seats: &SeatSnapshot{Available: 5, MeasuredAt: time.Now()}}},

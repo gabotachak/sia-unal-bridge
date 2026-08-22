@@ -83,3 +83,50 @@ func TestCatalogSanity_SuspectEmptyCatalog(t *testing.T) {
 		t.Errorf("an empty catalog for an uncached program must be allowed, got %v", err)
 	}
 }
+
+// TestCatalogSanity_ShrunkCatalog is A1/C3's other guard rail
+// (docs/PLAN-SIACHANGES.md, shrinkFloor): a catalog that shrinks below half
+// its cached size looks like a truncated listing or a dirty soc4, never a
+// real semester-to-semester drop. 98→90 (above the floor) is accepted;
+// 98→5 (below it) is rejected the same way as the all-the-way-to-0 case.
+func TestCatalogSanity_ShrunkCatalog(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeStore()
+	sia := &fakeSIA{catalogRows: 98}
+	svc := NewService(store, sia, "2026-2")
+
+	program, err := store.UpsertProgram(ctx, testProgram(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.Catalog(ctx, program, DefaultFreshness); err != nil {
+		t.Fatalf("first sweep: %v", err)
+	}
+	program, _, err = store.Program(ctx, program.CampusCode, program.FacultyCode, program.Code)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 98 -> 5 is well below shrinkFloor: reject, and the cache stays at 98.
+	sia.catalogRows = 5
+	if _, _, err := svc.Catalog(ctx, program, 0); !errors.Is(err, ErrSuspectRun) {
+		t.Fatalf("got err %v, want ErrSuspectRun for a 98->5 shrink", err)
+	}
+	courses, err := store.ProgramCourses(ctx, program.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(courses) != 98 {
+		t.Errorf("a suspect shrink must not touch the cache: got %d courses, want 98", len(courses))
+	}
+
+	// 98 -> 90 is above shrinkFloor: a real, if unlikely, drop — accepted.
+	// (fakeStore is not a full reconciliation simulation — docs at the top
+	// of service_test.go — so this only checks the guard's decision, not
+	// persisted row counts; the real UPDATE ... disabled_at path is covered
+	// against Postgres in internal/store's TestReconcile_CourseProgram.)
+	sia.catalogRows = 90
+	if _, _, err := svc.Catalog(ctx, program, 0); err != nil {
+		t.Fatalf("98->90 shrink should be accepted, got %v", err)
+	}
+}

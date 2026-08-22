@@ -223,7 +223,7 @@ func (f *fakeStore) CourseProgramTypology(_ context.Context, programID int64, co
 	return row.Typology, ok, nil
 }
 
-func (f *fakeStore) UpsertDetail(_ context.Context, programID int64, offering catalog.CourseOffering) error {
+func (f *fakeStore) UpsertDetail(_ context.Context, programID int64, _ string, offering catalog.CourseOffering) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	c := offering.Course

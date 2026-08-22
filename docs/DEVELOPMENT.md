@@ -1,7 +1,11 @@
 # Entorno de desarrollo
 
-Pensado para trabajar en Linux con Docker. Todavía no hay código: esto documenta el
-entorno que hace falta montar.
+Cómo montar el entorno para trabajar en este repo. Pensado para Linux con Docker.
+
+> **Puertos y variables no se repiten acá.** La fuente de verdad es
+> [`.env.example`](../.env.example), que es lo que `docker-compose.yml` lee. Los
+> comandos de abajo usan los nombres de variable (`DB_PORT`, `API_PORT`), no números
+> horneados: así siguen siendo correctos cuando alguien cambia un puerto.
 
 ---
 
@@ -9,42 +13,27 @@ entorno que hace falta montar.
 
 | Herramienta | Versión | Para qué |
 |---|---|---|
-| Go | 1.26.6 | el servicio |
-| Docker + Compose | cualquiera reciente | Postgres local |
+| Go | ver `go 1.x` en [`go.mod`](../go.mod) | el servicio y el Job |
+| Node | 22 | la interfaz (misma mayor que `web/Dockerfile`) |
+| Docker + Compose | cualquiera reciente | Postgres, API e interfaz |
 | Bruno | 1.x | ejecutar el flujo del SIA a mano |
 | `curl` | — | pruebas rápidas contra el SIA |
 
-Conexión a internet: el SIA solo responde desde fuera. No hay fixtures grabados en el
-repo todavía (ver [Fixtures](#fixtures)).
+Conexión a internet solo para tocar el SIA de verdad: el grueso del parser se prueba
+contra los fixtures commiteados (ver [Fixtures](#fixtures)).
 
 ---
 
 ## Postgres local
 
-```yaml
-# docker-compose.yml
-services:
-  db:
-    image: postgres:18.6-alpine
-    environment:
-      POSTGRES_USER: sia
-      POSTGRES_PASSWORD: sia
-      POSTGRES_DB: sia_bridge
-    ports: ["5432:5432"]
-    volumes:
-      - pgdata:/var/lib/postgresql   # 18+: layout por versión mayor, no .../data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sia"]
-      interval: 5s
-      retries: 10
-
-volumes:
-  pgdata:
-```
+El servicio `db` de [`docker-compose.yml`](../docker-compose.yml) lo levanta. Publica en
+`127.0.0.1:${DB_PORT}` y el volumen usa el layout por versión mayor de Postgres 18+
+(`/var/lib/postgresql`, no `.../data`).
 
 ```bash
+cp .env.example .env
 docker compose up -d db
-psql postgres://sia:sia@localhost:5432/sia_bridge
+psql "postgres://sia:sia@localhost:${DB_PORT:-15432}/sia_bridge"
 ```
 
 ### La base de test es OTRA base
@@ -59,7 +48,8 @@ La crea `deploy/initdb/01-test-database.sql` en el primer arranque del contenedo
 la base ya existía, a mano:
 
 ```bash
-psql -h localhost -p 15432 -U sia -d postgres -c 'CREATE DATABASE sia_bridge_test OWNER sia;'
+psql -h localhost -p "${DB_PORT:-15432}" -U sia -d postgres \
+  -c 'CREATE DATABASE sia_bridge_test OWNER sia;'
 make migrate-test        # y de nuevo tras cada migración nueva
 ```
 
@@ -67,24 +57,47 @@ make migrate-test        # y de nuevo tras cada migración nueva
 
 ## API en contenedor
 
-`Dockerfile` (multi-stage: `golang:1.26.6-alpine` build → `alpine:3.20` runtime) y el
-servicio `api` en `docker-compose.yml` levantan el puente completo:
+El [`Dockerfile`](../Dockerfile) de la raíz (multi-stage: build en Go, runtime en
+Alpine — las versiones exactas están ahí) y el servicio `api` de
+[`docker-compose.yml`](../docker-compose.yml) levantan el puente completo:
 
 ```bash
-DATABASE_URL="postgres://sia:sia@localhost:5432/sia_bridge?sslmode=disable" make migrate
-docker compose up -d --build
-curl http://localhost:8080/v1/healthz
+make migrate                      # lee DATABASE_URL del .env
+docker compose up -d --build api
+curl "http://localhost:${API_PORT:-18080}/v1/healthz"
 ```
 
 Las migraciones **no corren solas** — `api` no las aplica al arrancar. Correr `make
-migrate` contra el puerto 5432 mapeado en el host antes de `docker compose up` (o
-después; el schema no cambia entre versiones todavía).
+migrate` contra el `DB_PORT` mapeado en el host, antes o después de `docker compose up`.
 
 `api` espera a que `db` esté `healthy` (`depends_on.condition: service_healthy`), no
 solo arrancado.
 
-El esquema está en [DATA-MODEL.md](DATA-MODEL.md); las migraciones en `migrations/`
-(`00001_init.sql`, `00002_refresher.sql`).
+El esquema y el porqué de cada decisión están en [DATA-MODEL.md](DATA-MODEL.md); el
+esquema que de verdad corre es la suma de `migrations/`, que es lo que hay que mirar
+cuando los dos discrepen.
+
+### La interfaz
+
+Dos formas, según qué estés tocando:
+
+```bash
+# Desarrollo: Vite recarga en caliente y proxea /v1 a la API (VITE_API_TARGET).
+docker compose up -d db api
+cd web && npm install && npm run dev      # → localhost:${VITE_DEV_PORT}
+
+# Como en producción: nginx sobre los estáticos ya compilados.
+docker compose up -d --build web          # → localhost:${WEB_PORT}
+```
+
+Las variables `VITE_*` se **hornean en el bundle** durante el build: no hay proceso que
+las lea en caliente, así que cambiarlas pide `docker compose build web`, no un restart.
+En el build de Docker el contexto es `./web`, donde el `.env` de la raíz no se ve — por
+eso cada variable necesita su `ARG` en [`web/Dockerfile`](../web/Dockerfile) **y** su
+entrada en `build.args` del compose. Olvidar ese paso deja dev y producción con valores
+distintos sin que nada lo diga.
+
+Qué dependencia hace qué y por qué no hay más: [`web/README.md`](../web/README.md).
 
 ### El Job (`refresher`)
 
@@ -145,23 +158,20 @@ curl -sS -A 'sia-bridge/dev' '<url de arriba>' \
 
 ## Fixtures
 
-**No hay ninguno commiteado todavía.** `.gitignore` excluye `/testdata/live/` y `*.har`
-porque las respuestas del SIA pesan entre 50 KB y 1 MB.
+Viven en [`internal/sia/testdata/`](../internal/sia/testdata/) — respuestas reales del
+SIA, capturadas contra producción y commiteadas. Cubren los listados, la cascada, el
+bootstrap con tabla ajena, los no-ops y un detalle por cada forma rara que apareció. El
+listado completo es un `ls`; lo que importa es la convención:
 
-Cuando haya parser, conviene guardar un juego mínimo y sanitizado:
+- **Cada fixture nombra el caso y la fecha** — `detalle_2027641_0grupos_2026-08-15.xml`.
+  Una respuesta sintética lo dice en el nombre (`..._SYNTHETIC.xml`).
+- **Casi siempre nacen de un bug real.** Cuando el SIA muestre una forma que el parser
+  no esperaba, la fixture de esa página entra al repo junto al arreglo, con su sección
+  en [GOTCHAS.md](GOTCHAS.md) y su test. Es el patrón de §40.
+- **No se borran las viejas.** Sirven para detectar cuándo el SIA cambió de forma.
 
-| Fixture | Para probar |
-|---|---|
-| listado de una carrera (~98 filas) | parser de tabla, dedupe, `_afrRK` |
-| listado de electivas (~240 filas) | duplicados, comodín de sede |
-| detalle con varios grupos | parser de grupos, horarios, cupos |
-| detalle con 0 grupos (`2027641`) | asignatura sin oferta |
-| grupo sin horario (`Horarios/Aula: No informado`) | `section` sin `class_session` |
-| respuesta de ~900 B | detección de no-op |
-| respuesta de sesión caducada | detección de timeout |
-
-Fecharlos (`listado_2026-08-15.xml`) y no borrar los viejos: sirven para detectar
-cuándo el SIA cambió de forma.
+`.gitignore` excluye `/testdata/live/` y `*.har`: las capturas crudas pesan entre 50 KB
+y 1 MB, y lo que se commitea es la respuesta mínima que reproduce el caso.
 
 ---
 
@@ -190,21 +200,22 @@ verificar.
 
 ---
 
-## Orden sugerido para arrancar
+## Por dónde entrar al código
 
-1. Esquema y migraciones (`DATA-MODEL.md`).
-2. Parser del listado, contra un fixture guardado a mano con Bruno. Es la parte con más
-   trampas y no necesita red.
-3. Parser del detalle (grupos, horarios, cupos).
-4. `SIAConn`: bootstrap, cascada, búsqueda, detalle, Volver. Con los campos de estado
-   `parkedAt` y `detailRegion` desde el principio — son los que ahorran POSTs.
+Ya no hay nada que arrancar de cero, pero el orden en que se construyó sigue siendo el
+orden en que se entiende:
+
+1. **Los parsers** (`internal/sia/parse_*.go`) — la parte con más trampas, y la única
+   que se prueba entera sin red. Empezar por acá con `go test ./internal/sia/`.
+2. **`SIAConn`** (`conn.go`, `cascade.go`) — bootstrap, cascada, búsqueda, detalle,
+   Volver. Los campos de estado `parkedAt` y `detailRegion` son los que ahorran POSTs;
    `detailRegion` es un entero, no un bool: sube con cada detalle (GOTCHAS §20).
-5. Pool de 4 conexiones. El mutex envuelve la **operación lógica** (cascada+`cb1`,
-   detalle+`Volver`), no el POST: partirlo reproduce el §28 — dos peticiones a la vez
+3. **El pool** (`pool.go`) — el mutex envuelve la **operación lógica** (cascada+`cb1`,
+   detalle+`Volver`), no el POST. Partirlo reproduce el §28: dos peticiones a la vez
    sobre una conexión devuelven `200 OK` con la respuesta del otro hilo.
-6. `Store` y read-through.
-7. API HTTP.
+4. **`Store` y read-through** (`internal/store`, `internal/catalog`).
+5. **La API HTTP** (`internal/httpapi`) y **el Job** (`internal/refresher`).
 
-El paso 4 es donde muerden las trampas de `GOTCHAS.md`. Tener los pasos 2 y 3 ya
-probados contra fixtures hace que sea mucho más fácil saber si el problema está en la
-navegación o en el parseo.
+El paso 2 es donde muerden las trampas de `GOTCHAS.md`. Que los parsers estén probados
+contra fixtures es lo que permite saber si un fallo está en la navegación o en el
+parseo.

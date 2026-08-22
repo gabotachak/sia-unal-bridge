@@ -21,21 +21,37 @@ func checkListing(offerings []CourseOffering, program Program, half string) erro
 	return nil
 }
 
-// suspectEmptyCatalog rejects an empty catalog for a program that already
-// had one. Zero courses is legitimate for a plan nobody offers this term,
-// but zero where there were 98 means the SIA changed, or soc4 got dirty, or
-// the bootstrap's foreign table was parsed (GOTCHAS §22) — never a result.
-func (s *Service) suspectEmptyCatalog(ctx context.Context, program Program, offerings []CourseOffering) error {
-	if len(offerings) > 0 || program.CatalogFetchedAt == nil {
-		return nil
+// shrinkFloor: por debajo de esta fracción del catálogo activo previo, una
+// respuesta más chica no es "retiraron materias", es una lectura rota. Un
+// plan no pierde la mitad de su oferta de un semestre a otro; un listado
+// truncado (§14) o un soc4 sucio (§22) sí producen exactamente eso, y en
+// silencio.
+const shrinkFloor = 0.5
+
+// suspectShrunkCatalog rejects a catalog read that looks broken rather than
+// smaller: zero courses for a program that already had some (SIA changed,
+// soc4 got dirty, or the bootstrap's foreign table was parsed — GOTCHAS
+// §22), or a catalog that shrank by more than shrinkFloor. With
+// reconciliation live, a bad read here doesn't just leave the cache
+// incomplete — it disables real rows.
+func (s *Service) suspectShrunkCatalog(ctx context.Context, program Program, offerings []CourseOffering) error {
+	if program.CatalogFetchedAt == nil {
+		return nil // primera vez: no hay contra qué comparar
 	}
 	prev, err := s.store.ProgramCourses(ctx, program.ID)
 	if err != nil {
 		return err
 	}
-	if len(prev) > 0 {
+	if len(prev) == 0 {
+		return nil
+	}
+	if len(offerings) == 0 {
 		return fmt.Errorf("%w: program %s/%s returned 0 courses, cache holds %d",
 			ErrSuspectRun, program.CampusCode, program.Code, len(prev))
+	}
+	if float64(len(offerings)) < shrinkFloor*float64(len(prev)) {
+		return fmt.Errorf("%w: program %s/%s returned %d courses, cache holds %d active",
+			ErrSuspectRun, program.CampusCode, program.Code, len(offerings), len(prev))
 	}
 	return nil
 }
@@ -53,7 +69,7 @@ func (s *Service) RefreshDetails(ctx context.Context, program Program, refs []Co
 	yield func(CourseOffering, error) error) error {
 	return s.sia.FetchDetails(ctx, program.key(), refs, s.term, func(o CourseOffering, err error) error {
 		if err == nil {
-			err = s.store.UpsertDetail(ctx, program.ID, o)
+			err = s.store.UpsertDetail(ctx, program.ID, s.term, o)
 		}
 		return yield(o, err)
 	})

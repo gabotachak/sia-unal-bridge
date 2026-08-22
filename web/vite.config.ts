@@ -51,7 +51,7 @@ export default defineConfig(({ mode }) => {
   process.env.VITE_INCIDENT_BANNER_OFF = bannerOff;
 
   const staleSeats =
-    env.VITE_STALE_SEATS_SECONDS || process.env.VITE_STALE_SEATS_SECONDS || '7200';
+    env.VITE_STALE_SEATS_SECONDS || process.env.VITE_STALE_SEATS_SECONDS || '1800';
   process.env.VITE_STALE_SEATS_SECONDS = staleSeats;
 
   const apiTarget = env.VITE_API_TARGET || 'http://localhost:18080';

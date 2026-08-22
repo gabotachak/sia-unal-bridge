@@ -15,6 +15,10 @@ export type Row = {
   detail: CourseDetail | null;
   status: 'idle' | 'loading' | 'done' | 'error';
   error?: string;
+  /** El `code` del ApiError, cuando lo hay. 'unknown_course' es el caso de
+   *  reconciliación (docs/PLAN-SIACHANGES.md D2): la materia se apagó del
+   *  catálogo del plan y reintentar nunca la va a traer de vuelta. */
+  errorCode?: string;
   /**
    * Epoch ms a partir del cual esta materia se puede volver a medir. 0 = ya.
    *
@@ -173,6 +177,7 @@ export function useCourseDetails(items: PlanItem[]) {
           patch(id, {
             status: 'error',
             error: lastError instanceof ApiError ? lastError.humane : 'no se pudo consultar',
+            errorCode: lastError instanceof ApiError ? lastError.code : undefined,
           });
         } finally {
           // En el finally porque el camino feliz sale por `return`: la materia

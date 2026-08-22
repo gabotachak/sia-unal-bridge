@@ -48,11 +48,32 @@ func (s *Store) UpsertPrograms(ctx context.Context, scope string, programs []cat
 					faculty_name = EXCLUDED.faculty_name,
 					campus_idx = EXCLUDED.campus_idx,
 					faculty_idx = EXCLUDED.faculty_idx,
-					program_idx = EXCLUDED.program_idx`,
+					program_idx = EXCLUDED.program_idx,
+					disabled_at = NULL`,
 				p.CampusCode, p.FacultyCode, p.Code, p.LevelSlug, p.Name, p.CampusName, p.FacultyName,
 				p.LevelIdx, p.CampusIdx, p.FacultyIdx, p.ProgramIdx,
 			); err != nil {
 				return fmt.Errorf("store: UpsertPrograms: program %s: %w", p.Code, err)
+			}
+		}
+		// Lista vacía significa "el dropdown falló", nunca "la UNAL cerró
+		// todos los planes" — reconciliar apagaría el directorio entero.
+		if len(programs) > 0 {
+			facultyCodes := make([]string, len(programs))
+			programCodes := make([]string, len(programs))
+			for i, p := range programs {
+				facultyCodes[i], programCodes[i] = p.FacultyCode, p.Code
+			}
+			if _, err := tx.Exec(ctx, `
+				UPDATE program SET disabled_at = now()
+				WHERE campus_code = $1 AND level_slug = $2 AND disabled_at IS NULL
+				  AND NOT EXISTS (
+				      SELECT 1 FROM unnest($3::text[], $4::text[]) AS t(fac, code)
+				      WHERE t.fac = program.faculty_code AND t.code = program.code
+				  )`,
+				programs[0].CampusCode, programs[0].LevelSlug, facultyCodes, programCodes,
+			); err != nil {
+				return fmt.Errorf("store: UpsertPrograms: reconcile: %w", err)
 			}
 		}
 		return stampReference(ctx, tx, scope)
@@ -69,10 +90,24 @@ func (s *Store) UpsertCampuses(ctx context.Context, scope string, campuses []cat
 				VALUES ($1, $2, $3, $4)
 				ON CONFLICT (level_slug, code) DO UPDATE SET
 					name = EXCLUDED.name,
-					campus_idx = EXCLUDED.campus_idx`,
+					campus_idx = EXCLUDED.campus_idx,
+					disabled_at = NULL`,
 				c.LevelSlug, c.Code, c.Name, c.Index,
 			); err != nil {
 				return fmt.Errorf("store: UpsertCampuses: campus %s: %w", c.Code, err)
+			}
+		}
+		if len(campuses) > 0 {
+			codes := make([]string, len(campuses))
+			for i, c := range campuses {
+				codes[i] = c.Code
+			}
+			if _, err := tx.Exec(ctx, `
+				UPDATE campus SET disabled_at = now()
+				WHERE level_slug = $1 AND code != ALL($2) AND disabled_at IS NULL`,
+				campuses[0].LevelSlug, codes,
+			); err != nil {
+				return fmt.Errorf("store: UpsertCampuses: reconcile: %w", err)
 			}
 		}
 		return stampReference(ctx, tx, scope)
@@ -89,10 +124,22 @@ func (s *Store) UpsertLevels(ctx context.Context, scope string, levels []catalog
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO level (slug, name, level_idx)
 				VALUES ($1, $2, $3)
-				ON CONFLICT (name) DO UPDATE SET level_idx = EXCLUDED.level_idx`,
+				ON CONFLICT (name) DO UPDATE SET level_idx = EXCLUDED.level_idx, disabled_at = NULL`,
 				l.Slug, l.Name, l.Index,
 			); err != nil {
 				return fmt.Errorf("store: UpsertLevels: level %q: %w", l.Name, err)
+			}
+		}
+		if len(levels) > 0 {
+			names := make([]string, len(levels))
+			for i, l := range levels {
+				names[i] = l.Name
+			}
+			if _, err := tx.Exec(ctx, `
+				UPDATE level SET disabled_at = now()
+				WHERE name != ALL($1) AND disabled_at IS NULL`, names,
+			); err != nil {
+				return fmt.Errorf("store: UpsertLevels: reconcile: %w", err)
 			}
 		}
 		return stampReference(ctx, tx, scope)
@@ -103,7 +150,7 @@ func (s *Store) UpsertLevels(ctx context.Context, scope string, levels []catalog
 // order is the meaningful one here (pregrado first), and unlike the campus
 // list there are too few for alphabetical to help.
 func (s *Store) Levels(ctx context.Context) ([]catalog.Level, error) {
-	rows, err := s.pool.Query(ctx, `SELECT slug, name, level_idx FROM level ORDER BY level_idx`)
+	rows, err := s.pool.Query(ctx, `SELECT slug, name, level_idx FROM level WHERE disabled_at IS NULL ORDER BY level_idx`)
 	if err != nil {
 		return nil, fmt.Errorf("store: Levels: %w", err)
 	}
@@ -135,7 +182,8 @@ func stampReference(ctx context.Context, tx pgx.Tx, scope string) error {
 // output doesn't depend on soc9's volatile positions.
 func (s *Store) Campuses(ctx context.Context, levelSlug string) ([]catalog.Campus, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT level_slug, code, name, campus_idx FROM campus WHERE level_slug = $1 ORDER BY name`, levelSlug)
+		SELECT level_slug, code, name, campus_idx FROM campus
+		WHERE level_slug = $1 AND disabled_at IS NULL ORDER BY name`, levelSlug)
 	if err != nil {
 		return nil, fmt.Errorf("store: Campuses: %w", err)
 	}

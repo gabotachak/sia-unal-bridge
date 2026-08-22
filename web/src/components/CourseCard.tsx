@@ -41,7 +41,7 @@ export function CourseCard({
   /** A qué pantalla vuelve la ficha de la materia al tocar el nombre. */
   linkFrom: 'semester' | 'schedule';
 }) {
-  const { item, detail, status, error } = row;
+  const { item, detail, status, error, errorCode } = row;
   const all = detail?.sections ?? [];
   const sections = all.filter((s) => !onlyOpen || (s.seats?.available ?? 0) > 0);
   const totalSeats = all.reduce((n, s) => n + (s.seats?.available ?? 0), 0);
@@ -182,7 +182,24 @@ export function CourseCard({
         )}
       </header>
 
-      {status === 'error' && <p className="card__error">{error}</p>}
+      {status === 'error' && (
+        <p className="card__error">
+          {error}
+          {/* La reconciliación (docs/PLAN-SIACHANGES.md D2) apaga la materia
+              del catálogo del plan: reintentar nunca la trae de vuelta. La
+              caneca de arriba ya la quita, pero acá al lado hace explícito
+              QUÉ hacer con el error en vez de dejarlo en un limbo hasta que
+              alguien note el ícono. */}
+          {errorCode === 'unknown_course' && onRemove && (
+            <>
+              {' '}
+              <button type="button" className="card__errorAction" onClick={onRemove}>
+                quitar de la lista
+              </button>
+            </>
+          )}
+        </p>
+      )}
 
       {noGroups && <p className="card__error card__error--soft">Sin grupos este semestre.</p>}
 

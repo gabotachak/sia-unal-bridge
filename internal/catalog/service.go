@@ -438,7 +438,7 @@ func (s *Service) Catalog(ctx context.Context, program Program, maxAge time.Dura
 			return nil, err
 		}
 		combined := append(regular, electives...)
-		if err := s.suspectEmptyCatalog(ctx, program, combined); err != nil {
+		if err := s.suspectShrunkCatalog(ctx, program, combined); err != nil {
 			return nil, err
 		}
 		if err := s.store.UpsertCatalog(ctx, program, combined); err != nil {
@@ -559,7 +559,7 @@ func (s *Service) refreshDetail(ctx context.Context, program Program, code strin
 		if err != nil {
 			return nil, err
 		}
-		if err := s.store.UpsertDetail(ctx, program.ID, offering); err != nil {
+		if err := s.store.UpsertDetail(ctx, program.ID, s.term, offering); err != nil {
 			return nil, err
 		}
 		return s.readCourse(ctx, program, code)

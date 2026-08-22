@@ -21,6 +21,11 @@ ENV VITE_APP_VERSION=$GIT_TAG
 # construida sin pasar nada avisa, en vez de callar por omisión.
 ARG VITE_INCIDENT_BANNER_OFF=
 ENV VITE_INCIDENT_BANNER_OFF=$VITE_INCIDENT_BANNER_OFF
+# Umbral de "cupos viejos" que Program/Course le piden a la API con
+# ?max_age=. Mismo mecanismo que FETCH_COOLDOWN arriba: horneado en el
+# bundle, no leído en caliente. Ver web/vite.config.ts.
+ARG VITE_STALE_SEATS_SECONDS=1800
+ENV VITE_STALE_SEATS_SECONDS=$VITE_STALE_SEATS_SECONDS
 RUN npm run build
 
 # ── Runtime: nginx sirve los estáticos y proxea /v1 al backend ───────

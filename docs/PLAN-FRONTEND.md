@@ -4,7 +4,11 @@ Qué construir, con qué, y **qué significa cada cosa**. Escrito para alguien q
 el back y arranca el front desde cero: además de plan, es un curso mínimo.
 
 Hermano de [`PLAN.md`](PLAN.md), mismo formato: pasos con criterio de aceptación.
-Nada se implementa hasta que esté acordado.
+
+> **Estado: implementado.** La interfaz vive en [`../web/`](../web/) y está en
+> producción. Este documento queda como el porqué de cada decisión —y como el curso
+> mínimo de front—, no como la lista de lo que falta. Para correrla, ver
+> [`../web/README.md`](../web/README.md).
 
 > Las analogías con Go aparecen así a lo largo del documento. No son adornos: si algo
 > del front te suena raro, casi siempre tiene un equivalente exacto en lo que ya sabés.

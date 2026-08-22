@@ -43,6 +43,10 @@ const (
 	ScopeGlobal = "global"
 	ScopePlan   = "plan"
 	ScopeHot    = "hot"
+	// ScopeDebt is the live loop's work list, built by Store.SeatsByDebt:
+	// courses ordered by how overdue their seats are relative to their tier's
+	// target interval, so a hot course 6 min late outranks a cold one 5 h late.
+	ScopeDebt = "debt"
 )
 
 type Options struct {
@@ -70,6 +74,18 @@ type Options struct {
 	// Campus narrows a sweep to one sede ('1101'). Empty means every sede
 	// the directory cache knows.
 	Campus string
+
+	// Quarantine is set only by the live loop: a one-shot sweep has nowhere
+	// to remember a backoff between runs. Nil means no quarantine, which is
+	// the behavior of every cron mode today.
+	Quarantine *Quarantine
+
+	// Live tier intervals and batch size — used by ScopeDebt only.
+	// Zero values fall back to the defaults from config.LoadRefresh().
+	LiveHot   time.Duration
+	LiveWarm  time.Duration
+	LiveCold  time.Duration
+	LiveBatch int
 }
 
 func (o *Options) applyDefaults() {
@@ -93,6 +109,19 @@ func (o *Options) applyDefaults() {
 	}
 	if o.HotSetSize <= 0 {
 		o.HotSetSize = 250
+	}
+	// Live-mode defaults (match config.LoadRefresh defaults).
+	if o.LiveHot <= 0 {
+		o.LiveHot = 5 * time.Minute
+	}
+	if o.LiveWarm <= 0 {
+		o.LiveWarm = 30 * time.Minute
+	}
+	if o.LiveCold <= 0 {
+		o.LiveCold = 6 * time.Hour
+	}
+	if o.LiveBatch <= 0 {
+		o.LiveBatch = 100
 	}
 }
 

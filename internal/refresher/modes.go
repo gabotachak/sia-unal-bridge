@@ -2,6 +2,7 @@ package refresher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -129,16 +130,24 @@ func (r *refresher) detail(ctx context.Context) error {
 	})
 }
 
-// seats warms the hot set. It is NOT a freshness guarantee and the code says
-// so: one worker measures ~1 course/s, the universe is ~10 000 courses, and
-// the TTL is 5 min — short by a factor of ~8. What this buys is that the
-// courses people actually look at almost always answer from cache.
+// seats warms the hot set (ScopeHot) or drains the freshness-debt queue
+// (ScopeDebt). It is NOT a freshness guarantee: one worker measures ~1
+// course/s, the universe is ~3 474 courses with groups, and the TTL is 5 min.
+// What this buys is that the courses people actually look at — or the ones
+// most overdue relative to their tier target — almost always answer from cache.
 //
-// The work list comes from real client demand (RecordDemand, written only by
-// httpapi), never from "the ones with detail_fetched_at": that proxy works
-// only while a client is the sole writer, and the global sweep marks them
-// all.
+// The debt work list comes from Store.SeatsByDebt, which already selects the
+// lowest stable program_id per course (docs/PLAN-ULTIMATE-SYNC.md decisión 6).
+// The hot-set work list comes from real client demand (RecordDemand, written
+// only by httpapi), never from "the ones with detail_fetched_at".
 func (r *refresher) seats(ctx context.Context) error {
+	if r.opts.Scope == ScopeDebt {
+		return r.seatsDebt(ctx)
+	}
+	return r.seatsHot(ctx)
+}
+
+func (r *refresher) seatsHot(ctx context.Context) error {
 	programs, err := r.workList(ctx)
 	if err != nil {
 		return err
@@ -171,6 +180,14 @@ func (r *refresher) seats(ctx context.Context) error {
 		return ctx.Err()
 	}
 
+	programs, err = r.workList(ctx)
+	if err != nil {
+		return err
+	}
+	byID = make(map[int64]catalog.Program, len(programs))
+	for _, p := range programs {
+		byID[p.ID] = p
+	}
 	targets := make([]catalog.Program, 0, len(work))
 	for id := range work {
 		p, ok := byID[id]
@@ -186,14 +203,67 @@ func (r *refresher) seats(ctx context.Context) error {
 	})
 }
 
+func (r *refresher) seatsDebt(ctx context.Context) error {
+	programs, err := r.workList(ctx)
+	if err != nil {
+		return err
+	}
+	byID := make(map[int64]catalog.Program, len(programs))
+	for _, p := range programs {
+		byID[p.ID] = p
+	}
+
+	refs, err := r.svc.SeatsByDebt(ctx, r.svc.Term(), r.opts.LiveHot, r.opts.LiveWarm, r.opts.LiveCold, r.opts.LiveBatch)
+	if err != nil {
+		return err
+	}
+
+	// Filter quarantined courses before grouping by program.
+	filtered := refs[:0:0]
+	for _, ref := range refs {
+		if !r.opts.Quarantine.Blocked(ref.Code) {
+			filtered = append(filtered, ref)
+		}
+	}
+	refs = filtered
+
+	if len(refs) == 0 {
+		r.log.Info("refresher: debt queue empty, all courses within their freshness target")
+		return ctx.Err()
+	}
+
+	work := make(map[int64][]catalog.CourseRef)
+	for _, ref := range refs {
+		work[ref.ProgramID] = append(work[ref.ProgramID], ref)
+	}
+	targets := make([]catalog.Program, 0, len(work))
+	for id := range work {
+		p, ok := byID[id]
+		if !ok {
+			continue
+		}
+		targets = append(targets, p)
+	}
+	return r.eachProgram(ctx, targets, func(ctx context.Context, p catalog.Program) (int, bool, error) {
+		return r.fetchDetails(ctx, p, work[p.ID])
+	})
+}
+
 // fetchDetails walks one program's courses over one connection and folds the
 // result. A course that fails does not stop the batch; a program that
 // produces no successful course at all is a failed program, which is what
 // feeds the circuit breaker.
+//
+// ErrNotFound is special: it is NOT a circuit-breaker failure (the UNAL
+// retiring a course is not a SIA malfunction), but it IS counted in
+// Report.NotFound and quarantined for 24 h so the live loop can schedule
+// a catalog re-read for that plan.
 func (r *refresher) fetchDetails(ctx context.Context, p catalog.Program, refs []catalog.CourseRef) (int, bool, error) {
 	hadSections := make(map[string]bool, len(refs))
+	codeForRef := make(map[string]string, len(refs)) // course code → quarantine key
 	for _, ref := range refs {
 		hadSections[ref.Code] = ref.HadSections
+		codeForRef[ref.Code] = ref.Code
 	}
 
 	ok, failed := 0, 0
@@ -208,11 +278,21 @@ func (r *refresher) fetchDetails(ctx context.Context, p catalog.Program, refs []
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
+			if errors.Is(ferr, catalog.ErrNotFound) {
+				// Not a circuit-breaker failure: count and quarantine.
+				r.mu.Lock()
+				r.rep.NotFound++
+				r.mu.Unlock()
+				r.opts.Quarantine.Fail(o.Course.Code, true)
+				return nil // keep the batch alive
+			}
 			failed++
+			r.opts.Quarantine.Fail(o.Course.Code, false)
 			r.noteError(fmt.Errorf("detail %s/%s: %w", p.Code, o.Course.Code, ferr))
 			return nil // keep the batch alive
 		}
 		ok++
+		r.opts.Quarantine.OK(o.Course.Code)
 		if hadSections[o.Course.Code] {
 			known++
 			if len(o.Course.Sections) == 0 {

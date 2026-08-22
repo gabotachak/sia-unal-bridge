@@ -34,6 +34,10 @@ func NewService(store Store, sia SIASource, term string) *Service {
 	return &Service{store: store, sia: sia, term: term}
 }
 
+// Term returns the current SIA term string (e.g. "2026-2"). The live loop
+// needs it to pass to SeatsByDebt without having to re-read config.
+func (s *Service) Term() string { return s.term }
+
 // ensureDirectory guarantees Store holds a program directory for one
 // (campus, level) no older than maxAge, walking the live cascade only when
 // it doesn't. This is the reference cache docs/API.md "Frescura" specifies

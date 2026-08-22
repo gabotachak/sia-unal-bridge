@@ -66,15 +66,12 @@ jobs:
             bash -c '
             set -e
             cd /mnt/newhdd/robot/repos/sia-unal-bridge
+            git switch main
             git pull
-            # git pull ya trajo el tag que semantic-release acaba de crear
-            # (apunta al mismo commit) — describe lo resuelve sin fetch extra.
-            export GIT_TAG=$(git describe --tags --always)
-            export GIT_SHA=$(git rev-parse --short HEAD)
             ${{ steps.filter.outputs.db == 'true' && 'make migrate' || '' }}
-            ${{ steps.filter.outputs.api == 'true' && 'docker compose build api && docker compose up -d --no-deps api' || '' }}
-            ${{ steps.filter.outputs.web == 'true' && 'docker compose build web && docker compose up -d --no-deps web' || '' }}
-            ${{ steps.filter.outputs.job == 'true' && 'docker compose --profile jobs build refresher' || '' }}
+            ${{ steps.filter.outputs.api == 'true' && 'make deploy-api' || '' }}
+            ${{ steps.filter.outputs.web == 'true' && 'make deploy-web' || '' }}
+            ${{ steps.filter.outputs.job == 'true' && 'make deploy-jobs' || '' }}
             '
 
       - name: Healthcheck

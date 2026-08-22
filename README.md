@@ -280,6 +280,7 @@ plausibles y equivocados.
 | [`docs/PLAN.md`](docs/PLAN.md) | Fase 1: la API. Pasos y criterios de aceptación |
 | [`docs/FASE-2.md`](docs/FASE-2.md) | Fase 2: el `Refresher`, concurrencia del crawl y cadencia |
 | [`docs/PLAN-SIACHANGES.md`](docs/PLAN-SIACHANGES.md) | Reconciliar lo que el SIA deja de ofrecer |
+| [`docs/PLAN-ULTIMATE-SYNC.md`](docs/PLAN-ULTIMATE-SYNC.md) | Fase 3: sincronización continua de cupos (`--mode=live`) — medido, con runbook |
 
 ## Verificar contra el servidor
 

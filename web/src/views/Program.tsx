@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ArrowLeftRight,
   Check,
@@ -8,35 +8,42 @@ import {
   Ticket,
   TriangleAlert,
   X,
-} from 'lucide-react';
-import { routes } from '../api/client';
-import type { CoursesResponse, CourseSummary } from '../api/types';
-import { useApi } from '../hooks/useApi';
-import { useCatalogFilters } from '../hooks/useCatalogFilters';
-import { useCourseDetails } from '../hooks/useCourseDetails';
-import { usePlan } from '../hooks/usePlan';
-import { useScheduleConflicts } from '../hooks/useScheduleConflicts';
-import { useScheduleSelection } from '../hooks/useScheduleSelection';
-import { Layout } from '../components/Layout';
-import { AppLink } from '../components/AppLink';
-import { AvailabilityFields } from '../components/AvailabilityPicker';
-import { useConfirm } from '../components/Confirm';
-import { AddButton } from '../components/AddButton';
-import { Empty, Fault, Loading } from '../components/States';
-import { SearchInput } from '../components/SearchInput';
-import { SeatsFigure } from '../components/Seats';
-import { TableHead } from '../components/TableHead';
-import { Tooltip } from '../components/Tooltip';
-import type { TableCol } from '../lib/table';
-import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
-import { useTableSort } from '../hooks/useTableSort';
-import { fold, formatAge, sentence } from '../lib/format';
-import { classifyConflict, type SectionLike } from '../lib/conflicts';
-import { useDetailCache } from '../lib/detailCache';
-import { DEFAULT_AVAILABILITY, courseFitsAvailability, isAvailabilityActive } from '../lib/availability';
-import { itemId, selectionId } from '../lib/storage';
-import type { Screen } from '../state/nav';
-import './Program.css';
+} from "lucide-react";
+import { routes } from "../api/client";
+import type { CoursesResponse, CourseSummary } from "../api/types";
+import { useApi } from "../hooks/useApi";
+import { useCatalogFilters } from "../hooks/useCatalogFilters";
+import { useCourseDetails } from "../hooks/useCourseDetails";
+import { usePlan } from "../hooks/usePlan";
+import { useScheduleConflicts } from "../hooks/useScheduleConflicts";
+import { useScheduleSelection } from "../hooks/useScheduleSelection";
+import { Layout } from "../components/Layout";
+import { AppLink } from "../components/AppLink";
+import { AvailabilityFields } from "../components/AvailabilityPicker";
+import { useConfirm } from "../components/Confirm";
+import { AddButton } from "../components/AddButton";
+import { Empty, Fault, Loading } from "../components/States";
+import { SearchInput } from "../components/SearchInput";
+import { SeatsFigure } from "../components/Seats";
+import { TableHead } from "../components/TableHead";
+import { Tooltip } from "../components/Tooltip";
+import type { TableCol } from "../lib/table";
+import { SEATS_RANK, sortBy, type SortKey } from "../lib/sort";
+
+const STALE_SEATS_SECONDS =
+  Number(import.meta.env.VITE_STALE_SEATS_SECONDS) || 7200;
+import { useTableSort } from "../hooks/useTableSort";
+import { fold, formatAge, sentence } from "../lib/format";
+import { classifyConflict, type SectionLike } from "../lib/conflicts";
+import { useDetailCache } from "../lib/detailCache";
+import {
+  DEFAULT_AVAILABILITY,
+  courseFitsAvailability,
+  isAvailabilityActive,
+} from "../lib/availability";
+import { itemId, selectionId } from "../lib/storage";
+import type { Screen } from "../state/nav";
+import "./Program.css";
 
 /**
  * El catálogo de un plan. Hasta ~700 asignaturas (Medellín: 694).
@@ -45,7 +52,11 @@ import './Program.css';
  * misma respuesta, así que filtrar en el servidor costaría otra consulta al
  * SIA para mostrar menos de lo que ya tenemos.
  */
-export function Program({ screen }: { screen: Extract<Screen, { name: 'program' }> }) {
+export function Program({
+  screen,
+}: {
+  screen: Extract<Screen, { name: "program" }>;
+}) {
   const sel = screen.selection;
   const { level, campus, faculty, program } = sel;
 
@@ -66,7 +77,11 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
   const { selection: scheduleSelection } = useScheduleSelection();
   const hasSchedule = Object.keys(scheduleSelection).length > 0;
 
-  const path = routes.courses({ level, campus, faculty }, program, hasSchedule ? 'schedules' : undefined);
+  const path = routes.courses(
+    { level, campus, faculty },
+    program,
+    hasSchedule ? "schedules" : undefined,
+  );
   const { data, error, loading, elapsed, attempt, reload } =
     useApi<CoursesResponse>(path);
 
@@ -126,7 +141,10 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
    * esas pantallas no disparen ya solas.
    */
   const { rows: planRows } = useCourseDetails(plan.items);
-  const { blocks: chosenBlocks } = useScheduleConflicts(planRows, scheduleSelection);
+  const { blocks: chosenBlocks } = useScheduleConflicts(
+    planRows,
+    scheduleSelection,
+  );
 
   /**
    * Los grupos de cada materia que esta sesión conoce — del plan, de lo que
@@ -178,8 +196,8 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
         chosenBlocks,
         onlyOpen,
       });
-      if (mark === 'active') active.add(id);
-      else if (mark === 'potential') potential.add(id);
+      if (mark === "active") active.add(id);
+      else if (mark === "potential") potential.add(id);
     }
     return { active, potential };
   }, [data, courseId, sectionsById, scheduleSelection, chosenBlocks, onlyOpen]);
@@ -216,9 +234,9 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
         setScrollY(window.scrollY);
       });
     };
-    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
-      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener("scroll", onScroll);
       if (raf) cancelAnimationFrame(raf);
     };
   }, [setScrollY]);
@@ -229,11 +247,14 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
     const byTypology = new Map<string, number>();
     const byCredits = new Map<number, number>();
     for (const c of data?.courses ?? []) {
-      if (c.typology) byTypology.set(c.typology, (byTypology.get(c.typology) ?? 0) + 1);
+      if (c.typology)
+        byTypology.set(c.typology, (byTypology.get(c.typology) ?? 0) + 1);
       byCredits.set(c.credits, (byCredits.get(c.credits) ?? 0) + 1);
     }
     return {
-      typologies: [...byTypology.keys()].sort((a, b) => a.localeCompare(b, 'es')),
+      typologies: [...byTypology.keys()].sort((a, b) =>
+        a.localeCompare(b, "es"),
+      ),
       credits: [...byCredits.keys()].sort((a, b) => a - b),
       byTypology,
       byCredits,
@@ -241,18 +262,27 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
   }, [data]);
 
   /** Se recuerda entre visitas. `null` = como lo mandó el SIA, ya alfabético. */
-  const { sort, onSort } = useTableSort('catalog');
+  const { sort, onSort } = useTableSort("catalog");
 
   const shown = useMemo(() => {
     const needle = fold(q);
     const kept = (data?.courses ?? []).filter((c) => {
-      if (needle && !fold(c.name).includes(needle) && !fold(c.code).includes(needle)) return false;
+      if (
+        needle &&
+        !fold(c.name).includes(needle) &&
+        !fold(c.code).includes(needle)
+      )
+        return false;
       if (typols.size && !typols.has(c.typology)) return false;
       if (creds.size && !creds.has(c.credits)) return false;
       if (onlyOpen && !hasRoom(c)) return false;
       if (hideConflicts) {
         const id = courseId(c);
-        if (conflictCourseIds.active.has(id) || conflictCourseIds.potential.has(id)) return false;
+        if (
+          conflictCourseIds.active.has(id) ||
+          conflictCourseIds.potential.has(id)
+        )
+          return false;
       }
       if (isAvailabilityActive(availability)) {
         // Sin detalle a mano no se puede saber si encaja — se cae del
@@ -260,7 +290,8 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
         // filtrar: enseñar una materia que podría no encajar rompería la
         // confianza en el resultado.
         const sections = sectionsById[courseId(c)];
-        if (!sections || !courseFitsAvailability(sections, availability)) return false;
+        if (!sections || !courseFitsAvailability(sections, availability))
+          return false;
       }
       return true;
     });
@@ -280,7 +311,8 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
   ]);
 
   const total = data?.courses.length ?? 0;
-  const facetCount = typols.size + creds.size + (isAvailabilityActive(availability) ? 1 : 0);
+  const facetCount =
+    typols.size + creds.size + (isAvailabilityActive(availability) ? 1 : 0);
   const filtering = !!q || facetCount > 0 || onlyOpen || hideConflicts;
 
   /**
@@ -294,13 +326,18 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
    * alternarlo compone con el resto de chips igual que cualquier selección
    * manual.
    */
-  const libreTypology = facets.typologies.find((t) => t.startsWith('LIBRE'));
-  const nonLibreTypologies = facets.typologies.filter((t) => !t.startsWith('LIBRE'));
+  const libreTypology = facets.typologies.find((t) => t.startsWith("LIBRE"));
+  const nonLibreTypologies = facets.typologies.filter(
+    (t) => !t.startsWith("LIBRE"),
+  );
   const notLibreActive =
     nonLibreTypologies.length > 0 &&
     typols.size === nonLibreTypologies.length &&
     nonLibreTypologies.every((t) => typols.has(t));
-  const notLibreCount = nonLibreTypologies.reduce((n, t) => n + (facets.byTypology.get(t) ?? 0), 0);
+  const notLibreCount = nonLibreTypologies.reduce(
+    (n, t) => n + (facets.byTypology.get(t) ?? 0),
+    0,
+  );
   function toggleNotLibre() {
     pickTypology(notLibreActive ? new Set() : new Set(nonLibreTypologies));
   }
@@ -313,17 +350,22 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
    * nada. Elegir la última que cierra el conjunto completo lo vacía en vez
    * de completarlo — vuelve al estado real: sin filtro.
    */
-  function pickTypology(next: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>)) {
+  function pickTypology(
+    next:
+      | ReadonlySet<string>
+      | ((prev: ReadonlySet<string>) => ReadonlySet<string>),
+  ) {
     setTypols((prev) => {
-      const resolved = typeof next === 'function' ? next(prev) : next;
-      return resolved.size === facets.typologies.length && facets.typologies.length > 0
+      const resolved = typeof next === "function" ? next(prev) : next;
+      return resolved.size === facets.typologies.length &&
+        facets.typologies.length > 0
         ? new Set()
         : resolved;
     });
   }
 
   function clearAll() {
-    setQ('');
+    setQ("");
     setTypols(new Set());
     setCreds(new Set());
     setOnlyOpen(false);
@@ -352,12 +394,14 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
       const ok = await ask({
         title: `Cambiar al plan ${program}`,
         danger: true,
-        confirmLabel: 'Cambiar de plan',
+        confirmLabel: "Cambiar de plan",
         body: (
           <>
             <p>
-              Se va a borrar {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi
-              semestre, porque {n === 1 ? 'es' : 'son'} del plan <b>{selection?.programName}</b>.
+              Se va a borrar{" "}
+              {n === 1 ? "la materia guardada" : `las ${n} materias guardadas`}{" "}
+              en Mi semestre, porque {n === 1 ? "es" : "son"} del plan{" "}
+              <b>{selection?.programName}</b>.
             </p>
             <p>Sus grupos y su tipología son de ese plan, no de este.</p>
           </>
@@ -374,12 +418,12 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
       {foreign && selection && (
         <div className="stray" role="status">
           <p className="stray__text">
-            Estás mirando el plan <b>{program}</b>, y el tuyo es <b>{selection.programName}</b>.
-            Puedes mirar todo lo que quieras, pero para agregar materias al semestre tienes que
-            estar en tu plan.
+            Estás mirando el plan <b>{program}</b>, y el tuyo es{" "}
+            <b>{selection.programName}</b>. Puedes mirar todo lo que quieras,
+            pero para agregar materias al semestre tienes que estar en tu plan.
           </p>
           <div className="stray__actions">
-            <AppLink className="btn" to={{ name: 'program', selection }}>
+            <AppLink className="btn" to={{ name: "program", selection }}>
               <CornerUpLeft size={15} strokeWidth={1.75} aria-hidden="true" />
               volver al mío
             </AppLink>
@@ -398,13 +442,19 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
         </div>
         {total > 0 && (
           <p className="head__meta tnum">
-            {shown.length === total ? `${total} asignaturas` : `${shown.length} de ${total}`}
+            {shown.length === total
+              ? `${total} asignaturas`
+              : `${shown.length} de ${total}`}
           </p>
         )}
       </header>
 
       {loading && !data && (
-        <Loading elapsed={elapsed} attempt={attempt} what="Trayendo el catálogo" />
+        <Loading
+          elapsed={elapsed}
+          attempt={attempt}
+          what="Trayendo el catálogo"
+        />
       )}
       {error && <Fault error={error} level={level} onRetry={() => reload()} />}
 
@@ -424,13 +474,14 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
             <Tooltip
               content={
                 <p className="tt-body">
-                  Deja solo las que tienen cupo. Las que nunca se han consultado también se
-                  quedan: es mejor que sobre una a que se pierda una con cupos.
+                  Deja solo las que tienen cupo. Las que nunca se han consultado
+                  también se quedan: es mejor que sobre una a que se pierda una
+                  con cupos.
                 </p>
               }
             >
               <button
-                className={`chip ${onlyOpen ? 'is-on' : ''}`}
+                className={`chip ${onlyOpen ? "is-on" : ""}`}
                 onClick={() => setOnlyOpen((v) => !v)}
                 aria-pressed={onlyOpen}
               >
@@ -450,21 +501,25 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
             <Tooltip
               content={
                 <p className="tt-body">
-                  Oculta las materias a las que ya no les sirve ningún grupo, y aquellas cuyo
-                  grupo elegido choca con Mi horario. Se destacan igual en la lista mientras
-                  este chip está apagado.
+                  Oculta las materias a las que ya no les sirve ningún grupo, y
+                  aquellas cuyo grupo elegido choca con Mi horario. Se destacan
+                  igual en la lista mientras este chip está apagado.
                 </p>
               }
             >
               <button
-                className={`chip ${hideConflicts ? 'is-on' : ''}`}
+                className={`chip ${hideConflicts ? "is-on" : ""}`}
                 onClick={() => setHideConflicts((v) => !v)}
                 aria-pressed={hideConflicts}
               >
                 {hideConflicts ? (
                   <Check size={14} strokeWidth={2.5} aria-hidden="true" />
                 ) : (
-                  <TriangleAlert size={14} strokeWidth={1.75} aria-hidden="true" />
+                  <TriangleAlert
+                    size={14}
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                  />
                 )}
                 sin choques
               </button>
@@ -474,26 +529,39 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                 plegar esconda información: dice cuántas facetas hay puestas
                 sin tener que abrir a mirar. */}
             <button
-              className={`chip filters__toggle ${facetCount ? 'is-on' : ''}`}
+              className={`chip filters__toggle ${facetCount ? "is-on" : ""}`}
               onClick={() => setShowFacets((v) => !v)}
               aria-expanded={showFacets}
               aria-controls="facetas"
             >
-              <SlidersHorizontal size={14} strokeWidth={1.75} aria-hidden="true" />
+              <SlidersHorizontal
+                size={14}
+                strokeWidth={1.75}
+                aria-hidden="true"
+              />
               filtros
-              {facetCount > 0 && <span className="chip__code tnum">{facetCount}</span>}
+              {facetCount > 0 && (
+                <span className="chip__code tnum">{facetCount}</span>
+              )}
             </button>
 
             {filtering && (
               <Tooltip content={<p className="tt-title">Quitar los filtros</p>}>
-                <button className="toolbar__clear" onClick={clearAll} aria-label="Quitar los filtros">
+                <button
+                  className="toolbar__clear"
+                  onClick={clearAll}
+                  aria-label="Quitar los filtros"
+                >
                   <X size={15} strokeWidth={2} aria-hidden="true" />
                 </button>
               </Tooltip>
             )}
           </div>
 
-          <div className={`filters ${showFacets ? 'is-open' : ''}`} id="facetas">
+          <div
+            className={`filters ${showFacets ? "is-open" : ""}`}
+            id="facetas"
+          >
             <div className="filters__row">
               <span className="filters__label">tipología</span>
               <div className="chips">
@@ -508,12 +576,14 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                     }
                   >
                     <button
-                      className={`chip chip--sm ${typols.has(t) ? 'is-on' : ''}`}
+                      className={`chip chip--sm ${typols.has(t) ? "is-on" : ""}`}
                       onClick={() => pickTypology((s) => toggle(s, t))}
                       aria-pressed={typols.has(t)}
                     >
-                      {sentence(t.replace(/\s*\([^)]*\)\s*$/, ''))}
-                      <span className="chip__code tnum">{facets.byTypology.get(t)}</span>
+                      {sentence(t.replace(/\s*\([^)]*\)\s*$/, ""))}
+                      <span className="chip__code tnum">
+                        {facets.byTypology.get(t)}
+                      </span>
                     </button>
                   </Tooltip>
                 ))}
@@ -535,23 +605,29 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                     }
                   >
                     <button
-                      className={`chip chip--sm ${typols.has(libreTypology) ? 'is-on' : ''}`}
-                      onClick={() => pickTypology((s) => toggle(s, libreTypology))}
+                      className={`chip chip--sm ${typols.has(libreTypology) ? "is-on" : ""}`}
+                      onClick={() =>
+                        pickTypology((s) => toggle(s, libreTypology))
+                      }
                       aria-pressed={typols.has(libreTypology)}
                     >
-                      {sentence(libreTypology.replace(/\s*\([^)]*\)\s*$/, ''))}
-                      <span className="chip__code tnum">{facets.byTypology.get(libreTypology)}</span>
+                      {sentence(libreTypology.replace(/\s*\([^)]*\)\s*$/, ""))}
+                      <span className="chip__code tnum">
+                        {facets.byTypology.get(libreTypology)}
+                      </span>
                     </button>
                   </Tooltip>
                 )}
                 {nonLibreTypologies.length > 0 && (
                   <Tooltip
                     content={
-                      <p className="tt-body">Todas las tipologías del plan menos libre elección.</p>
+                      <p className="tt-body">
+                        Todas las tipologías del plan menos libre elección.
+                      </p>
                     }
                   >
                     <button
-                      className={`chip chip--sm ${notLibreActive ? 'is-on' : ''}`}
+                      className={`chip chip--sm ${notLibreActive ? "is-on" : ""}`}
                       onClick={toggleNotLibre}
                       aria-pressed={notLibreActive}
                     >
@@ -569,15 +645,21 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                 {facets.credits.map((n) => (
                   <Tooltip
                     key={n}
-                    content={<p className="tt-title">{n} {n === 1 ? 'crédito' : 'créditos'}</p>}
+                    content={
+                      <p className="tt-title">
+                        {n} {n === 1 ? "crédito" : "créditos"}
+                      </p>
+                    }
                   >
                     <button
-                      className={`chip chip--sm ${creds.has(n) ? 'is-on' : ''}`}
+                      className={`chip chip--sm ${creds.has(n) ? "is-on" : ""}`}
                       onClick={() => setCreds((s) => toggle(s, n))}
                       aria-pressed={creds.has(n)}
                     >
                       <span className="tnum">{n}</span>
-                      <span className="chip__code tnum">{facets.byCredits.get(n)}</span>
+                      <span className="chip__code tnum">
+                        {facets.byCredits.get(n)}
+                      </span>
                     </button>
                   </Tooltip>
                 ))}
@@ -589,7 +671,10 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                 está armando, no una caja aparte. */}
             <div className="filters__row">
               <span className="filters__label">horario</span>
-              <AvailabilityFields value={availability} onChange={setAvailability} />
+              <AvailabilityFields
+                value={availability}
+                onChange={setAvailability}
+              />
             </div>
           </div>
 
@@ -612,71 +697,92 @@ export function Program({ screen }: { screen: Extract<Screen, { name: 'program' 
                   // todavía no elegiste grupo y NINGUNO de los que hay te
                   // sirve — un aviso, antes de comprometerte.
                   const isActiveConflict = conflictCourseIds.active.has(id);
-                  const isPotentialConflict = conflictCourseIds.potential.has(id);
+                  const isPotentialConflict =
+                    conflictCourseIds.potential.has(id);
                   const inConflict = isActiveConflict || isPotentialConflict;
                   return (
-                  <li key={c.code}>
-                    <AppLink
-                      className={`row table__row ${isActiveConflict ? 'is-conflict' : ''} ${isPotentialConflict ? 'is-conflict-potential' : ''}`}
-                      to={{ name: 'course', selection: sel, code: c.code }}
-                    >
-                      <span className="row__code tnum col-code">{c.code}</span>
-                      <span className="row__name">
-                        {inConflict && (
-                          <Tooltip
-                            content={
-                              <p className="tt-body">
-                                {isActiveConflict
-                                  ? 'El grupo elegido choca con tu horario actual.'
-                                  : 'Ningún grupo de esta materia te sirve: todos chocan con tu horario actual.'}
-                              </p>
-                            }
-                          >
-                            <span
-                              className="row__conflict-icon"
-                              role="img"
-                              aria-label={
-                                isActiveConflict
-                                  ? 'El grupo elegido choca con tu horario actual'
-                                  : 'Ningún grupo de esta materia te sirve: todos chocan con tu horario actual'
+                    <li key={c.code}>
+                      <AppLink
+                        className={`row table__row ${isActiveConflict ? "is-conflict" : ""} ${isPotentialConflict ? "is-conflict-potential" : ""}`}
+                        to={{ name: "course", selection: sel, code: c.code }}
+                      >
+                        <span className="row__code tnum col-code">
+                          {c.code}
+                        </span>
+                        <span className="row__name">
+                          {inConflict && (
+                            <Tooltip
+                              content={
+                                <p className="tt-body">
+                                  {isActiveConflict
+                                    ? "El grupo elegido choca con tu horario actual."
+                                    : "Ningún grupo de esta materia te sirve: todos chocan con tu horario actual."}
+                                </p>
                               }
                             >
-                              <TriangleAlert size={13} strokeWidth={2} aria-hidden="true" />
+                              <span
+                                className="row__conflict-icon"
+                                role="img"
+                                aria-label={
+                                  isActiveConflict
+                                    ? "El grupo elegido choca con tu horario actual"
+                                    : "Ningún grupo de esta materia te sirve: todos chocan con tu horario actual"
+                                }
+                              >
+                                <TriangleAlert
+                                  size={13}
+                                  strokeWidth={2}
+                                  aria-hidden="true"
+                                />
+                              </span>
+                            </Tooltip>
+                          )}
+                          <Tooltip
+                            content={
+                              <p className="tt-title">{sentence(c.name)}</p>
+                            }
+                            onlyIfTruncated
+                          >
+                            <span className="row__name-text">
+                              {sentence(c.name)}
                             </span>
                           </Tooltip>
-                        )}
-                        <Tooltip content={<p className="tt-title">{sentence(c.name)}</p>} onlyIfTruncated>
-                          <span className="row__name-text">{sentence(c.name)}</span>
-                        </Tooltip>
-                      </span>
-                      <Tooltip
-                        content={
-                          <>
-                            <p className="tt-eyebrow">Tipología</p>
-                            <p className="tt-title">{c.typology}</p>
-                          </>
-                        }
-                      >
-                        <span className={`tag tag--${slugTypology(c.typology)} col-typ`}>
-                          {shortTypology(c.typology)}
                         </span>
-                      </Tooltip>
-                      <span className="row__credits tnum col-cr">{c.credits}</span>
-                      <SeatsCell seats={c.seats} askedAt={c.detail_fetched_at} />
-                      <AddButton
-                        item={{
-                          level,
-                          campus,
-                          program,
-                          faculty,
-                          code: c.code,
-                          name: c.name,
-                          credits: c.credits,
-                          typology: c.typology,
-                        }}
-                      />
-                    </AppLink>
-                  </li>
+                        <Tooltip
+                          content={
+                            <>
+                              <p className="tt-eyebrow">Tipología</p>
+                              <p className="tt-title">{c.typology}</p>
+                            </>
+                          }
+                        >
+                          <span
+                            className={`tag tag--${slugTypology(c.typology)} col-typ`}
+                          >
+                            {shortTypology(c.typology)}
+                          </span>
+                        </Tooltip>
+                        <span className="row__credits tnum col-cr">
+                          {c.credits}
+                        </span>
+                        <SeatsCell
+                          seats={c.seats}
+                          askedAt={c.detail_fetched_at}
+                        />
+                        <AddButton
+                          item={{
+                            level,
+                            campus,
+                            program,
+                            faculty,
+                            code: c.code,
+                            name: c.name,
+                            credits: c.credits,
+                            typology: c.typology,
+                          }}
+                        />
+                      </AppLink>
+                    </li>
                   );
                 })}
               </ul>
@@ -712,14 +818,19 @@ function SeatsCell({
   seats,
   askedAt,
 }: {
-  seats?: CourseSummary['seats'];
+  seats?: CourseSummary["seats"];
   askedAt?: string | null;
 }) {
   if (!seats) {
     if (!askedAt) {
       return (
         <Tooltip
-          content={<p className="tt-body">Nunca se le preguntó al SIA por esta asignatura. Ábrela para medir sus cupos.</p>}
+          content={
+            <p className="tt-body">
+              Nunca se le preguntó al SIA por esta asignatura. Ábrela para medir
+              sus cupos.
+            </p>
+          }
         >
           <span className="row__seats is-unknown col-seats">
             <HelpCircle size={15} strokeWidth={2} aria-hidden="true" />
@@ -731,13 +842,35 @@ function SeatsCell({
     // "Sin grupos" tampoco es para siempre: la UNAL puede programar oferta
     // mañana. Así que lleva su edad igual que todo lo demás — la del sello del
     // detalle, calculada acá porque el reloj del servidor solo sella los cupos.
-    const age = formatAge((Date.now() - Date.parse(askedAt)) / 1000);
+    const ageSeconds = (Date.now() - Date.parse(askedAt)) / 1000;
+
+    if (ageSeconds > STALE_SEATS_SECONDS) {
+      return (
+        <Tooltip
+          content={
+            <p className="tt-body">
+              Hace más de 2 horas que se midieron los cupos. Ábrela para volver
+              a preguntar.
+            </p>
+          }
+        >
+          <span className="row__seats is-unknown col-seats">
+            <HelpCircle size={15} strokeWidth={2} aria-hidden="true" />
+            <span className="sr-only">Cupos desactualizados</span>
+          </span>
+        </Tooltip>
+      );
+    }
+
+    const age = formatAge(ageSeconds);
     return (
       <Tooltip
         content={
           <>
             <p className="tt-title">Sin grupos programados</p>
-            <p className="tt-body">Consultado el {new Date(askedAt).toLocaleString('es-CO')}.</p>
+            <p className="tt-body">
+              Consultado el {new Date(askedAt).toLocaleString("es-CO")}.
+            </p>
           </>
         }
       >
@@ -764,16 +897,21 @@ function SeatsCell({
           </li>
           <li className="tt-row">
             <span>Medido</span>
-            <b>{new Date(seats.measured_at).toLocaleString('es-CO')}</b>
+            <b>{new Date(seats.measured_at).toLocaleString("es-CO")}</b>
           </li>
         </ul>
       }
     >
-      <span className={`row__seats col-seats ${seats.available === 0 ? 'is-zero' : 'is-open'}`}>
+      <span
+        className={`row__seats col-seats ${seats.available === 0 ? "is-zero" : "is-open"}`}
+      >
         {/* Sin animar: en el catálogo el número no cambia después de cargar, y
             313 filas aleteando en la primera pintura serían ruido y trabajo por
             nada. La forma y el color sí son los mismos que en la ficha. */}
-        <SeatsFigure available={seats.available} tone={seats.available === 0 ? 'empty' : 'ok'} />
+        <SeatsFigure
+          available={seats.available}
+          tone={seats.available === 0 ? "empty" : "ok"}
+        />
         <small className="tnum">{formatAge(seats.age_seconds)}</small>
       </span>
     </Tooltip>
@@ -786,19 +924,26 @@ function SeatsCell({
  */
 function sortKeyOf(c: CourseSummary, col: TableCol): SortKey {
   switch (col) {
-    case 'code':
+    case "code":
       return c.code;
-    case 'name':
+    case "name":
       return c.name;
-    case 'typology':
+    case "typology":
       return c.typology;
-    case 'credits':
+    case "credits":
       return c.credits;
-    case 'seats':
+    case "seats":
       if (!c.seats) {
         // El sello del detalle es lo único que separa 'no hay grupos' de
         // 'nadie preguntó': sin cupos y sin sello, no se midió nunca.
-        return c.detail_fetched_at ? SEATS_RANK.noOffer : SEATS_RANK.unknown;
+        if (
+          !c.detail_fetched_at ||
+          (Date.now() - Date.parse(c.detail_fetched_at)) / 1000 >
+            STALE_SEATS_SECONDS
+        ) {
+          return SEATS_RANK.unknown;
+        }
+        return SEATS_RANK.noOffer;
       }
       return c.seats.available === 0 ? SEATS_RANK.full : c.seats.available;
   }
@@ -824,7 +969,10 @@ function toggle<T>(set: ReadonlySet<T>, v: T): ReadonlySet<T> {
  */
 function hasRoom(c: CourseSummary): boolean {
   if (c.seats) return c.seats.available > 0;
-  return !c.detail_fetched_at;
+  return (
+    !c.detail_fetched_at ||
+    (Date.now() - Date.parse(c.detail_fetched_at)) / 1000 > STALE_SEATS_SECONDS
+  );
 }
 
 /** 'FUND. OBLIGATORIA (B)' → 'B'. La letra entre paréntesis es lo que informa. */
@@ -833,8 +981,8 @@ function shortTypology(t: string): string {
 }
 
 function slugTypology(t: string): string {
-  if (t.startsWith('LIBRE')) return 'libre';
-  if (t.includes('OBLIGATORIA')) return 'obligatoria';
-  if (t.includes('OPTATIVA')) return 'optativa';
-  return 'otra';
+  if (t.startsWith("LIBRE")) return "libre";
+  if (t.includes("OBLIGATORIA")) return "obligatoria";
+  if (t.includes("OPTATIVA")) return "optativa";
+  return "otra";
 }

@@ -50,6 +50,10 @@ export default defineConfig(({ mode }) => {
     env.VITE_INCIDENT_BANNER_OFF || process.env.VITE_INCIDENT_BANNER_OFF || '';
   process.env.VITE_INCIDENT_BANNER_OFF = bannerOff;
 
+  const staleSeats =
+    env.VITE_STALE_SEATS_SECONDS || process.env.VITE_STALE_SEATS_SECONDS || '7200';
+  process.env.VITE_STALE_SEATS_SECONDS = staleSeats;
+
   const apiTarget = env.VITE_API_TARGET || 'http://localhost:18080';
   const devPort = Number(env.VITE_DEV_PORT) || 5173;
 
@@ -58,6 +62,7 @@ export default defineConfig(({ mode }) => {
     define: {
       'import.meta.env.VITE_FETCH_COOLDOWN': JSON.stringify(cooldown),
       'import.meta.env.VITE_INCIDENT_BANNER_OFF': JSON.stringify(bannerOff),
+      'import.meta.env.VITE_STALE_SEATS_SECONDS': JSON.stringify(staleSeats),
     },
     server: {
       port: devPort,

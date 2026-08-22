@@ -65,6 +65,23 @@ limiting" = middleware + wiring + config + docker-compose + docs), commitear
 un commit único al final. Excepción: si la feature en sí es chica (un fix de
 una línea, un solo archivo), un commit está bien.
 
+**Regla dura, no solo preferencia: si un cambio se sostiene solo —compila,
+pasa sus tests, tiene sentido leído aparte— va en su propio commit.** No
+entra a un commit más grande solo porque nació en la misma sesión o el mismo
+plan. Señal concreta para partir: si al escribir el mensaje hace falta un
+"y también" o una lista de bullets para lo que el commit toca, son dos
+commits, no uno. Un plan con partes A/B/C/D (`docs/PLAN-*.md`) no es un
+commit por letra: cada archivo o grupo de archivos que cambia junto por
+necesidad de compilación (una firma de interfaz y todos sus implementadores y
+llamadores, por ejemplo) es su propio hito, aunque la letra del plan sea una
+sola.
+
+Excepción real, no excusa: cambios que **no pueden compilar por separado**
+—una firma de función y cada sitio que la implementa o la llama— van
+atómicamente en un solo commit, porque partirlos deja un commit intermedio
+que no construye. Fuera de eso, no hay atajo: dos archivos que cada uno
+tendría sentido revertido por separado son dos commits.
+
 Esto no es solo estilo — un historial partido por hito es más fácil de
 revisar, de revertir parcialmente, y deja claro qué `tipo:` corresponde a cada
 pedazo (un `refactor:` no debería ir mezclado en el mismo commit que un

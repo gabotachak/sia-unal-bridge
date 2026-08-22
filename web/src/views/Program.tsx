@@ -9,7 +9,7 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { routes } from '../api/client';
+import { routes, STALE_SEATS_SECONDS } from '../api/client';
 import type { CoursesResponse, CourseSummary } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { useCatalogFilters } from '../hooks/useCatalogFilters';
@@ -29,9 +29,6 @@ import { TableHead } from '../components/TableHead';
 import { Tooltip } from '../components/Tooltip';
 import type { TableCol } from '../lib/table';
 import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
-
-const STALE_SEATS_SECONDS =
-  Number(import.meta.env.VITE_STALE_SEATS_SECONDS) || 7200;
 import { useTableSort } from '../hooks/useTableSort';
 import { fold, formatAge, sentence } from '../lib/format';
 import { classifyConflict, type SectionLike } from '../lib/conflicts';

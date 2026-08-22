@@ -32,6 +32,18 @@ export type Result<T> = {
  */
 export const FETCH_COOLDOWN = Number(import.meta.env.VITE_FETCH_COOLDOWN) || 300;
 
+/**
+ * Cuánto puede tener un dato antes de que Program/Course lo pidan de nuevo
+ * con `?max_age=`, en vez de servir lo que Postgres tenga aunque sea viejo.
+ *
+ * NO es un umbral del cliente sobre datos que ya llegaron — eso lo decidía
+ * un `useEffect` que reimplementaba en el front lo que `?max_age=` ya hace
+ * en el servidor (docs/PLAN-SIACHANGES.md A3). Es la frescura que este front
+ * le PIDE a la API en la petición normal; la autoridad sigue siendo el
+ * servidor, igual que con FETCH_COOLDOWN.
+ */
+export const STALE_SEATS_SECONDS = Number(import.meta.env.VITE_STALE_SEATS_SECONDS) || 1800;
+
 /** Un error de la API con su significado, no un `Error` genérico. */
 export class ApiError extends Error {
   status: number;

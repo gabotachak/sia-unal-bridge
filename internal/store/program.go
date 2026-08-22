@@ -25,7 +25,8 @@ func (s *Store) UpsertProgram(ctx context.Context, p catalog.Program) (catalog.P
 			faculty_name = EXCLUDED.faculty_name,
 			campus_idx = EXCLUDED.campus_idx,
 			faculty_idx = EXCLUDED.faculty_idx,
-			program_idx = EXCLUDED.program_idx
+			program_idx = EXCLUDED.program_idx,
+			disabled_at = NULL
 		RETURNING id, catalog_fetched_at`,
 		p.CampusCode, p.FacultyCode, p.Code, p.LevelSlug, p.Name, p.CampusName, p.FacultyName,
 		p.LevelIdx, p.CampusIdx, p.FacultyIdx, p.ProgramIdx,
@@ -41,7 +42,8 @@ func (s *Store) Program(ctx context.Context, campusCode, facultyCode, code strin
 	err := s.pool.QueryRow(ctx, `
 		SELECT id, campus_code, faculty_code, code, level_slug, name, campus_name, faculty_name,
 		       level_idx, campus_idx, faculty_idx, program_idx, catalog_fetched_at
-		FROM program WHERE campus_code = $1 AND faculty_code = $2 AND code = $3`,
+		FROM program WHERE campus_code = $1 AND faculty_code = $2 AND code = $3
+		  AND disabled_at IS NULL`,
 		campusCode, facultyCode, code,
 	).Scan(&p.ID, &p.CampusCode, &p.FacultyCode, &p.Code, &p.LevelSlug, &p.Name, &p.CampusName, &p.FacultyName,
 		&p.LevelIdx, &p.CampusIdx, &p.FacultyIdx, &p.ProgramIdx, &p.CatalogFetchedAt)
@@ -69,6 +71,7 @@ func (s *Store) Programs(ctx context.Context, campusCode, facultyCode, levelSlug
 		WHERE ($1 = '' OR campus_code = $1)
 		  AND ($2 = '' OR faculty_code = $2)
 		  AND ($3 = '' OR level_slug = $3)
+		  AND disabled_at IS NULL
 		ORDER BY campus_code, name`,
 		campusCode, facultyCode, levelSlug,
 	)
@@ -99,6 +102,7 @@ func (s *Store) ProgramsOfferingCourse(ctx context.Context, campusCode, code str
 		FROM program p
 		JOIN course_program cp ON cp.program_id = p.id
 		WHERE cp.code = $2 AND ($1 = '' OR p.campus_code = $1)
+		  AND p.disabled_at IS NULL AND cp.disabled_at IS NULL
 		ORDER BY p.name`,
 		campusCode, code,
 	)

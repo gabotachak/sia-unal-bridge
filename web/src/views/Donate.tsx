@@ -43,46 +43,59 @@ export function Donate() {
           volver
         </AppLink>
 
-        <HeartHandshake
-          className="donate__icon"
-          size={32}
-          strokeWidth={1.5}
-          aria-hidden="true"
-        />
+        <div className="donate__content">
+          <div className="donate__text">
+            <HeartHandshake
+              className="donate__icon"
+              size={32}
+              strokeWidth={1.5}
+              aria-hidden="true"
+            />
 
-        <p className="eyebrow rise">gracias</p>
-        <h1 className="donate__title rise" style={{ animationDelay: "60ms" }}>
-          Si esto te <em>sirvió</em>
-        </h1>
-        <p className="donate__lead rise" style={{ animationDelay: "120ms" }}>
-          SIA Bridge es gratis, sin cuentas y sin anuncios. Vive en un servidor
-          que alguien tiene en la sala de su casa. Si facilité la tarde de
-          inscripción, puedes invitarme un café aquí. 👇
-        </p>
-
-        <div className="donate__card rise" style={{ animationDelay: "180ms" }}>
-          <img
-            className="donate__qr"
-            src="/donate-qr.webp"
-            width={723}
-            height={881}
-            alt="Código QR Bre-B para donar a NEQUIGAB107"
-          />
-
-          <div className="donate__key">
-            <span className="donate__key-label">o con tu llave Bre-B</span>
-            <button
-              type="button"
-              className="donate__key-value tnum"
-              onClick={copyKey}
+            <p className="eyebrow rise">gracias</p>
+            <h1
+              className="donate__title rise"
+              style={{ animationDelay: "60ms" }}
             >
-              <span>{BRE_B_KEY}</span>
-              {copied ? (
-                <Check size={15} strokeWidth={2} aria-hidden="true" />
-              ) : (
-                <Copy size={15} strokeWidth={1.75} aria-hidden="true" />
-              )}
-            </button>
+              Si esto te <em>sirvió</em>
+            </h1>
+            <p
+              className="donate__lead rise"
+              style={{ animationDelay: "120ms" }}
+            >
+              SIA Bridge es gratis, sin cuentas y sin anuncios. Vive en un
+              servidor que alguien tiene en la sala de su casa. Si facilité la
+              tarde de inscripción, puedes invitarme un café aquí. <span className="emoji-mobile">👇</span><span className="emoji-desktop">👉</span>
+            </p>
+          </div>
+
+          <div
+            className="donate__card rise"
+            style={{ animationDelay: "180ms" }}
+          >
+            <img
+              className="donate__qr"
+              src="/donate-qr.webp"
+              width={723}
+              height={881}
+              alt="Código QR Bre-B para donar a NEQUIGAB107"
+            />
+
+            <div className="donate__key">
+              <span className="donate__key-label">o con tu llave Bre-B</span>
+              <button
+                type="button"
+                className="donate__key-value tnum"
+                onClick={copyKey}
+              >
+                <span>{BRE_B_KEY}</span>
+                {copied ? (
+                  <Check size={15} strokeWidth={2} aria-hidden="true" />
+                ) : (
+                  <Copy size={15} strokeWidth={1.75} aria-hidden="true" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>

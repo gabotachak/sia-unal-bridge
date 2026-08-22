@@ -20,6 +20,8 @@ import { itemId } from '../lib/storage';
 import type { Screen } from '../state/nav';
 import './Course.css';
 
+const STALE_SEATS_SECONDS = Number(import.meta.env.VITE_STALE_SEATS_SECONDS) || 7200;
+
 export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }> }) {
   const { selection: sel, code, from } = screen;
   const { level, campus, faculty, program } = sel;
@@ -112,6 +114,20 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
     setCooldownUntil(Date.now() + FETCH_COOLDOWN * 1000);
     reload(routes.course(scope, program, code, 0));
   }
+
+  // Auto-actualizar si lleva mucho tiempo sin grupos
+  useEffect(() => {
+    if (!data) return;
+    if (data.sections.length > 0) return;
+    
+    const at = Date.parse(data.fetched_at);
+    if (!Number.isFinite(at)) return;
+    
+    const ageSeconds = (Date.now() - at) / 1000;
+    if (ageSeconds > STALE_SEATS_SECONDS && cooldownUntil <= Date.now()) {
+      measureAll();
+    }
+  }, [data, cooldownUntil, scope, program, code, reload]);
 
   /**
    * Un 429 del cooldown no es un fallo: la asignatura sigue en pantalla y el

@@ -111,6 +111,20 @@ type Refresh struct {
 	CatalogMaxAge time.Duration
 	DetailMaxAge  time.Duration
 	HotSetSize    int
+
+	// Live is the --mode=live daemon's own knobs (docs/PLAN-ULTIMATE-SYNC.md
+	// fase C.1). It is a separate group, not more fields bolted onto the
+	// ones above, because live runs as a continuous loop instead of a cron
+	// sweep and none of the fields above (MaxDuration, HotSetSize, ...)
+	// apply to it.
+	LiveEnabled         bool
+	LiveWorkers         int
+	LiveBatch           int
+	LiveHotInterval     time.Duration
+	LiveWarmInterval    time.Duration
+	LiveColdInterval    time.Duration
+	LiveNightFactor     float64
+	LiveRechecksPerHour int
 }
 
 func LoadRefresh() (Refresh, error) {
@@ -145,6 +159,35 @@ func LoadRefresh() (Refresh, error) {
 		return Refresh{}, fmt.Errorf("REFRESH_HOT_SET_SIZE: must be a positive integer, got %q", os.Getenv("REFRESH_HOT_SET_SIZE"))
 	}
 
+	liveWorkers, err := strconv.Atoi(getenv("REFRESH_LIVE_WORKERS", "2"))
+	if err != nil || liveWorkers <= 0 {
+		return Refresh{}, fmt.Errorf("REFRESH_LIVE_WORKERS: must be a positive integer, got %q", os.Getenv("REFRESH_LIVE_WORKERS"))
+	}
+	liveBatch, err := strconv.Atoi(getenv("REFRESH_LIVE_BATCH", "100"))
+	if err != nil || liveBatch <= 0 {
+		return Refresh{}, fmt.Errorf("REFRESH_LIVE_BATCH: must be a positive integer, got %q", os.Getenv("REFRESH_LIVE_BATCH"))
+	}
+	liveHot, err := time.ParseDuration(getenv("REFRESH_LIVE_HOT_INTERVAL", "5m"))
+	if err != nil {
+		return Refresh{}, fmt.Errorf("REFRESH_LIVE_HOT_INTERVAL: %w", err)
+	}
+	liveWarm, err := time.ParseDuration(getenv("REFRESH_LIVE_WARM_INTERVAL", "30m"))
+	if err != nil {
+		return Refresh{}, fmt.Errorf("REFRESH_LIVE_WARM_INTERVAL: %w", err)
+	}
+	liveCold, err := time.ParseDuration(getenv("REFRESH_LIVE_COLD_INTERVAL", "6h"))
+	if err != nil {
+		return Refresh{}, fmt.Errorf("REFRESH_LIVE_COLD_INTERVAL: %w", err)
+	}
+	liveNightFactor, err := strconv.ParseFloat(getenv("REFRESH_LIVE_NIGHT_FACTOR", "0.25"), 64)
+	if err != nil || liveNightFactor <= 0 {
+		return Refresh{}, fmt.Errorf("REFRESH_LIVE_NIGHT_FACTOR: must be a positive number, got %q", os.Getenv("REFRESH_LIVE_NIGHT_FACTOR"))
+	}
+	liveRechecks, err := strconv.Atoi(getenv("REFRESH_LIVE_RECHECKS_PER_HOUR", "20"))
+	if err != nil || liveRechecks <= 0 {
+		return Refresh{}, fmt.Errorf("REFRESH_LIVE_RECHECKS_PER_HOUR: must be a positive integer, got %q", os.Getenv("REFRESH_LIVE_RECHECKS_PER_HOUR"))
+	}
+
 	return Refresh{
 		Enabled:       getenv("REFRESH_ENABLED", "true") != "false",
 		Workers:       workers,
@@ -154,6 +197,15 @@ func LoadRefresh() (Refresh, error) {
 		CatalogMaxAge: catalogMaxAge,
 		DetailMaxAge:  detailMaxAge,
 		HotSetSize:    hotSet,
+
+		LiveEnabled:         getenv("REFRESH_LIVE_ENABLED", "false") == "true",
+		LiveWorkers:         liveWorkers,
+		LiveBatch:           liveBatch,
+		LiveHotInterval:     liveHot,
+		LiveWarmInterval:    liveWarm,
+		LiveColdInterval:    liveCold,
+		LiveNightFactor:     liveNightFactor,
+		LiveRechecksPerHour: liveRechecks,
 	}, nil
 }
 

@@ -276,6 +276,9 @@ func (f *fakeStore) CoursesNeedingVisibility(context.Context, int64, time.Durati
 func (f *fakeStore) SeatsHotSet(context.Context, string, int) ([]catalog.CourseRef, error) {
 	return nil, nil
 }
+func (f *fakeStore) SeatsByDebt(context.Context, string, time.Duration, time.Duration, time.Duration, int) ([]catalog.CourseRef, error) {
+	return nil, nil
+}
 func (f *fakeStore) RecordDemand(_ context.Context, campusCode, code string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

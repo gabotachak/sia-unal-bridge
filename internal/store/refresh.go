@@ -124,6 +124,80 @@ func (s *Store) SeatsHotSet(ctx context.Context, campusCode string, limit int) (
 	return out, rows.Err()
 }
 
+// SeatsByDebt is the live loop's work list: the courses whose seats are most
+// overdue relative to the target interval of their tier.
+//
+//	debt = (now - seats_checked_at) / target_interval_of_its_tier
+//
+// One comparable number across tiers, so a hot course 6 min late outranks a
+// cold one 5 h late — which is the right answer. Only courses with debt >= 1
+// are returned: below that they are inside their target and there is
+// nothing to do.
+//
+// The plan each course is measured from is the LOWEST program_id that can
+// see it, deliberately stable: UpsertDetail reconciles section_program for
+// the plan that made the POST, so a plan that changes between cycles would
+// turn the visibility subset of DATA-MODEL.md decision 6 into permanent
+// flapping (docs/PLAN-ULTIMATE-SYNC.md decisión 6).
+func (s *Store) SeatsByDebt(ctx context.Context, term string, hot, warm, cold time.Duration, limit int) ([]catalog.CourseRef, error) {
+	rows, err := s.pool.Query(ctx, `
+		WITH agg AS (
+		    SELECT sec.campus_code, sec.code,
+		           max(sec.seats_checked_at) AS checked_at,
+		           min(cs.available_seats)   AS min_seats,
+		           max(cs.measured_at)       AS changed_at
+		    FROM section sec
+		    JOIN current_seats cs ON cs.section_id = sec.id
+		    WHERE sec.term = $1
+		    GROUP BY 1, 2
+		), tiered AS (
+		    SELECT a.campus_code, a.code, a.checked_at,
+		           CASE
+		             WHEN d.last_requested_at > now() - interval '1 hour' THEN $2::double precision
+		             WHEN a.changed_at        > now() - interval '1 hour' THEN $2::double precision
+		             WHEN d.last_requested_at > now() - interval '7 days' THEN $3::double precision
+		             WHEN a.min_seats <= 3                                THEN $3::double precision
+		             ELSE                                                      $4::double precision
+		           END AS target_s
+		    FROM agg a
+		    LEFT JOIN course_demand d
+		           ON d.campus_code = a.campus_code AND d.code = a.code
+		), scored AS (
+		    SELECT t.campus_code, t.code,
+		           extract(epoch FROM now() - coalesce(t.checked_at, 'epoch'::timestamptz)) / t.target_s AS debt
+		    FROM tiered t
+		)
+		SELECT program_id, code, name, typology, debt FROM (
+		    SELECT DISTINCT ON (s.campus_code, s.code)
+		           cp.program_id, s.code, c.name, coalesce(cp.typology, '') AS typology, s.debt
+		    FROM scored s
+		    JOIN course c          ON c.campus_code  = s.campus_code AND c.code  = s.code
+		    JOIN course_program cp ON cp.campus_code = s.campus_code AND cp.code = s.code
+		                          AND cp.disabled_at IS NULL
+		    WHERE s.debt >= 1
+		    ORDER BY s.campus_code, s.code, cp.program_id
+		) t
+		ORDER BY debt DESC
+		LIMIT $5`,
+		term, hot.Seconds(), warm.Seconds(), cold.Seconds(), limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("store: SeatsByDebt: %w", err)
+	}
+	defer rows.Close()
+
+	var out []catalog.CourseRef
+	for rows.Next() {
+		ref := catalog.CourseRef{HadSections: true}
+		var debt float64
+		if err := rows.Scan(&ref.ProgramID, &ref.Code, &ref.Name, &ref.Typology, &debt); err != nil {
+			return nil, fmt.Errorf("store: SeatsByDebt: scan: %w", err)
+		}
+		out = append(out, ref)
+	}
+	return out, rows.Err()
+}
+
 // RecordDemand is the counter the hot set is built from. Only httpapi calls
 // it: "las que tienen detail_fetched_at" works today only because a client
 // is the sole writer, and stops working the moment the global sweep stamps

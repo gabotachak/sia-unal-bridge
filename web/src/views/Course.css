@@ -67,6 +67,22 @@
   font-size: var(--t-small);
 }
 
+.course__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-xs);
+  margin: 0 0 var(--gap);
+  padding: var(--gap-sm) var(--gap);
+  border-radius: var(--radius);
+  background: var(--warn-soft);
+  color: var(--warn-dark, var(--warn));
+  font-size: var(--t-small);
+}
+.course__warning svg {
+  flex: none;
+  margin-top: 0.1rem;
+}
+
 /* ── Barra de los grupos ────────────────────────────────────────── */
 
 .groups__bar {

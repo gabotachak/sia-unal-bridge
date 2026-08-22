@@ -9,11 +9,19 @@ Nacional de Colombia). El SIA solo expone el catálogo mediante una app Oracle A
 estado de sesión en servidor y navegación por POSTs de formulario encadenados. Este
 proyecto traduce eso a JSON.
 
-**Estado: API en pie + fase 2 (`Refresher`) implementada.** Read-through de referencia,
-catálogo, detalle y cupos sobre Postgres, y un Job por cron que llena la cache antes de
-que un cliente pague el miss. La ingeniería inversa del protocolo está completa y
-verificada contra producción (2026-08-15, ampliada el 2026-08-17), igual que el
-funcionamiento multi-sede (Bogotá, Medellín, Amazonia, Palmira, La Paz).
+**Estado: en producción.** Tres piezas en este repo:
+
+- **API** (`cmd/bridge` + `internal/`) — read-through de referencia, catálogo, detalle
+  y cupos sobre Postgres. Contrato en `internal/httpapi/openapi.yaml`, servido en
+  `/v1/docs`.
+- **`Refresher`** (`cmd/refresher`) — el Job por cron de la fase 2, que llena la cache
+  antes de que un cliente pague el miss.
+- **Interfaz** (`web/`) — React + TypeScript. Habla la misma API pública que cualquier
+  otro cliente: **nunca** toca Postgres ni importa nada de `internal/`.
+
+La ingeniería inversa del protocolo está completa y verificada contra producción
+(2026-08-15, ampliada el 2026-08-17), igual que el funcionamiento multi-sede (Bogotá,
+Medellín, Amazonia, Palmira, La Paz).
 
 **La sede es un segmento obligatorio de la ruta**: `/v1/campuses/{campus}/…`. No hay
 sede ni nivel privilegiado en el código; las dos listas salen de sus dropdowns y se
@@ -34,12 +42,13 @@ formato no rompe nada, pero deja el deploy sin Release ni changelog.
 
 ## Antes de escribir código
 
-Lee **`docs/GOTCHAS.md`** completo. No es opcional. Son 39 trampas verificadas contra
-el servidor real, varias de las cuales fallan **en silencio** (devuelven datos
-plausibles pero equivocados). El proyecto anterior murió por asumir mal cuatro de ellas.
+Lee **`docs/GOTCHAS.md`** completo. No es opcional. Son trampas verificadas contra el
+servidor real, varias de las cuales fallan **en silencio** (devuelven datos plausibles
+pero equivocados). El proyecto anterior murió por asumir mal cuatro de ellas. El
+documento crece: cuántas hay y cuál es la última se leen ahí, no acá.
 
-Las cuatro que más código han roto (y §34–§39, que las destapó el Job de la fase 2 en
-sedes y niveles que la API nunca había recorrido):
+Las cuatro que más código han roto (más las que destapó el Job de la fase 2 en sedes y
+niveles que la API nunca había recorrido, y §40, encontrada en vivo el 2026-08-21):
 
 1. **La región de detalle está numerada y el número sube.** Volver es
    `pt1:r1:<N>:cb4`, con `N` leído de la respuesta del detalle. Con `1` fijo, la
@@ -65,15 +74,22 @@ sedes y niveles que la API nunca había recorrido):
 | `docs/FASE-2.md` | **La fase 2: el Job, su concurrencia, su cadencia y lo medido al implementarla** |
 | `docs/ARCH.md` | Arquitectura: puertos, read-through, pool de sesiones, concurrencia |
 | `docs/API.md` | Contrato HTTP: endpoints, IDs públicos, frescura, errores |
-| `docs/LAYOUT.md` | Árbol de paquetes Go y librerías — propuesta, sin implementar |
+| `docs/LAYOUT.md` | Árbol de paquetes Go: qué vive en cada uno y por qué |
 | `docs/PROTOCOL.md` | Handshake ADF completo con cuerpos de petición reales |
 | `docs/FIELDS.md` | Componentes ADF, opciones de cada dropdown, mapeo a columnas |
-| `docs/GOTCHAS.md` | Las 39 trampas |
+| `docs/GOTCHAS.md` | Las trampas verificadas contra el servidor |
 | `docs/DATA-MODEL.md` | Esquema Postgres + structs de Go |
 | `docs/OPEN-QUESTIONS.md` | Qué está verificado y qué no. Léelo antes de asumir |
 | `docs/DEVELOPMENT.md` | Entorno: Docker, Postgres, cómo replicar el flujo |
+| `docs/PLAN-PRODUCTION.md` | Cómo esto pasa de localhost al server |
+| `docs/PLAN-SIACHANGES.md` | Reconciliar lo que el SIA deja de ofrecer |
+| `web/README.md`, `docs/PLAN-FRONTEND.md` | La interfaz: cómo correrla, y su plan |
+| `internal/httpapi/openapi.yaml` | **El contrato que manda.** `docs/API.md` explica el porqué, no la forma |
+| `.env.example` | **La fuente de verdad de puertos y variables.** Ningún doc los repite |
 | `bruno/sia-catalogo/` | Colección Bruno: el flujo ADF crudo, a mano contra el SIA |
-| `bruno/bridge-api/` | Colección Bruno: los 15 endpoints de esta API |
+| `bruno/bridge-api/` | Colección Bruno: esta API, endpoint por endpoint |
+
+El índice completo, agrupado por para-qué-lo-abrís, está en `README.md`.
 
 ## Arquitectura acordada
 

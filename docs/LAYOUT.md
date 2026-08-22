@@ -1,10 +1,12 @@
 # Estructura del código y dependencias
 
-Propuesta de árbol de archivos y librerías. Todavía no hay código: esto es para revisar
-antes de escribirlo.
+Qué vive en cada paquete de Go y por qué está partido así. Traduce a código la
+arquitectura de [ARCH.md](ARCH.md) y el contrato de [API.md](API.md). Los
+identificadores van en inglés; esta documentación en español.
 
-Traduce a paquetes de Go la arquitectura de [ARCH.md](ARCH.md) y el contrato de
-[API.md](API.md). Los identificadores van en inglés; esta documentación en español.
+> **Este árbol describe el código que existe, no una propuesta.** Nació como plan y se
+> implementó casi tal cual; donde el árbol y el repo difieran, manda el repo — un
+> `find cmd internal -name '*.go'` lo resuelve en un segundo.
 
 ---
 
@@ -124,7 +126,7 @@ devuelven, y está bien: dependen del dominio, que apunta hacia adentro.)
 
 ## Por qué `internal/sia` está partido así
 
-Es el paquete gordo y debe serlo: ahí viven las 39 trampas de
+Es el paquete gordo y debe serlo: ahí viven las trampas de
 [GOTCHAS.md](GOTCHAS.md). Está dividido por **fase del protocolo**, no por capa
 técnica, para que cada trampa tenga un archivo obvio donde vivir y donde buscarla.
 

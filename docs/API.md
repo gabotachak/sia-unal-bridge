@@ -5,6 +5,12 @@ español.
 
 Base: `/v1`. Todo JSON, `UTF-8`.
 
+> **La forma exacta la define [`../internal/httpapi/openapi.yaml`](../internal/httpapi/openapi.yaml)**
+> — OpenAPI 3.1, embebido en el binario y servido en `/v1/docs`, así que la instancia
+> que corre siempre describe su propia versión. Este documento explica el **porqué** de
+> cada decisión (qué identifica un recurso, cómo se mide la frescura, qué significa cada
+> error) y no repite los esquemas: donde los dos discrepen, manda el YAML.
+
 ---
 
 ## Por qué REST
@@ -227,6 +233,11 @@ elige. Quien no quiera manejarlo, usa la ruta canónica.
 | `GET` | `/v1/healthz` | liveness |
 | `GET` | `/v1/status` | cobertura de la cache, estado de conexiones vivas y **última corrida del `Refresher`** |
 | `GET` | `/v1/version` | tag semver y commit del build corriendo (`{"version","commit"}`) — ver `docs/COMMANDS.md` |
+| `GET` | `/v1/openapi.yaml` | el contrato, embebido en el binario |
+| `GET` | `/v1/docs` | Swagger UI sobre ese contrato (con sus estáticos bajo `/v1/docs/`) |
+
+Los dos últimos se sirven desde el propio binario, sin CDN ni red: una instancia
+aislada documenta su versión sin depender de nada externo.
 
 ---
 

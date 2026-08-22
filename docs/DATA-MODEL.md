@@ -6,6 +6,12 @@ Los literales del SIA se citan tal cual porque son datos, no texto nuestro.
 Cada decisión de aquí sale de algo verificado contra el servidor.
 Referencias a [GOTCHAS.md](GOTCHAS.md).
 
+> **El esquema que corre es la suma de [`../migrations/`](../migrations/)**, no el DDL
+> de este documento. El DDL de acá lleva los comentarios que explican *por qué* cada
+> columna es como es —eso es lo que aporta— pero una migración posterior puede haber
+> agregado columnas o índices que no estén transcritos. Donde los dos discrepen, manda
+> `migrations/`.
+
 ---
 
 ## Por qué relacional
@@ -62,6 +68,14 @@ CREATE TABLE course (
     fetched_at  timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (campus_code, code)
 );
+
+-- Índice de búsqueda (migración 00003). SearchCourses hace `name ILIKE '%...%'`
+-- y el comodín inicial descarta cualquier btree: medido, Seq Scan completo sobre
+-- 28 246 filas, 41 ms por búsqueda. Y la búsqueda global NUNCA consulta al SIA
+-- (API.md), así que está 100% expuesta a la carga de estudiantes. Con GIN de
+-- trigramas: 0.56 ms, Bitmap Index Scan.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX course_name_trgm_idx ON course USING gin (name gin_trgm_ops);
 
 CREATE TABLE program (                     -- a degree program (UNAL "carrera")
     id           bigserial PRIMARY KEY,

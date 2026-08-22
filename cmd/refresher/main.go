@@ -1,11 +1,12 @@
-// Command refresher runs one sweep of the SIA catalog and exits. It is the
-// wiring for internal/refresher — config → store → its OWN pool → Service →
-// Refresher — and holds no logic, same rule as cmd/bridge.
+// Command refresher runs one sweep of the SIA catalog and exits (cron modes),
+// or loops continuously until SIGTERM (--mode=live). It is the wiring for
+// internal/refresher — config → store → its OWN pool → Service → Refresher —
+// and holds no logic, same rule as cmd/bridge.
 //
 // Its own pool, not the API's: a detail sweep occupies its connections for
 // hours, and sharing would make every real user request compete with it and
 // come back 503 busy — the error docs/API.md reserves for spikes, served for
-// nine hours straight. The invariant is conexiones(api) + conexiones(job) ≤ 8.
+// nine hours straight.
 package main
 
 import (
@@ -26,7 +27,7 @@ import (
 )
 
 func main() {
-	mode := flag.String("mode", "", "reference | catalog | detail | seats")
+	mode := flag.String("mode", "", "reference | catalog | detail | seats | live")
 	scope := flag.String("scope", "", "detail: global | plan · seats: hot")
 	campus := flag.String("campus", "", "narrow the sweep to one sede, e.g. 1101")
 	workers := flag.Int("workers", 0, "goroutines and connections (default REFRESH_WORKERS)")
@@ -34,7 +35,7 @@ func main() {
 	flag.Parse()
 
 	if *mode == "" {
-		slog.Error("refresher: --mode is required", "modes", "reference|catalog|detail|seats")
+		slog.Error("refresher: --mode is required", "modes", "reference|catalog|detail|seats|live")
 		os.Exit(2)
 	}
 
@@ -57,6 +58,14 @@ func main() {
 		return
 	}
 
+	// Live-mode guard: REFRESH_LIVE_ENABLED defaults to false so the container
+	// can be deployed without starting to measure seats immediately. Same
+	// pattern as REFRESH_ENABLED: exit 0, no SIA connections.
+	if *mode == refresher.ModeLive && !rcfg.LiveEnabled {
+		slog.Info("refresher: REFRESH_LIVE_ENABLED=false, live mode not started")
+		return
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -69,7 +78,9 @@ func main() {
 
 	// One advisory lock per mode: if the previous run is still alive, this
 	// one leaves with code 0 and a log instead of queueing up behind it and
-	// doubling the load on the SIA.
+	// doubling the load on the SIA. For --mode=live the lock is held for the
+	// entire lifetime of the process, which prevents two live daemons from
+	// running at once.
 	release, ok, err := st.TryLock(ctx, "refresh:"+*mode)
 	if err != nil {
 		slog.Error("refresher: advisory lock", "err", err)
@@ -92,13 +103,25 @@ func main() {
 	}
 
 	poolSize := rcfg.PoolSize
-	if opts.Workers > poolSize {
-		poolSize = opts.Workers
+	if *mode == refresher.ModeLive {
+		// Live uses its own worker count from config.
+		if rcfg.LiveWorkers > 0 {
+			opts.Workers = rcfg.LiveWorkers
+		}
+		if opts.Workers > poolSize {
+			poolSize = opts.Workers
+		}
+	} else {
+		if opts.Workers > poolSize {
+			poolSize = opts.Workers
+		}
 	}
+
 	slog.Info("refresher: bootstrapping its own SIA pool", "size", poolSize, "api_pool", cfg.SIAPoolSize)
 	if poolSize+cfg.SIAPoolSize > maxTotalConnections {
-		slog.Warn("refresher: over the measured ceiling of concurrent SIA sessions; real requests may get 503 busy",
-			"refresher", poolSize, "api", cfg.SIAPoolSize, "ceiling", maxTotalConnections)
+		slog.Warn("refresher: over our reserved margin of concurrent SIA sessions; real requests may get 503 busy",
+			"refresher", poolSize, "api", cfg.SIAPoolSize, "margin", maxTotalConnections,
+			"note", "the real SIA ceiling is ~80 connections, 16 is our conservative reserved margin")
 	}
 	pool, err := sia.NewPool(ctx, cfg.SIABaseURL, poolSize)
 	if err != nil {
@@ -110,6 +133,14 @@ func main() {
 	go pool.Keepalive(ctx)
 
 	svc := catalog.NewService(st, sia.NewSource(pool), cfg.Term)
+
+	if *mode == refresher.ModeLive {
+		if err := refresher.Loop(ctx, svc, rcfg, opts, pool.Stats); err != nil {
+			slog.Error("refresher: live loop error", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	rep, runErr := refresher.Run(ctx, svc, opts, pool.Stats)
 	if runErr != nil {
@@ -124,11 +155,12 @@ func main() {
 	}
 }
 
-// maxTotalConnections is the measured ceiling: 8 concurrent SIA sessions with
-// no errors and no throttling. It is a courtesy limit shared between the two
-// processes, which is why crossing it is a warning here and not a silent
-// success.
-const maxTotalConnections = 8
+// maxTotalConnections is the margin this project reserves for its own use.
+// The real SIA ceiling is ~80 concurrent sessions (measured 2026-08-19;
+// OPEN-QUESTIONS.md §5). This constant is NOT the SIA's limit: it is our
+// conservative budget so we stay well clear of it. If the number of workers
+// ever needs to grow, raise this constant and document why.
+const maxTotalConnections = 16
 
 func pick(flagVal, cfgVal int) int {
 	if flagVal > 0 {

@@ -53,6 +53,12 @@ type Report struct {
 	ProgramsFailed  int
 	CoursesOK       int
 
+	// NotFound is the count of courses that came back ErrNotFound. It is NOT
+	// counted as a failure for the circuit breaker (a retirement by the UNAL
+	// is not a SIA malfunction), but it IS counted here: a spike means the
+	// SIA changed its catalog and the live loop's recheck queue should drain.
+	NotFound int
+
 	Posts int64
 	Bytes int64
 
@@ -101,6 +107,9 @@ func (r *Report) logArgs() []any {
 		"courses_ok", r.CoursesOK,
 		"posts", r.Posts,
 		"mb", fmt.Sprintf("%.1f", float64(r.Bytes)/(1024*1024)),
+	}
+	if r.NotFound > 0 {
+		args = append(args, "not_found", r.NotFound)
 	}
 	if r.ErrorsDropped > 0 {
 		args = append(args, "errors_dropped", r.ErrorsDropped)

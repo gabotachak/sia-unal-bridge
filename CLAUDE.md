@@ -83,6 +83,7 @@ niveles que la API nunca había recorrido, y §40, encontrada en vivo el 2026-08
 | `docs/DEVELOPMENT.md` | Entorno: Docker, Postgres, cómo replicar el flujo |
 | `docs/PLAN-PRODUCTION.md` | Cómo esto pasa de localhost al server |
 | `docs/PLAN-SIACHANGES.md` | Reconciliar lo que el SIA deja de ofrecer |
+| `docs/PLAN-ULTIMATE-SYNC.md` | **Fase 3: cupos en continuo (`--mode=live`) — medición, decisiones y runbook** |
 | `web/README.md`, `docs/PLAN-FRONTEND.md` | La interfaz: cómo correrla, y su plan |
 | `internal/httpapi/openapi.yaml` | **El contrato que manda.** `docs/API.md` explica el porqué, no la forma |
 | `.env.example` | **La fuente de verdad de puertos y variables.** Ningún doc los repite |

@@ -1,0 +1,33 @@
+Línea base — Fase A de docs/PLAN-ULTIMATE-SYNC.md
+Medido en producción, 2026-08-21. HEAD fbdbd32, imagen desplegada v1.17.0-18-gcaf0cd5, migración 4.
+
+--- coste por asignatura, ultimas 48 h ---
+  mode  | scope  | corridas | asignaturas | posts_por_asig | kb_por_asig | bytes_totales | no_terminadas
+--------+--------+----------+-------------+----------------+-------------+---------------+---------------
+ detail | global |        2 |        7478 |           20.2 |         581 | 4245 MB       |             2
+ seats  | hot    |      135 |       21667 |            8.8 |         347 | 7334 MB       |           134
+
+--- SLO: edad de cupos de lo pedido ---
+   ventana   | asignaturas | p50_s | p95_s
+-------------+-------------+-------+-------
+ ultima hora |         569 |   605 | 73350
+ 7 dias      |         780 |   704 | 79102
+
+--- universo ---
+ cursos | cursos_con_grupos | secciones
+--------+-------------------+-----------
+  28246 |              3513 |      8886
+
+Comparación con el número documentado en el plan (2026-08-22, previo):
+
+| Métrica                              | Plan (08-22) | Esta corrida (08-21) |
+|---|---|---|
+| seats: POSTs por asignatura          | 8.8          | 8.8 |
+| seats: KB por asignatura             | 348          | 347 |
+| detail --scope=global: POSTs/asig    | 21.7         | 20.2 |
+| p50 edad cupos (última hora)         | 6 min        | 10 min (605s) |
+| p95 edad cupos (última hora)         | 20 h         | 20.4 h (73350s) |
+| Corridas de seats que terminan       | 0 de 67      | 1 de 135 |
+
+Coincide dentro de ruido. Confirma el diagnóstico de la Fase B: el coste por
+asignatura sigue en ~8.8 POSTs, sin mejora. Procede la Fase B.

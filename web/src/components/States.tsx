@@ -1,5 +1,6 @@
 import { Inbox, RotateCw, TriangleAlert } from 'lucide-react';
 import type { ApiError } from '../api/client';
+import { clearStored } from '../lib/storage';
 import { AppLink } from './AppLink';
 import './States.css';
 
@@ -104,6 +105,31 @@ export function Fault({
             </li>
           ))}
         </ul>
+      </section>
+    );
+  }
+
+  // El plan que la Selection guardaba se apagó del lado del SIA (reconciliación,
+  // docs/PLAN-SIACHANGES.md D1): reintentar nunca va a arreglarlo, porque el
+  // 404 sale de la misma Selection en cada intento. La salida es elegir otro
+  // plan, por el mismo camino que Topbar.startOver — borrar y RECARGAR, no
+  // navegar, para que ninguna pantalla siga repintándose con la Selection
+  // vieja que vive en memoria.
+  if (error.code === 'unknown_program') {
+    return (
+      <section className="state state--fault">
+        <TriangleAlert className="state__icon" size={24} strokeWidth={1.5} aria-hidden="true" />
+        <h2 className="state__head">No se pudo</h2>
+        <p className="state__note">{error.humane}</p>
+        <button
+          className="btn"
+          onClick={() => {
+            clearStored();
+            window.location.assign('/');
+          }}
+        >
+          elegir otro plan
+        </button>
       </section>
     );
   }

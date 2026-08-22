@@ -194,7 +194,7 @@ func (s *Source) FetchDetails(ctx context.Context, key catalog.ProgramKey, refs 
 
 func fetchDetail(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, ref catalog.CourseRef, term string) (catalog.CourseOffering, error) {
 	code := ref.Code
-	row, err := findRow(ctx, conn, key, code, ref.Name)
+	row, err := findRow(ctx, conn, key, code, ref.Name, catalog.IsElective(ref.Typology))
 	if err != nil {
 		return catalog.CourseOffering{}, err
 	}
@@ -238,6 +238,11 @@ func fetchDetail(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, ref
 // back to its electives listing (libre elección never appears in the regular
 // one — GOTCHAS §21). Returns catalog.ErrNotFound if neither has it.
 //
+// electivesFirst flips which listing is tried first: a libre elección course
+// is NEVER in the regular one, so looking there first is 2-3 POSTs and a
+// whole listing thrown away before the electives cascade even starts
+// (catalog.IsElective, measured 2026-08-22 — 43% of the hot set).
+//
 // With a name it first narrows the listing through it11, which is the single
 // optimisation of fase 2 that is worth a factor of 4: the unfiltered cb1 is
 // 241 KB and the filtered one 15–27 KB, twice per course. It does NOT make
@@ -253,10 +258,10 @@ func fetchDetail(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, ref
 //     form state carries it11 on every POST, so clearing the field IS the
 //     reset — and it happens here, inside the logical operation, with the
 //     same criterion by which FetchCatalog reposts soc4.
-func findRow(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code, name string) (Row, error) {
+func findRow(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code, name string, electivesFirst bool) (Row, error) {
 	if name != "" {
 		conn.form.Nombre = name
-		row, err := findRowInListings(ctx, conn, key, code)
+		row, err := findRowInListings(ctx, conn, key, code, electivesFirst)
 		conn.form.Nombre = "" // see above: never leave the filter behind
 		if err == nil {
 			return row, nil
@@ -264,36 +269,43 @@ func findRow(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code, n
 		// 0 rows, a parse failure, or a code the filter did not match
 		// (accents, odd names) all fall through to the full listings.
 	}
-	return findRowInListings(ctx, conn, key, code)
+	return findRowInListings(ctx, conn, key, code, electivesFirst)
 }
 
-// findRowInListings looks for code in the regular listing and then in the
-// electives one, with whatever it11 filter the caller has set. Both halves are
-// searched under the filter: the electives listing is the biggest single
-// response the SIA serves (~240–320 KB, and libre elección courses are only
-// ever found there), so filtering just the regular half would leave most of
-// the bytes on the table.
+// findRowInListings looks for code in the regular listing and the electives
+// one, in the order electivesFirst says, with whatever it11 filter the
+// caller has set. Both halves are searched under the filter: the electives
+// listing is the biggest single response the SIA serves (~240–320 KB, and
+// libre elección courses are only ever found there), so filtering just the
+// regular half would leave most of the bytes on the table.
 //
-// A failed regular-catalog fetch used to be swallowed here — any error fell
-// straight through to the electives search, and if THAT also came back empty
-// (certain, for a course that was never libre elección to begin with) the
-// caller got a plain catalog.ErrNotFound. That is a confident lie: the course
-// was never actually checked, a transient SIA hiccup was. Reported live
-// 2026-08-21 as a course the Store already had (real sections, freshly
-// crawled hours earlier) 404ing on every forced refresh — indistinguishable
-// from "doesn't exist" from the outside. Now a catalog-fetch failure is kept
-// and, if electives doesn't resolve it either, surfaced instead of masked.
-func findRowInListings(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code string) (Row, error) {
-	body, catalogErr := conn.FetchCatalog(ctx, key)
-	if catalogErr == nil {
+// Error handling does not depend on order: whichever half fails with
+// something other than catalog.ErrNotFound is kept, and only surfaced if the
+// OTHER half also comes back without the code. A failed fetch used to be
+// swallowed here — any error fell straight through to the second half, and
+// if THAT also came back empty (certain, for a course that could only ever
+// be in the failed half) the caller got a plain catalog.ErrNotFound. That is
+// a confident lie: the course was never actually checked, a transient SIA
+// hiccup was. Reported live 2026-08-21 as a course the Store already had
+// (real sections, freshly crawled hours earlier) 404ing on every forced
+// refresh — indistinguishable from "doesn't exist" from the outside. Now a
+// fetch failure is kept and, if the other half doesn't resolve it either,
+// surfaced instead of masked.
+func findRowInListings(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code string, electivesFirst bool) (Row, error) {
+	regular := func() (Row, error) {
+		body, err := conn.FetchCatalog(ctx, key)
+		if err != nil {
+			return Row{}, err
+		}
 		rows, perr := ParseList(body)
 		if perr != nil {
-			catalogErr = fmt.Errorf("sia: findRowInListings: ParseList: %w", perr)
-		} else if r, ok := rowWithCode(rows, code); ok {
+			return Row{}, fmt.Errorf("sia: findRowInListings: ParseList: %w", perr)
+		}
+		if r, ok := rowWithCode(rows, code); ok {
 			return r, nil
 		}
+		return Row{}, catalog.ErrNotFound
 	}
-
 	// FindElectiveRow, not FetchElectives + electiveRows: the row is about to
 	// be CLICKED, and an _afrRK only means anything while its own listing is
 	// the live render. Where the sede has no wildcard the electives listing is
@@ -301,27 +313,53 @@ func findRowInListings(ctx context.Context, conn *SIAConn, key catalog.ProgramKe
 	// picked out of the union clicks a row of whichever search ran last —
 	// which is how every doctorado course reachable only through libre
 	// elección failed with "no detail region id" (GOTCHAS §38).
-	row, electivesErr := conn.FindElectiveRow(ctx, key, code)
-	if electivesErr == nil {
-		return row, nil
-	}
-	if catalogErr == nil {
-		return Row{}, electivesErr
+	electives := func() (Row, error) { return conn.FindElectiveRow(ctx, key, code) }
+
+	first, second := regular, electives
+	if electivesFirst {
+		first, second = electives, regular
 	}
 
-	// Both checks came back empty-handed AND the regular one never actually
-	// completed — do not report a course as unknown on the strength of a
-	// search that broke. See the doc comment above.
-	if !errors.Is(electivesErr, catalog.ErrNotFound) {
-		slog.Warn("sia: findRowInListings: regular catalog fetch failed AND electives search itself failed",
-			"level", key.Level, "campus", key.Campus, "faculty", key.Faculty, "program", key.Program,
-			"code", code, "catalog_err", catalogErr, "electives_err", electivesErr)
+	// The first check to run either wins outright or leaves its error
+	// pinned to what it actually is (regular vs electives); order never
+	// changes which named error means what below.
+	row, firstErr := first()
+	if firstErr == nil {
+		return row, nil
+	}
+	regularErr, electivesErr := firstErr, error(nil)
+	if electivesFirst {
+		regularErr, electivesErr = nil, firstErr
+	}
+
+	row, secondErr := second()
+	if secondErr == nil {
+		return row, nil
+	}
+	if electivesFirst {
+		regularErr = secondErr
+	} else {
+		electivesErr = secondErr
+	}
+
+	if regularErr == nil {
+		// Regular listing was checked in full (found or confirmed absent):
+		// trust whatever electives came back with, real error or not.
 		return Row{}, electivesErr
 	}
-	slog.Warn("sia: findRowInListings: regular catalog fetch failed, electives came back empty — reporting the catalog failure instead of a false unknown_course",
+	if !errors.Is(electivesErr, catalog.ErrNotFound) {
+		slog.Warn("sia: findRowInListings: both listings failed to fetch",
+			"level", key.Level, "campus", key.Campus, "faculty", key.Faculty, "program", key.Program,
+			"code", code, "regular_err", regularErr, "electives_err", electivesErr)
+		return Row{}, electivesErr
+	}
+	// Electives confirmed absence, but the regular fetch itself never
+	// completed — do not report a course as unknown on the strength of a
+	// search that broke. See the doc comment above.
+	slog.Warn("sia: findRowInListings: regular fetch failed, electives came back empty — reporting the fetch failure instead of a false unknown_course",
 		"level", key.Level, "campus", key.Campus, "faculty", key.Faculty, "program", key.Program,
-		"code", code, "catalog_err", catalogErr)
-	return Row{}, fmt.Errorf("sia: findRowInListings: regular catalog check failed for %s: %w", code, catalogErr)
+		"code", code, "regular_err", regularErr)
+	return Row{}, fmt.Errorf("sia: findRowInListings: regular check failed for %s: %w", code, regularErr)
 }
 
 // checkDetailCode compares the code the detail page printed with the one we

@@ -133,8 +133,8 @@ func TestCoursesNeedingDetail_GlobalFreshnessIsShared(t *testing.T) {
 	a, b := mk("2D02", 10), mk("2D03", 11)
 
 	offerings := []catalog.CourseOffering{
-		{Course: catalog.Course{CampusCode: "9995", Code: "SHARED-1", Name: "Compartida"}},
-		{Course: catalog.Course{CampusCode: "9995", Code: "ONLY-A", Name: "Solo A"}},
+		{Course: catalog.Course{CampusCode: "9995", Code: "SHARED-1", Name: "Compartida"}, Typology: "FUND. OBLIGATORIA (B)"},
+		{Course: catalog.Course{CampusCode: "9995", Code: "ONLY-A", Name: "Solo A"}, Typology: "LIBRE ELECCIÓN (L)"},
 	}
 	if err := s.UpsertCatalog(ctx, a, offerings); err != nil {
 		t.Fatalf("UpsertCatalog a: %v", err)
@@ -168,6 +168,9 @@ func TestCoursesNeedingDetail_GlobalFreshnessIsShared(t *testing.T) {
 	if len(pending) != 1 || pending[0].Code != "ONLY-A" {
 		t.Fatalf("got %+v, want only ONLY-A pending", pending)
 	}
+	if pending[0].Typology != "LIBRE ELECCIÓN (L)" {
+		t.Errorf("typology must ride along: findRow needs it to search electives first, got %q", pending[0].Typology)
+	}
 
 	// Per-plan scope must NOT share: visibility is the one thing another
 	// plan's fetch cannot teach us.
@@ -177,6 +180,11 @@ func TestCoursesNeedingDetail_GlobalFreshnessIsShared(t *testing.T) {
 	}
 	if len(perPlan) != 2 {
 		t.Fatalf("per-plan: got %d pending, want 2", len(perPlan))
+	}
+	for _, ref := range perPlan {
+		if ref.Code == "ONLY-A" && ref.Typology != "LIBRE ELECCIÓN (L)" {
+			t.Errorf("CoursesNeedingVisibility: typology must ride along, got %q for %s", ref.Typology, ref.Code)
+		}
 	}
 }
 
@@ -193,7 +201,7 @@ func TestDemandFeedsHotSet(t *testing.T) {
 		t.Fatalf("UpsertProgram: %v", err)
 	}
 	if err := s.UpsertCatalog(ctx, p, []catalog.CourseOffering{
-		{Course: catalog.Course{CampusCode: "9996", Code: "POPULAR", Name: "Popular"}},
+		{Course: catalog.Course{CampusCode: "9996", Code: "POPULAR", Name: "Popular"}, Typology: "ELECTIVA DE PREGRADO (E)"},
 		{Course: catalog.Course{CampusCode: "9996", Code: "QUIET", Name: "Quieta"}},
 	}); err != nil {
 		t.Fatalf("UpsertCatalog: %v", err)
@@ -220,6 +228,9 @@ func TestDemandFeedsHotSet(t *testing.T) {
 	}
 	if hot[0].ProgramID != p.ID {
 		t.Errorf("hot set must name a plan that sees the course, got program %d", hot[0].ProgramID)
+	}
+	if hot[0].Typology != "ELECTIVA DE PREGRADO (E)" {
+		t.Errorf("SeatsHotSet: typology must ride along, got %q", hot[0].Typology)
 	}
 
 	// The limit is the budget, honoured.

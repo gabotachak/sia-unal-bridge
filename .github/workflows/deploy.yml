@@ -66,6 +66,7 @@ jobs:
             bash -c '
             set -e
             cd /mnt/newhdd/robot/repos/sia-unal-bridge
+            git switch main
             git pull
             ${{ steps.filter.outputs.db == 'true' && 'make migrate' || '' }}
             ${{ steps.filter.outputs.api == 'true' && 'make deploy-api' || '' }}

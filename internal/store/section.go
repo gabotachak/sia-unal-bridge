@@ -53,7 +53,11 @@ func (s *Store) CourseProgramTypology(ctx context.Context, programID int64, code
 // wholesale per section, schedules don't get incremental diffs), and a
 // seat_snapshot per section with seats (append-only, DATA-MODEL.md
 // decision 4). Also stamps course_program.detail_fetched_at for programID.
-func (s *Store) UpsertDetail(ctx context.Context, programID int64, offering catalog.CourseOffering) error {
+//
+// term is an explicit parameter, not read off offering.Course.Sections:
+// that slice is empty exactly when the reconciliation below matters most
+// (GOTCHAS §18), and there is no section left to read a term from.
+func (s *Store) UpsertDetail(ctx context.Context, programID int64, term string, offering catalog.CourseOffering) error {
 	c := offering.Course
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `
@@ -99,7 +103,7 @@ func (s *Store) UpsertDetail(ctx context.Context, programID int64, offering cata
 
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO section_program (section_id, program_id) VALUES ($1, $2)
-				ON CONFLICT DO NOTHING`,
+				ON CONFLICT (section_id, program_id) DO UPDATE SET disabled_at = NULL`,
 				sectionID, programID,
 			); err != nil {
 				return fmt.Errorf("section_program %s: %w", sec.Key, err)
@@ -145,6 +149,36 @@ func (s *Store) UpsertDetail(ctx context.Context, programID int64, offering cata
 				}
 			}
 		}
+
+		// La respuesta del detalle describe con autoridad UNA cosa: qué
+		// grupos ve ESTE plan. No dice nada sobre los grupos de los demás
+		// planes —Sistemas ve 25 donde Industrial ve 23 (DATA-MODEL.md
+		// §2)— así que se apaga la visibilidad, nunca el grupo. Un grupo
+		// cancelado de verdad se apaga solo: deja de aparecer en el detalle
+		// de todos los planes que lo veían.
+		//
+		// c.Sections vacío es un caso válido (§18) y llega acá con keys
+		// vacío, que apaga toda la visibilidad de este plan sobre este
+		// curso. Es lo correcto: el plan dejó de ver grupos. Y es seguro
+		// apagarlo porque A1 garantiza que un 0 que llega hasta acá es un 0
+		// de verdad y no un parseo roto.
+		keys := make([]string, len(c.Sections))
+		for i, sec := range c.Sections {
+			keys[i] = sec.Key
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE section_program sp SET disabled_at = now()
+			WHERE sp.program_id = $1 AND sp.disabled_at IS NULL
+			  AND EXISTS (
+			      SELECT 1 FROM section sec
+			      WHERE sec.id = sp.section_id
+			        AND sec.campus_code = $2 AND sec.code = $3 AND sec.term = $4
+			        AND sec.key != ALL($5)
+			  )`,
+			programID, c.CampusCode, c.Code, term, keys,
+		); err != nil {
+			return fmt.Errorf("store: UpsertDetail: reconcile section_program: %w", err)
+		}
 		return nil
 	})
 }
@@ -170,6 +204,7 @@ func (s *Store) Sections(ctx context.Context, campusCode, code string, programID
 		FROM section sec
 		JOIN section_program sp ON sp.section_id = sec.id
 		WHERE sec.campus_code = $1 AND sec.code = $2 AND sp.program_id = $3
+		  AND sp.disabled_at IS NULL
 		ORDER BY sec.number, sec.key`,
 		campusCode, code, programID,
 	)
@@ -319,9 +354,11 @@ func (s *Store) ProgramSchedules(ctx context.Context, programID int64) (map[stri
 		      AND EXISTS (
 		          SELECT 1 FROM section_program sp
 		          WHERE sp.section_id = sec.id AND sp.program_id = cp.program_id
+		            AND sp.disabled_at IS NULL
 		      )
 		LEFT JOIN class_session cs ON cs.section_id = sec.id
 		WHERE cp.program_id = $1 AND cp.detail_fetched_at IS NOT NULL
+		  AND cp.disabled_at IS NULL
 		ORDER BY cp.code, sec.number, sec.key, sec.id, cs.weekday, cs.start_time`,
 		programID,
 	)

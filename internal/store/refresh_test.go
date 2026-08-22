@@ -63,7 +63,7 @@ func TestSeatsDedupe(t *testing.T) {
 				Seats: &catalog.SeatSnapshot{Available: available, MeasuredAt: at},
 			}},
 		}
-		if err := s.UpsertDetail(ctx, p.ID, catalog.CourseOffering{Course: course}); err != nil {
+		if err := s.UpsertDetail(ctx, p.ID, "2026-2", catalog.CourseOffering{Course: course}); err != nil {
 			t.Fatalf("UpsertDetail: %v", err)
 		}
 	}
@@ -157,7 +157,7 @@ func TestCoursesNeedingDetail_GlobalFreshnessIsShared(t *testing.T) {
 	// Program B fetches the shared course. A must now consider it done.
 	course := catalog.Course{CampusCode: "9995", Code: "SHARED-1", Name: "Compartida",
 		Sections: []catalog.Section{{CampusCode: "9995", Code: "SHARED-1", Term: "2026-2", Key: "1", Number: 1}}}
-	if err := s.UpsertDetail(ctx, b.ID, catalog.CourseOffering{Course: course}); err != nil {
+	if err := s.UpsertDetail(ctx, b.ID, "2026-2", catalog.CourseOffering{Course: course}); err != nil {
 		t.Fatalf("UpsertDetail b: %v", err)
 	}
 

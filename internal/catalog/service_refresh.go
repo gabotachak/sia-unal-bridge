@@ -69,7 +69,7 @@ func (s *Service) RefreshDetails(ctx context.Context, program Program, refs []Co
 	yield func(CourseOffering, error) error) error {
 	return s.sia.FetchDetails(ctx, program.key(), refs, s.term, func(o CourseOffering, err error) error {
 		if err == nil {
-			err = s.store.UpsertDetail(ctx, program.ID, o)
+			err = s.store.UpsertDetail(ctx, program.ID, s.term, o)
 		}
 		return yield(o, err)
 	})

@@ -129,7 +129,7 @@ func TestUpsertDetailAndSectionsRoundTrip(t *testing.T) {
 			},
 		},
 	}
-	if err := s.UpsertDetail(ctx, p.ID, catalog.CourseOffering{Course: course, Typology: "FUND. OPTATIVA (O)"}); err != nil {
+	if err := s.UpsertDetail(ctx, p.ID, "2026-2", catalog.CourseOffering{Course: course, Typology: "FUND. OPTATIVA (O)"}); err != nil {
 		t.Fatalf("UpsertDetail: %v", err)
 	}
 
@@ -197,13 +197,13 @@ func TestUpsertDetail_SeatSnapshotIsAppendOnly(t *testing.T) {
 	section := catalog.Section{CampusCode: "9999", Code: "2016696", Term: "2026-2", Key: "1", Number: 1, Label: "Grupo 1"}
 	section.Seats = &catalog.SeatSnapshot{Available: 30, MeasuredAt: time.Now().Add(-time.Hour)}
 	course := catalog.Course{CampusCode: "9999", Code: "2016696", Name: "Algoritmos", Sections: []catalog.Section{section}}
-	if err := s.UpsertDetail(ctx, p.ID, catalog.CourseOffering{Course: course}); err != nil {
+	if err := s.UpsertDetail(ctx, p.ID, "2026-2", catalog.CourseOffering{Course: course}); err != nil {
 		t.Fatalf("UpsertDetail 1: %v", err)
 	}
 
 	section.Seats = &catalog.SeatSnapshot{Available: 28, MeasuredAt: time.Now()}
 	course.Sections = []catalog.Section{section}
-	if err := s.UpsertDetail(ctx, p.ID, catalog.CourseOffering{Course: course}); err != nil {
+	if err := s.UpsertDetail(ctx, p.ID, "2026-2", catalog.CourseOffering{Course: course}); err != nil {
 		t.Fatalf("UpsertDetail 2: %v", err)
 	}
 
@@ -262,13 +262,13 @@ func TestProgramSchedules(t *testing.T) {
 			{CampusCode: "9999", Code: "2015725", Term: "2026-2", Key: "3", Number: 3},
 		},
 	}
-	if err := s.UpsertDetail(ctx, p.ID, catalog.CourseOffering{Course: turco, Typology: "LIBRE ELECCIÓN (L)"}); err != nil {
+	if err := s.UpsertDetail(ctx, p.ID, "2026-2", catalog.CourseOffering{Course: turco, Typology: "LIBRE ELECCIÓN (L)"}); err != nil {
 		t.Fatalf("UpsertDetail turco: %v", err)
 	}
 
 	// Medida y sin grupos: el cero es un dato.
 	vacia := catalog.Course{CampusCode: "9999", Code: "2029512", Name: "Sin grupos", Credits: 3}
-	if err := s.UpsertDetail(ctx, p.ID, catalog.CourseOffering{Course: vacia, Typology: "LIBRE ELECCIÓN (L)"}); err != nil {
+	if err := s.UpsertDetail(ctx, p.ID, "2026-2", catalog.CourseOffering{Course: vacia, Typology: "LIBRE ELECCIÓN (L)"}); err != nil {
 		t.Fatalf("UpsertDetail vacia: %v", err)
 	}
 

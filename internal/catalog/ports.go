@@ -126,7 +126,7 @@ type Store interface {
 	Course(ctx context.Context, campusCode, code string) (Course, bool, error)
 	CourseProgramFetchedAt(ctx context.Context, programID int64, code string) (*time.Time, bool, error)
 	CourseProgramTypology(ctx context.Context, programID int64, code string) (string, bool, error)
-	UpsertDetail(ctx context.Context, programID int64, offering CourseOffering) error
+	UpsertDetail(ctx context.Context, programID int64, term string, offering CourseOffering) error
 	Sections(ctx context.Context, campusCode, code string, programID int64) ([]Section, error)
 	CurrentSeats(ctx context.Context, sectionID int64) (SeatSnapshot, bool, error)
 

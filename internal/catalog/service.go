@@ -559,7 +559,7 @@ func (s *Service) refreshDetail(ctx context.Context, program Program, code strin
 		if err != nil {
 			return nil, err
 		}
-		if err := s.store.UpsertDetail(ctx, program.ID, offering); err != nil {
+		if err := s.store.UpsertDetail(ctx, program.ID, s.term, offering); err != nil {
 			return nil, err
 		}
 		return s.readCourse(ctx, program, code)

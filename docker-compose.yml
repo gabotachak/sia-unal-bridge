@@ -108,6 +108,11 @@ services:
         # Apaga el banner de incidencia del front. Se hornea en el bundle, así
         # que cambiarlo pide `docker compose build web`, no un restart.
         VITE_INCIDENT_BANNER_OFF: ${VITE_INCIDENT_BANNER_OFF:-}
+        # Mismo camino que FETCH_COOLDOWN: .env de la raíz, build arg acá,
+        # ARG/ENV en el Dockerfile, `define` en vite.config.ts. Sin este
+        # eslabón el bundle de Docker caía al '7200' de vite.config.ts aunque
+        # .env.example diga 1800 (docs/PLAN-SIACHANGES.md A4).
+        VITE_STALE_SEATS_SECONDS: ${VITE_STALE_SEATS_SECONDS:-1800}
         GIT_TAG: ${GIT_TAG:-dev}
         GIT_SHA: ${GIT_SHA:-unknown}
     # Atado a 127.0.0.1: mismo motivo que api arriba.

@@ -32,7 +32,7 @@ func (s *Store) CoursesNeedingDetail(ctx context.Context, programID int64, maxAg
 			SELECT max(cp2.detail_fetched_at) AS t FROM course_program cp2
 			WHERE cp2.campus_code = cp.campus_code AND cp2.code = cp.code
 		) d ON true
-		WHERE cp.program_id = $1
+		WHERE cp.program_id = $1 AND cp.disabled_at IS NULL
 		  AND coalesce(greatest(g.t, d.t), 'epoch'::timestamptz) < now() - ($2::double precision * interval '1 second')
 		ORDER BY c.name`,
 		programID, maxAge.Seconds(),
@@ -65,7 +65,7 @@ func (s *Store) CoursesNeedingVisibility(ctx context.Context, programID int64, m
 		               WHERE sec.campus_code = cp.campus_code AND sec.code = cp.code) AS had_sections
 		FROM course_program cp
 		JOIN course c ON c.campus_code = cp.campus_code AND c.code = cp.code
-		WHERE cp.program_id = $1
+		WHERE cp.program_id = $1 AND cp.disabled_at IS NULL
 		  AND coalesce(cp.detail_fetched_at, 'epoch'::timestamptz)
 		      < now() - ($2::double precision * interval '1 second')
 		ORDER BY c.name`,
@@ -99,6 +99,7 @@ func (s *Store) SeatsHotSet(ctx context.Context, campusCode string, limit int) (
 			FROM course_demand d
 			JOIN course c ON c.campus_code = d.campus_code AND c.code = d.code
 			JOIN course_program cp ON cp.campus_code = d.campus_code AND cp.code = d.code
+			                      AND cp.disabled_at IS NULL
 			WHERE d.campus_code = $1
 			ORDER BY d.code, cp.detail_fetched_at DESC NULLS LAST, cp.program_id
 		) t

@@ -21,7 +21,7 @@ import (
 // profesor, horario, cupos — are valid for every plan.
 func (s *Store) CoursesNeedingDetail(ctx context.Context, programID int64, maxAge time.Duration) ([]catalog.CourseRef, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT cp.code, c.name, g.t IS NOT NULL AS had_sections
+		SELECT cp.code, c.name, coalesce(cp.typology, ''), g.t IS NOT NULL AS had_sections
 		FROM course_program cp
 		JOIN course c ON c.campus_code = cp.campus_code AND c.code = cp.code
 		LEFT JOIN LATERAL (
@@ -45,7 +45,7 @@ func (s *Store) CoursesNeedingDetail(ctx context.Context, programID int64, maxAg
 	var out []catalog.CourseRef
 	for rows.Next() {
 		ref := catalog.CourseRef{ProgramID: programID}
-		if err := rows.Scan(&ref.Code, &ref.Name, &ref.HadSections); err != nil {
+		if err := rows.Scan(&ref.Code, &ref.Name, &ref.Typology, &ref.HadSections); err != nil {
 			return nil, fmt.Errorf("store: CoursesNeedingDetail: scan: %w", err)
 		}
 		out = append(out, ref)
@@ -60,7 +60,7 @@ func (s *Store) CoursesNeedingDetail(ctx context.Context, programID int64, maxAg
 // cannot teach us (DATA-MODEL.md decision 6).
 func (s *Store) CoursesNeedingVisibility(ctx context.Context, programID int64, maxAge time.Duration) ([]catalog.CourseRef, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT cp.code, c.name,
+		SELECT cp.code, c.name, coalesce(cp.typology, ''),
 		       EXISTS (SELECT 1 FROM section sec
 		               WHERE sec.campus_code = cp.campus_code AND sec.code = cp.code) AS had_sections
 		FROM course_program cp
@@ -79,7 +79,7 @@ func (s *Store) CoursesNeedingVisibility(ctx context.Context, programID int64, m
 	var out []catalog.CourseRef
 	for rows.Next() {
 		ref := catalog.CourseRef{ProgramID: programID}
-		if err := rows.Scan(&ref.Code, &ref.Name, &ref.HadSections); err != nil {
+		if err := rows.Scan(&ref.Code, &ref.Name, &ref.Typology, &ref.HadSections); err != nil {
 			return nil, fmt.Errorf("store: CoursesNeedingVisibility: scan: %w", err)
 		}
 		out = append(out, ref)
@@ -93,9 +93,10 @@ func (s *Store) CoursesNeedingVisibility(ctx context.Context, programID int64, m
 // merely lists the course in its catalog is not (DATA-MODEL.md decision 6).
 func (s *Store) SeatsHotSet(ctx context.Context, campusCode string, limit int) ([]catalog.CourseRef, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT program_id, code, name FROM (
+		SELECT program_id, code, name, typology FROM (
 			SELECT DISTINCT ON (d.code)
-			       cp.program_id, d.code, c.name, d.hits, d.last_requested_at
+			       cp.program_id, d.code, c.name, coalesce(cp.typology, '') AS typology,
+			       d.hits, d.last_requested_at
 			FROM course_demand d
 			JOIN course c ON c.campus_code = d.campus_code AND c.code = d.code
 			JOIN course_program cp ON cp.campus_code = d.campus_code AND cp.code = d.code
@@ -115,7 +116,7 @@ func (s *Store) SeatsHotSet(ctx context.Context, campusCode string, limit int) (
 	var out []catalog.CourseRef
 	for rows.Next() {
 		var ref catalog.CourseRef
-		if err := rows.Scan(&ref.ProgramID, &ref.Code, &ref.Name); err != nil {
+		if err := rows.Scan(&ref.ProgramID, &ref.Code, &ref.Name, &ref.Typology); err != nil {
 			return nil, fmt.Errorf("store: SeatsHotSet: scan: %w", err)
 		}
 		out = append(out, ref)

@@ -7,8 +7,10 @@ Hermano de [`PLAN-FRONTEND.md`](PLAN-FRONTEND.md), mismo formato: fases con crit
 aceptación. Escrito para que lo ejecute otro modelo sin volver a leer todo `web/src/`,
 así que cada decisión trae el archivo y la línea donde vive hoy.
 
-> **Estado: propuesto.** Nada de esto está implementado. La rama es
-> `feature/double-titulation`.
+> **Estado: implementado.** Las seis fases de este plan están en la rama
+> `feature/double-titulation`, lista para PR. `tablero.plan.v1` sigue sin
+> borrarse (es el seguro de rollback) — eso queda para un release después,
+> ver [Después, y no en este PR](#después-y-no-en-este-pr).
 
 ---
 

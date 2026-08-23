@@ -12,7 +12,7 @@ import type { Selection } from '../lib/storage';
  * y no solo los códigos — por dos razones distintas:
  *
  *  - 'program' puede "adoptar" el plan que muestra (el aviso de plan ajeno en
- *    Program.tsx), y adoptar es `plan.select(selection)`, que necesita los
+ *    Program.tsx), y adoptar es `plan.select([selection])`, que necesita los
  *    nombres para no dejar el chip de la barra diciendo el código a secas.
  *  - 'course' los lleva para poder volver al catálogo de ESE plan con sus
  *    nombres ya puestos, sin ir a buscarlos nunca.

@@ -32,15 +32,16 @@ function wins(a: CourseSummary, b: CourseSummary): boolean {
 export function mergeCatalogs(
   parts: { plan: Selection; courses: CourseSummary[] }[],
 ): MergedCourse[] {
+  // Un `Map` conserva el orden de la PRIMERA inserción de cada clave —
+  // reasignarla no la mueve—, así que alcanza para el orden de salida: no
+  // hace falta una lista aparte.
   const byCode = new Map<string, MergedCourse>();
-  const order: string[] = [];
 
   for (const { plan, courses } of parts) {
     for (const course of courses) {
       const existing = byCode.get(course.code);
       if (!existing) {
         byCode.set(course.code, { ...course, plan });
-        order.push(course.code);
         continue;
       }
       // Ya había una fila con este código —del mismo plan (una repetición,
@@ -57,5 +58,5 @@ export function mergeCatalogs(
     }
   }
 
-  return order.map((code) => byCode.get(code)!);
+  return [...byCode.values()];
 }

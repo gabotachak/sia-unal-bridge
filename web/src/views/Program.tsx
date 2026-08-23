@@ -110,11 +110,10 @@ export function Program({
   const bothSettled = settledA && settledB;
   const anyData = !!a.data || !!b.data;
   const combinedError = a.error ?? (mine[1] ? b.error : null);
-  const reload = useCallback(() => {
+  const reload = () => {
     a.reload();
     b.reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [a.reload, b.reload]);
+  };
 
   const courses = useMemo(
     () =>
@@ -429,11 +428,11 @@ export function Program({
    */
   const [ask, confirmDialog] = useConfirm();
   const foreign = plan.selection !== null && !plan.owns(sel);
+  const double = plan.plans.length > 1;
 
   async function adoptThis() {
     const n = plan.items.length;
     if (n > 0) {
-      const double = plan.plans.length > 1;
       const ok = await ask({
         title: `Cambiar al plan ${program}`,
         danger: true,
@@ -465,7 +464,7 @@ export function Program({
         <div className="stray" role="status">
           <p className="stray__text">
             Estás mirando el plan <b>{program}</b>, y{' '}
-            {plan.plans.length > 1 ? (
+            {double ? (
               <>
                 los tuyos son <b>{plan.plans.map((p) => p.programName).join(' y ')}</b>
               </>
@@ -475,7 +474,7 @@ export function Program({
               </>
             )}
             . Puedes mirar todo lo que quieras, pero para agregar materias al semestre tienes que
-            estar en {plan.plans.length > 1 ? 'uno de tus planes' : 'tu plan'}.
+            estar en {double ? 'uno de tus planes' : 'tu plan'}.
           </p>
           <div className="stray__actions">
             {plan.selection && (

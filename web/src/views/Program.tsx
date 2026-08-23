@@ -10,7 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { routes, STALE_SEATS_SECONDS } from '../api/client';
-import type { CoursesResponse, CourseSummary } from '../api/types';
+import type { CoursesResponse } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { useCatalogFilters } from '../hooks/useCatalogFilters';
 import { useCourseDetails } from '../hooks/useCourseDetails';
@@ -33,17 +33,25 @@ import { useTableSort } from '../hooks/useTableSort';
 import { fold, formatAge, sentence } from '../lib/format';
 import { classifyConflict, type SectionLike } from '../lib/conflicts';
 import { useDetailCache } from '../lib/detailCache';
+import { mergeCatalogs, type MergedCourse } from '../lib/catalog';
 import {
   DEFAULT_AVAILABILITY,
   courseFitsAvailability,
   isAvailabilityActive,
 } from '../lib/availability';
-import { itemId, selectionId } from '../lib/storage';
+import { itemId, type Selection } from '../lib/storage';
 import type { Screen } from '../state/nav';
 import './Program.css';
 
+function scopeOf(s: Selection) {
+  return { level: s.level, campus: s.campus, faculty: s.faculty };
+}
+
 /**
- * El catálogo de un plan. Hasta ~700 asignaturas (Medellín: 694).
+ * El catálogo de un plan — o de dos, con doble titulación
+ * (PLAN-DOUBLE-TITULATION.md). Hasta ~700 asignaturas por plan (Medellín:
+ * 694); la unión de dos NO es la suma (D6): comparten cientos de códigos de
+ * libre elección.
  *
  * Los filtros son en memoria a propósito: el catálogo completo ya vino en la
  * misma respuesta, así que filtrar en el servidor costaría otra consulta al
@@ -55,7 +63,17 @@ export function Program({
   screen: Extract<Screen, { name: 'program' }>;
 }) {
   const sel = screen.selection;
-  const { level, campus, faculty, program } = sel;
+  const { level, program } = sel;
+
+  const plan = usePlan();
+
+  /**
+   * Qué planes catalogar. Si `sel` es uno de los míos, es MI catálogo —la
+   * unión de todos mis planes (D5)—; si es de otro plan, se pinta él solo
+   * (Interfaz §5, "Catálogo ajeno"). Nunca los dos criterios a la vez: no
+   * hay forma de mezclar un plan ajeno con los propios.
+   */
+  const mine = plan.owns(sel) ? plan.plans : [sel];
 
   /**
    * Los horarios de los grupos se piden en la MISMA respuesta del catálogo
@@ -73,14 +91,44 @@ export function Program({
    */
   const { selection: scheduleSelection } = useScheduleSelection();
   const hasSchedule = Object.keys(scheduleSelection).length > 0;
+  const include = hasSchedule ? 'schedules' : undefined;
 
-  const path = routes.courses(
-    { level, campus, faculty },
-    program,
-    hasSchedule ? 'schedules' : undefined,
+  // Hooks FIJOS, sin condicional: `useApi` acepta `null` y no pide nada —lo
+  // mismo que ya hace este archivo para no pedir el directorio sin sede. Con
+  // un solo plan, `b` es un hook que nunca dispara nada.
+  const a = useApi<CoursesResponse>(routes.courses(scopeOf(mine[0]), mine[0].program, include));
+  const b = useApi<CoursesResponse>(
+    mine[1] ? routes.courses(scopeOf(mine[1]), mine[1].program, include) : null,
   );
-  const { data, error, loading, elapsed, attempt, reload } =
-    useApi<CoursesResponse>(path);
+
+  // "Settled" = ya se sabe qué pasó con esta parte, para bien o para mal.
+  // Mientras falte alguna, se muestra el Loading de siempre; en cuanto las
+  // que hacían falta contestaron —aunque una haya sido con error— se pinta
+  // lo que haya: media lista sirve, ninguna no.
+  const settledA = a.data !== null || a.error !== null;
+  const settledB = !mine[1] || b.data !== null || b.error !== null;
+  const bothSettled = settledA && settledB;
+  const anyData = !!a.data || !!b.data;
+  const combinedError = a.error ?? (mine[1] ? b.error : null);
+  const reload = useCallback(() => {
+    a.reload();
+    b.reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [a.reload, b.reload]);
+
+  const courses = useMemo(
+    () =>
+      mergeCatalogs(
+        mine[1]
+          ? [
+              { plan: mine[0], courses: a.data?.courses ?? [] },
+              { plan: mine[1], courses: b.data?.courses ?? [] },
+            ]
+          : [{ plan: mine[0], courses: a.data?.courses ?? [] }],
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [a.data, b.data, mine[0], mine[1]],
+  );
 
   /**
    * Los filtros.
@@ -114,19 +162,15 @@ export function Program({
     setScrollY,
   } = useCatalogFilters();
 
-  /**
-   * El plan elegido, para saber qué materias tienen grupo elegido en Mi
-   * horario (issue #28).
-   *
-   * Se trae acá arriba —y no más abajo, donde ya se usaba para "estás
-   * mirando otro plan"— porque hace falta antes: da los `plan.items` con los
-   * que se mide el choque de horario.
-   */
-  const plan = usePlan();
-
+  // `code` alcanza para identificar DENTRO de la unión —D3 obliga a los dos
+  // planes a compartir sede, y ahí `code` no colisiona (CLAUDE.md)— pero el
+  // `itemId` de cada fila tiene que llevar el plan REAL que la gana (D6), no
+  // el de la pantalla desde la que se llegó: es de ahí que sale el
+  // `PlanItem` que recibe `AddButton`.
   const courseId = useCallback(
-    (c: CourseSummary) => itemId({ level, campus, program, code: c.code }),
-    [level, campus, program],
+    (c: MergedCourse) =>
+      itemId({ level: c.plan.level, campus: c.plan.campus, program: c.plan.program, code: c.code }),
+    [],
   );
 
   /**
@@ -157,7 +201,7 @@ export function Program({
     const map: Record<string, SectionLike[]> = {};
     // 1. Lo que vino en la respuesta del catálogo: todas las asignaturas
     //    cuyo detalle alguien pidió alguna vez, con `?include=schedules`.
-    for (const c of data?.courses ?? []) {
+    for (const c of courses) {
       if (c.section_schedules) map[courseId(c)] = c.section_schedules;
     }
     // 2. Y encima, lo que esta sesión trajo con más detalle —cupos por
@@ -168,7 +212,7 @@ export function Program({
       if (row.detail) map[itemId(row.item)] = row.detail.sections;
     }
     return map;
-  }, [data, courseId, detailCache, planRows]);
+  }, [courses, courseId, detailCache, planRows]);
 
   /**
    * Rojo, amarillo o nada para cada materia — una sola pasada, un solo
@@ -184,7 +228,7 @@ export function Program({
     const potential = new Set<string>();
     if (chosenBlocks.length === 0) return { active, potential };
 
-    for (const c of data?.courses ?? []) {
+    for (const c of courses) {
       const id = courseId(c);
       const mark = classifyConflict({
         itemId: id,
@@ -197,7 +241,7 @@ export function Program({
       else if (mark === 'potential') potential.add(id);
     }
     return { active, potential };
-  }, [data, courseId, sectionsById, scheduleSelection, chosenBlocks, onlyOpen]);
+  }, [courses, courseId, sectionsById, scheduleSelection, chosenBlocks, onlyOpen]);
 
   /**
    * Restaura el scroll UNA vez, apenas hay filas que pintar — antes de eso
@@ -206,10 +250,10 @@ export function Program({
    */
   const restored = useRef(false);
   useEffect(() => {
-    if (restored.current || !data || data.courses.length === 0) return;
+    if (restored.current || courses.length === 0) return;
     restored.current = true;
     if (scrollY > 0) window.scrollTo(0, scrollY);
-  }, [data, scrollY]);
+  }, [courses, scrollY]);
 
   /**
    * Guarda el scroll EN CADA scroll, no al desmontar.
@@ -243,7 +287,7 @@ export function Program({
   const facets = useMemo(() => {
     const byTypology = new Map<string, number>();
     const byCredits = new Map<number, number>();
-    for (const c of data?.courses ?? []) {
+    for (const c of courses) {
       if (c.typology)
         byTypology.set(c.typology, (byTypology.get(c.typology) ?? 0) + 1);
       byCredits.set(c.credits, (byCredits.get(c.credits) ?? 0) + 1);
@@ -256,14 +300,14 @@ export function Program({
       byTypology,
       byCredits,
     };
-  }, [data]);
+  }, [courses]);
 
   /** Se recuerda entre visitas. `null` = como lo mandó el SIA, ya alfabético. */
   const { sort, onSort } = useTableSort('catalog');
 
   const shown = useMemo(() => {
     const needle = fold(q);
-    const kept = (data?.courses ?? []).filter((c) => {
+    const kept = courses.filter((c) => {
       if (
         needle &&
         !fold(c.name).includes(needle) &&
@@ -294,7 +338,7 @@ export function Program({
     });
     return sort ? sortBy(kept, (c) => sortKeyOf(c, sort.col), sort.dir) : kept;
   }, [
-    data,
+    courses,
     q,
     typols,
     creds,
@@ -307,7 +351,7 @@ export function Program({
     sort,
   ]);
 
-  const total = data?.courses.length ?? 0;
+  const total = courses.length;
   const facetCount =
     typols.size + creds.size + (isAvailabilityActive(availability) ? 1 : 0);
   const filtering = !!q || facetCount > 0 || onlyOpen || hideConflicts;
@@ -371,23 +415,25 @@ export function Program({
   }
 
   /**
-   * El plan de esta pantalla contra el plan elegido.
+   * El plan de esta pantalla contra MIS planes.
    *
-   * Casi siempre son el mismo. La excepción es llegar acá desde un candidato
-   * de un 300 ambiguo (ver Fault en States.tsx) sin haber confirmado el
-   * cambio: ahí `sel` es el plan que se está MIRANDO, y `plan.selection` sigue
-   * siendo el de siempre. No se toca nada por las malas — se avisa y se deja
-   * decidir, porque cambiar de verdad borra el semestre.
+   * Casi siempre `sel` es uno de los míos. La excepción es llegar acá desde
+   * un candidato de un 300 ambiguo (ver Fault en States.tsx) sin haber
+   * confirmado el cambio, o mirar el plan de otra persona: ahí `sel` es el
+   * plan que se está MIRANDO y no está entre `plan.plans`. No se toca nada
+   * por las malas — se avisa y se deja decidir, porque cambiar de verdad
+   * borra el semestre.
    *
-   * `plan` en sí ya se trajo arriba, para el choque de horario.
+   * `plan` en sí ya se trajo arriba, para el choque de horario y para saber
+   * qué catalogar (`mine`).
    */
   const [ask, confirmDialog] = useConfirm();
-  const { selection, select } = plan;
-  const foreign = selection && selectionId(selection) !== selectionId(sel);
+  const foreign = plan.selection !== null && !plan.owns(sel);
 
   async function adoptThis() {
     const n = plan.items.length;
     if (n > 0) {
+      const double = plan.plans.length > 1;
       const ok = await ask({
         title: `Cambiar al plan ${program}`,
         danger: true,
@@ -397,33 +443,47 @@ export function Program({
             <p>
               Se va a borrar{' '}
               {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`}{' '}
-              en Mi semestre, porque {n === 1 ? 'es' : 'son'} del plan{' '}
-              <b>{selection?.programName}</b>.
+              en Mi semestre, porque {n === 1 ? 'es' : 'son'} de{' '}
+              {double ? 'los planes' : 'el plan'}{' '}
+              <b>{plan.plans.map((p) => p.programName).join(' y ')}</b>.
             </p>
-            <p>Sus grupos y su tipología son de ese plan, no de este.</p>
+            <p>Sus grupos y su tipología son de {double ? 'esos planes' : 'ese plan'}, no de este.</p>
           </>
         ),
       });
       if (!ok) return;
     }
-    select([sel]);
+    plan.select([sel]);
   }
+
+  const planEyebrow = mine.map((p) => p.program).join(' · ');
 
   return (
     <Layout>
       {confirmDialog}
-      {foreign && selection && (
+      {foreign && (
         <div className="stray" role="status">
           <p className="stray__text">
-            Estás mirando el plan <b>{program}</b>, y el tuyo es{' '}
-            <b>{selection.programName}</b>. Puedes mirar todo lo que quieras,
-            pero para agregar materias al semestre tienes que estar en tu plan.
+            Estás mirando el plan <b>{program}</b>, y{' '}
+            {plan.plans.length > 1 ? (
+              <>
+                los tuyos son <b>{plan.plans.map((p) => p.programName).join(' y ')}</b>
+              </>
+            ) : (
+              <>
+                el tuyo es <b>{plan.selection?.programName}</b>
+              </>
+            )}
+            . Puedes mirar todo lo que quieras, pero para agregar materias al semestre tienes que
+            estar en {plan.plans.length > 1 ? 'uno de tus planes' : 'tu plan'}.
           </p>
           <div className="stray__actions">
-            <AppLink className="btn" to={{ name: 'program', selection }}>
-              <CornerUpLeft size={15} strokeWidth={1.75} aria-hidden="true" />
-              volver al mío
-            </AppLink>
+            {plan.selection && (
+              <AppLink className="btn" to={{ name: 'program', selection: plan.selection }}>
+                <CornerUpLeft size={15} strokeWidth={1.75} aria-hidden="true" />
+                volver al mío
+              </AppLink>
+            )}
             <button className="btn btn--ghost" onClick={adoptThis}>
               <ArrowLeftRight size={15} strokeWidth={1.75} aria-hidden="true" />
               cambiarme a este
@@ -434,7 +494,7 @@ export function Program({
 
       <header className="head">
         <div>
-          <p className="eyebrow">plan {program}</p>
+          <p className="eyebrow">plan {planEyebrow}</p>
           <h1 className="head__title">Catálogo</h1>
         </div>
         {total > 0 && (
@@ -446,16 +506,16 @@ export function Program({
         )}
       </header>
 
-      {loading && !data && (
+      {!bothSettled && !anyData && (
         <Loading
-          elapsed={elapsed}
-          attempt={attempt}
+          elapsed={Math.max(a.elapsed, b.elapsed)}
+          attempt={Math.max(a.attempt, b.attempt)}
           what="Trayendo el catálogo"
         />
       )}
-      {error && <Fault error={error} level={level} onRetry={() => reload()} />}
+      {combinedError && <Fault error={combinedError} level={level} onRetry={reload} />}
 
-      {data && (
+      {anyData && (
         <>
           <div className="toolbar">
             <SearchInput
@@ -701,7 +761,7 @@ export function Program({
                     <li key={c.code}>
                       <AppLink
                         className={`row table__row ${isActiveConflict ? 'is-conflict' : ''} ${isPotentialConflict ? 'is-conflict-potential' : ''}`}
-                        to={{ name: 'course', selection: sel, code: c.code }}
+                        to={{ name: 'course', selection: c.plan, code: c.code }}
                       >
                         <span className="row__code tnum col-code">
                           {c.code}
@@ -734,6 +794,12 @@ export function Program({
                               </span>
                             </Tooltip>
                           )}
+                          {/* De qué plan es esta fila — solo con doble
+                              titulación (D6, interfaz §6). Vive en la celda
+                              del nombre, que es la que cede ancho: la del
+                              código es angosta a propósito y no tiene sitio
+                              para un segundo token. */}
+                          {mine.length > 1 && <PlanTag course={c} />}
                           <Tooltip
                             content={
                               <p className="tt-title">{sentence(c.name)}</p>
@@ -768,10 +834,10 @@ export function Program({
                         />
                         <AddButton
                           item={{
-                            level,
-                            campus,
-                            program,
-                            faculty,
+                            level: c.plan.level,
+                            campus: c.plan.campus,
+                            program: c.plan.program,
+                            faculty: c.plan.faculty,
                             code: c.code,
                             name: c.name,
                             credits: c.credits,
@@ -788,6 +854,36 @@ export function Program({
         </>
       )}
     </Layout>
+  );
+}
+
+/**
+ * De qué plan es esta fila, y —al pasar el mouse— cómo figura en el otro si
+ * el código está en los dos (D6, interfaz §6). Solo se dibuja con doble
+ * titulación: con un plan, `main` no gana ni un elemento.
+ */
+function PlanTag({ course: c }: { course: MergedCourse }) {
+  return (
+    <Tooltip
+      content={
+        <>
+          <p className="tt-body">
+            Se cuenta en <b>{c.plan.program}</b> como <code>{c.typology}</code>
+          </p>
+          {/* Solo cuando la tipología del otro plan es DISTINTA: decirlo
+              cuando coincide sería ruido puro (D6, interfaz §6) —la mitad de
+              libre elección se comparte entre los dos planes con la misma
+              tipología en los dos. */}
+          {c.alsoIn && c.alsoIn.typology !== c.typology && (
+            <p className="tt-body">
+              También está en {c.alsoIn.plan.program}, como <code>{c.alsoIn.typology}</code>.
+            </p>
+          )}
+        </>
+      }
+    >
+      <span className="chip__code tnum row__plan-tag">{c.plan.program}</span>
+    </Tooltip>
   );
 }
 
@@ -815,7 +911,7 @@ function SeatsCell({
   seats,
   askedAt,
 }: {
-  seats?: CourseSummary['seats'];
+  seats?: MergedCourse['seats'];
   askedAt?: string | null;
 }) {
   if (!seats) {
@@ -948,7 +1044,7 @@ function SeatsCell({
  * Por qué se ordena cada columna. Cupos es la única con matiz: los cuatro
  * estados de la celda caen en una sola recta según SEATS_RANK.
  */
-function sortKeyOf(c: CourseSummary, col: TableCol): SortKey {
+function sortKeyOf(c: MergedCourse, col: TableCol): SortKey {
   switch (col) {
     case 'code':
       return c.code;
@@ -1000,7 +1096,7 @@ function toggle<T>(set: ReadonlySet<T>, v: T): ReadonlySet<T> {
  * Las que sí se consultaron y no tienen grupos, o los tienen llenos, se van:
  * de esas la respuesta ya se sabe.
  */
-function hasRoom(c: CourseSummary): boolean {
+function hasRoom(c: MergedCourse): boolean {
   if (c.seats) {
     // Si el dato está desactualizado, no sabemos el estado real → incógnita.
     if (

@@ -63,6 +63,49 @@ que persistir ni que sincronizar.
 
 ---
 
+## La invariante: una materia, una sola fila
+
+**Lo más importante de todo el plan.** Si algo de esta rama se implementa a medias, que
+no sea esto:
+
+> Nadie ve nunca la misma asignatura dos veces por estar en los dos planes. Ni en el
+> catálogo, ni en Mi semestre, ni en el horario, ni en los conteos.
+
+No es cosmético. Una persona inscribe la asignatura **una vez, por un solo plan**; dos
+filas serían dos formas de agregar la misma clase, dos bloques idénticos pisados en el
+calendario y créditos contados dos veces. Es la diferencia entre un tablero que suma dos
+planes y uno que dice mentiras.
+
+**La clave de identidad es `code`**, no `itemId`. `itemId` lleva el plan adentro
+(`storage.ts:75-77`), así que la misma asignatura desde dos planes son dos `itemId`
+distintos: perfecto para no colisionar en el estado, inútil para deduplicar de cara a la
+persona. Lo que hay que comparar es el código de la asignatura.
+
+Y `code` alcanza **porque los dos planes son de la misma sede** ([D3](#d3--dos-planes-de-la-misma-sede)):
+la identidad de una asignatura en la base es `(campus_code, code)`, no `code` a secas.
+
+Dónde se garantiza, superficie por superficie:
+
+| Superficie | Cómo | Dónde |
+|---|---|---|
+| Catálogo | `mergeCatalogs` colapsa por `code` antes de pintar; el mapa se llena recorriendo las partes **en orden**, así que también absorbe una repetición dentro de un mismo plan | D5, D6 |
+| Botón `+` | `PlanProvider.add()` rechaza un `code` que ya esté en la lista, venga del plan que venga | D7 |
+| Mi semestre / Mi horario | Salen de `plan.items`, que ya no puede tener dos con el mismo `code` | D7 |
+| Calendario y `.ics` | Salen de los mismos `items` | — |
+| Créditos y facetas | Cuentan filas, y hay una sola por asignatura | D9 |
+| Datos viejos en el navegador | `loadPlan()` deduplica por `code` al leer, igual que ya valida tipos | Fase 1 |
+
+Las dos primeras filas son las que hacen el trabajo; las demás salen gratis de que las
+dos primeras se cumplan. La última es cinturón: hoy no puede haber duplicados guardados
+—había un solo plan— pero leer sin validar es exactamente cómo este repo se ha negado a
+trabajar (`storage.ts:44-53`).
+
+Y cuando hay una sola fila para dos planes, hay que decir de cuál es y dejar cambiarla:
+eso es [D6](#d6--qué-plan-gana-cuando-un-código-está-en-los-dos) y la
+[interfaz §6](#6-coursecard--de-qué-plan-es-dónde-más-está-y-cómo-cambiarla).
+
+---
+
 ## Por qué esto es casi gratis
 
 La parte cara ya está hecha, sin querer. **El estado del semestre ya está etiquetado por
@@ -200,7 +243,7 @@ adónde apunta el icono de catálogo de la barra).
 > minoría y metía un campo de estado nuevo en `localStorage`. La unión hace las dos cosas
 > mejor con menos código.
 
-### D3 · Tope de **2** planes
+### D3 · Dos planes, **de la misma sede**
 
 Doble titulación son dos, y la casilla lo dice literalmente. Con dos elegidos, las filas
 de la lista quedan deshabilitadas hasta que se suelte una — mismo patrón de botón apagado
@@ -210,6 +253,23 @@ de la lista quedan deshabilitadas hasta que se suelte una — mismo patrón de b
 // ponytail: tope duro de 2, sube a N cambiando la constante si aparece el caso
 export const MAX_PLANS = 2;
 ```
+
+**Y los dos son de la misma sede**: la doble titulación no cruza sedes. No es una
+suposición nuestra, es cómo funciona, así que se hace cumplir en vez de confiar:
+
+- En el picker, elegido el primer plan, **la sede queda fija** y sus chips se
+  deshabilitan con una nota corta ("la doble titulación es dentro de una sede"). Un
+  estado imposible que no se puede tipear es mejor que uno validado después.
+- `addPlan()` rechaza —devuelve `false`— un plan cuya sede no sea la del primero. El
+  guardia va en la función compartida, no en la pantalla.
+
+No es solo higiene de dominio: **es lo que hace segura la deduplicación por `code`**. La
+identidad de una asignatura en la base es `(campus_code, code)` (`DATA-MODEL.md`, tabla
+`course`), así que dentro de una sede el código identifica y entre sedes no. Con los dos
+planes en la misma sede, además, **`name` y `credits` de una asignatura compartida son
+por definición idénticos** en los dos: viven en `course`, que es por sede, no en
+`course_program`. Lo único que puede diferir es la tipología y qué grupos se ven — que es
+exactamente lo que resuelve D6, y nada más.
 
 ### D4 · Cambiar de plan **no borra nada**. Quitar un plan borra **solo lo suyo**
 
@@ -229,82 +289,115 @@ Con dos planes, `Program` pide los dos catálogos (`useApi` acepta `null`, así 
 llamadas fijas sin hooks condicionales) y los fusiona en memoria. Cada fila recuerda de
 qué plan salió, que es lo que después arma su `PlanItem`.
 
-Los códigos que existen en los dos planes **aparecen una sola vez**. Esto no es cosmético:
-`course.code` se repite entre planes con frecuencia y la persona va a inscribir la materia
-**por un solo plan**, así que dos filas idénticas serían dos formas de agregar la misma
-clase dos veces.
+Los códigos que existen en los dos planes **aparecen una sola vez** — ver
+[La invariante](#la-invariante-una-materia-una-sola-fila), que es lo primero que hay que
+leer de este plan.
 
 > Descartado: dos listas, una debajo de otra, con encabezado por plan. Rompe el orden,
 > rompe el buscador y duplica los códigos compartidos, que es justo lo que hay que
 > resolver.
 
-### D6 · La regla de tipología: obligatorio > optativo > libre elección
+### D6 · Qué plan gana cuando un código está en los dos
 
-Cuando un código está en los dos planes **con tipología distinta** —confirmado que pasa:
-8 de 22 códigos compartidos divergen entre planes de Bogotá, `GOTCHAS.md` §17— gana la
-tipología más exigente, y con ella gana su plan.
+Que pase está confirmado: de 22 códigos compartidos entre planes de Bogotá, **8 divergen
+en tipología** (`GOTCHAS.md` §17). Tres criterios, en orden. El primero que decide,
+decide.
 
-La letra entre paréntesis es la clave estable, no la frase: `FUND. OBLIGATORIA (B)` → `B`.
+| # | Criterio | Cuándo aplica |
+|---|---|---|
+| 1 | **Más grupos**: gana el plan que ve más | Solo si el catálogo trae `section_schedules` de los **dos** lados |
+| 2 | **Tipología de mayor rango** (tabla abajo) | Siempre: la tipología viene en el listado |
+| 3 | **El primer plan elegido** | Empate en todo lo anterior |
 
-| Rango | Tipologías (literal del SIA) | Letra |
+**Criterio 1 · más opciones gana.** Los grupos visibles dependen del programa —relación
+de subconjunto estricto, `CLAUDE.md`—, así que el plan que ve más grupos es el que deja
+armar más horarios. El dato sale de `section_schedules` (`api/types.ts:55-63`) y hay que
+leerlo con cuidado: **ausente = nadie pidió el detalle desde ese plan** (no se sabe);
+**`[]` = se pidió y no hay grupos** (se sabe, y es cero). Solo se compara cuando los dos
+lados lo traen; con uno solo no se inventa nada y pasa el turno al criterio 2.
+
+Por eso **con dos planes el catálogo se pide siempre con `?include=schedules`**, y no
+solo cuando hay horario armado (`Program.tsx:77-81`): son ~44 KB sobre ~358 KB por plan,
+y es lo que hace que este criterio se pueda aplicar. Aun así, para los códigos que nadie
+midió todavía manda el criterio 2 — es el caso normal, no la excepción.
+
+**Criterio 2 · la tipología.** La letra entre paréntesis es la clave estable, no la frase
+(el SIA cambia de vocabulario entre vistas, `GOTCHAS.md` §17): `FUND. OBLIGATORIA (B)` →
+`B`.
+
+| Rango | Tipología (literal del SIA) | Letra |
 |---:|---|---|
 | 4 | `TRABAJO DE GRADO` | `P` |
-| 3 | `FUND. OBLIGATORIA`, `DISCIPLINAR OBLIGATORIA` | `B`, `C` |
-| 2 | `FUND. OPTATIVA`, `DISCIPLINAR OPTATIVA` | `O`, `T` |
-| 1 | `LIBRE ELECCIÓN` | `L` |
-| 0 | `NIVELACIÓN`, y cualquier letra desconocida | `E`, … |
+| 3 | `NIVELACIÓN` | `E` |
+| 2 | `FUND. OBLIGATORIA`, `DISCIPLINAR OBLIGATORIA` | `B`, `C` |
+| 1 | `FUND. OPTATIVA`, `DISCIPLINAR OPTATIVA` | `O`, `T` |
+| 0 | `LIBRE ELECCIÓN`, y cualquier letra desconocida | `L`, … |
 
-Empate (misma letra en los dos planes) → gana el **primer plan elegido**, por desempate
-estable y no por azar del orden de llegada de las respuestas.
+> `NIVELACIÓN` por encima de las obligatorias es deliberado, no un descuido de
+> ordenamiento: bloquea el avance del plan, así que es lo más urgente de inscribir. No lo
+> "arregles" en un refactor.
 
 Consecuencias que hay que saber:
 
-- **El literal que se muestra y se guarda en `PlanItem.typology` es el del plan
-  ganador**, crudo, tal como lo manda el SIA. No se normaliza ni se traduce: es dato de
-  ellos (convención de idioma, `CLAUDE.md`).
+- **`PlanItem.typology` es el literal del plan ganador**, crudo, tal como lo manda el
+  SIA. No se normaliza ni se traduce: es dato de ellos (convención de idioma,
+  `CLAUDE.md`).
 - **El desglose de créditos por tipología cuenta la materia una sola vez**, en la
-  tipología ganadora.
-- **Los grupos visibles son los del plan ganador.** Los grupos que se ven dependen del
-  programa desde el que se consulta (`CLAUDE.md`: relación de subconjunto estricto), así
-  que una materia ganada por el plan A puede mostrar menos grupos de los que mostraría
-  desde el B. Se avisa en la tarjeta con una línea —"también en 2B10 como
-  `LIBRE ELECCIÓN (L)`"— y no se hace nada más: fusionar los grupos de las dos
-  consultas duplicaría las peticiones de detalle para un caso de borde.
-  Ver [Preguntas abiertas](#preguntas-abiertas) §2.
-
-> Rangos 4 y 0 son propuesta, no instrucción recibida: `TRABAJO DE GRADO` y `NIVELACIÓN`
-> no entran en la regla de tres niveles. Ver [Preguntas abiertas](#preguntas-abiertas) §1.
+  tipología del plan ganador.
+- **El criterio 1 puede ganarle al 2**, y eso tiene consecuencia académica: una materia
+  obligatoria en A y de libre elección en B, con más grupos en B, se queda con B — y
+  entonces se ve, se cuenta y se inscribiría **como libre elección**. Por eso no se
+  decide en silencio: la tarjeta dice dónde más está y con qué tipología, y deja
+  cambiarla de plan con un clic (interfaz §6).
 
 ### D7 · Una asignatura, un plan: no se agrega dos veces el mismo `code`
 
-La deduplicación de D5 ya hace imposible agregarla dos veces desde el catálogo. El
-guardia va igual **en `PlanProvider.add()`**, porque la ficha de la materia también agrega
-y porque un `localStorage` viejo puede traer la lista ya duplicada. Es una línea:
-`if (prev.some((i) => i.code === item.code)) return prev;`
-
-### D8 · El tope de materias sube a **15** cuando hay dos planes
-
-`MAX_ITEMS = 10` (`planContext.ts:6`) es un presupuesto de mediciones contra el SIA —una
-petición de detalle por materia, pool de 4—, no una cuota académica. Un semestre de doble
-titulación son ~8-9 materias inscritas, y la lista es una **preselección**: con 10 se
-queda sin espacio para comparar candidatas, que es para lo que existe el tablero.
+La segunda mitad de [la invariante](#la-invariante-una-materia-una-sola-fila). La
+deduplicación de D5 ya hace imposible agregarla dos veces desde el catálogo; el guardia va
+igual **en `PlanProvider.add()`**, porque la ficha de la materia también agrega, porque
+un `localStorage` viejo puede traer la lista ya duplicada, y porque es donde pasan todos
+los caminos. Es una línea:
 
 ```ts
-// ponytail: el techo real es la ronda de medición (~1.3 s por materia, 4 en
-// paralelo): 15 son ~5 s con la barra de progreso a la vista. Si molesta, baja.
-const max = plans.length > 1 ? 15 : 10;
+if (prev.some((i) => i.code === item.code)) return prev;
 ```
 
-### D9 · Los créditos siguen sumando en global; el desglose por plan va al tooltip
+Por `code`, **no** por `itemId`: comparar `itemId` dejaría entrar la misma asignatura una
+vez por cada plan, que es justo lo que hay que impedir.
 
-`CreditsBadge` muestra el total del semestre y el semáforo de los estatutos con los
-mismos umbrales de hoy (`credits.ts:10,16`). El tooltip, que ya despliega el desglose por
-tipología, gana uno por plan cuando hay dos.
+### D8 · El tope de materias sube a **20**, para todos
 
-**Lo que NO se hace: aplicar el semáforo por plan.** No sabemos si los mínimos de 6 y 10
-créditos se exigen por plan de estudios o sobre la inscripción completa
-([Preguntas abiertas](#preguntas-abiertas) §3). Inventarlo sería pintar de rojo un
-semestre válido, y este badge es informativo por diseño: nunca bloquea nada.
+`MAX_ITEMS` (`planContext.ts:6`) es un presupuesto de mediciones contra el SIA —una
+petición de detalle por materia, pool de 4—, no una cuota académica. La lista es una
+**preselección**: con 10 se queda sin espacio para comparar candidatas, que es para lo
+que existe el tablero, y con dos planes se queda corta antes todavía.
+
+**Un solo número, no uno por cardinalidad de planes**: nada en el costo de medir depende
+de cuántos planes haya, y dos constantes serían dos cosas que mantener sincronizadas para
+no ganar nada.
+
+```ts
+/** Tope deliberado: 20. El techo real es la ronda de medición —una petición
+ *  de detalle por materia, 4 en paralelo—, ~7 s con la barra de progreso a la
+ *  vista. Es un planificador de semestre, no una lista de deseos.
+ *  ponytail: si la ronda se siente lenta, este número es la perilla. */
+export const MAX_ITEMS = 20;
+```
+
+**Hay tres sitios con el `10` escrito a mano** que pasan a leer la constante, o la
+pantalla va a mentir: `Semester.tsx:49` (`{plan.full && ' de 10'}`), `AddButton.tsx:47`
+("Hasta 10 materias a la vez") y el comentario de `planContext.ts:5`.
+
+### D9 · Los créditos suman por **inscripción completa**, no por plan
+
+Confirmado: los mínimos de los estatutos (6 para inscribir, 10 para cerrar,
+`credits.ts:10,16`) se miden sobre la inscripción entera, no plan por plan. Así que
+`CreditsBadge` **no cambia de lógica**: mismo total, mismo semáforo, mismos umbrales, con
+las materias de los dos planes sumadas.
+
+Lo único que gana, con dos planes, es un desglose por plan en el tooltip que ya despliega
+el de tipología. Es informativo: **no** hay semáforo por plan, porque no hay regla por
+plan que semaforear.
 
 ### D10 · En Mi semestre, la sigla del plan por fila; en el calendario, nada
 
@@ -350,12 +443,16 @@ Reglas de `loadPlans()`, en este orden:
 > **La clave del semestre —`tablero.semestre.v2`— no se toca.** `PlanItem` no cambia de
 > forma, y bumpearla le borraría el semestre a todo el mundo por nada.
 
+`loadPlan()` (la lista de materias, `storage.ts:38-57`) gana **una** línea: después de
+filtrar por tipos, deduplica por `code` quedándose con la primera. Es el cinturón de
+[la invariante](#la-invariante-una-materia-una-sola-fila) contra un `localStorage`
+manipulado o venido de una versión futura; no debería disparar nunca.
+
 ### `web/src/state/planContext.ts`
 
 ```ts
 export const MAX_PLANS = 2;
-export const MAX_ITEMS = 10;       // con un plan
-export const MAX_ITEMS_PAIR = 15;  // con dos (D8)
+export const MAX_ITEMS = 20;  // uno solo, para uno y para dos planes (D8)
 
 export type PlanApi = {
   // ── sin cambios ─────────────────────────────────────────────
@@ -364,7 +461,7 @@ export type PlanApi = {
   add: (item: Omit<PlanItem, 'addedAt'>) => boolean;  // + guardia D7
   remove: (id: string) => void;
   clear: () => void;
-  full: boolean;                    // contra el tope que corresponda (D8)
+  full: boolean;                    // items.length >= MAX_ITEMS (20, D8)
   /** El primer plan. Mismo significado de siempre para quien tiene uno. */
   selection: Selection | null;
   /** Fija el plan ÚNICO: reemplaza la lista entera. Es lo que usa quien no
@@ -392,30 +489,49 @@ Verificarlo es criterio de aceptación de la Fase 1, no código nuevo.
 
 ```ts
 /** La letra entre paréntesis: 'FUND. OBLIGATORIA (B)' → 'B'. Es lo estable;
- *  la frase cambia de vocabulario entre vistas del SIA (GOTCHAS §17). */
+ *  la frase cambia de vocabulario entre vistas del SIA (GOTCHAS §17).
+ *  Sin paréntesis o vacío → '' (rango 0, no tira). */
 export function typologyLetter(raw: string): string;
 
-/** Rango de exigencia (D6). Más alto gana. Desconocida → 0. */
+/** Rango de exigencia (D6): P=4, E=3, B|C=2, O|T=1, todo lo demás 0. */
 export function typologyRank(raw: string): number;
 ```
 
-### `web/src/lib/catalog.ts` (nuevo, ~30 líneas)
+### `web/src/lib/catalog.ts` (nuevo, ~40 líneas)
 
 ```ts
 export type MergedCourse = CourseSummary & {
   /** De qué plan salió esta fila: lo que arma su PlanItem y su itemId. */
   plan: Selection;
-  /** Si el mismo código estaba en el otro plan, con qué tipología. Solo
-   *  para la línea informativa de la tarjeta. */
-  alsoIn?: { plan: Selection; typology: string };
+  /** El mismo código visto desde el otro plan, si estaba. Alimenta la línea
+   *  informativa de la tarjeta y el botón de cambiarla de plan. */
+  alsoIn?: { plan: Selection; typology: string; sections: number | null };
 };
 
-/** Une los catálogos de 1 o 2 planes. Dedup por `code` con la regla de D6.
- *  Con un solo plan es un map sobre la lista: mismo orden, mismo largo. */
+/** Une los catálogos de 1 o 2 planes. Dedup por `code` con los tres
+ *  criterios de D6. Con un solo plan es un map sobre la lista: mismo orden,
+ *  mismo largo, sin `alsoIn`. */
 export function mergeCatalogs(
   parts: { plan: Selection; courses: CourseSummary[] }[],
 ): MergedCourse[];
 ```
+
+El desempate, entero (D6). `sections` es `c.section_schedules?.length ?? null`, y `null`
+significa "no se sabe", que **no** es lo mismo que 0:
+
+```ts
+function wins(a: CourseSummary, b: CourseSummary): boolean {
+  const [sa, sb] = [countOf(a), countOf(b)];       // number | null
+  if (sa !== null && sb !== null && sa !== sb) return sa > sb;   // 1
+  const [ra, rb] = [typologyRank(a.typology), typologyRank(b.typology)];
+  if (ra !== rb) return ra > rb;                                 // 2
+  return true;  // 3: `a` es el del primer plan elegido — se queda
+}
+```
+
+El orden de `parts` **es** el orden de elección de los planes, así que el criterio 3 sale
+solo de recorrer en orden y no reemplazar en caso de empate. Nada de `Math.random`, nada
+de "el que llegó primero por la red": el resultado tiene que ser el mismo en cada carga.
 
 ---
 
@@ -439,8 +555,11 @@ Con la casilla **marcada**:
 - `choose()` llama a `addPlan()`. Si con eso quedan dos, navega al catálogo; si es el
   primero, **se queda** y espera el segundo.
 - Con dos elegidos, las filas quedan deshabilitadas ("suelta uno para cambiarlo").
-- Nivel y sede no se tocan entre un plan y el otro: el componente no se desmonta, así
-  que el segundo plan de la misma sede está a un clic.
+- **Elegido el primero, la sede se congela** (D3): los chips de sede quedan
+  deshabilitados con la nota "la doble titulación es dentro de una sede", y el buscador
+  sigue filtrando los planes de esa sede. Soltar el primer chip la descongela.
+- El nivel tampoco hay que volver a tocarlo: el componente no se desmonta, así que el
+  segundo plan está a un clic del primero.
 
 Con la casilla **sin marcar** (la mayoría): la pantalla es la de hoy, con `choose()`
 llamando a `select()` — que reemplaza el plan único, con la confirmación de siempre si
@@ -455,14 +574,18 @@ tengo, no solo el primero.
 ### 2. Catálogo (`views/Program.tsx`) · la unión
 
 ```tsx
-const merged = plan.owns(sel) ? plan.plans : [sel];   // plan ajeno ⇒ solo ese
+const mine = plan.owns(sel) ? plan.plans : [sel];   // plan ajeno ⇒ solo ese
 
-const a = useApi<CoursesResponse>(routes.courses(scope(merged[0]), merged[0].program, inc));
+// Con dos planes los horarios se piden SIEMPRE: son el criterio 1 de D6, no
+// solo el marcado de choques. Ver el comentario de Program.tsx:60-73.
+const inc = mine.length > 1 || hasSchedule ? 'schedules' : undefined;
+
+const a = useApi<CoursesResponse>(routes.courses(scope(mine[0]), mine[0].program, inc));
 const b = useApi<CoursesResponse>(
-  merged[1] ? routes.courses(scope(merged[1]), merged[1].program, inc) : null,
+  mine[1] ? routes.courses(scope(mine[1]), mine[1].program, inc) : null,
 );
 
-const courses = useMemo(() => mergeCatalogs([...]), [a.data, b.data, merged]);
+const courses = useMemo(() => mergeCatalogs([...]), [a.data, b.data, mine]);
 ```
 
 - **Hooks fijos, sin condicional**: `useApi` ya acepta `null` y no pide nada
@@ -531,11 +654,24 @@ planes"** (`!plan.owns(sel)`). Ahí el catálogo se pinta solo (no unido), se qu
 de hoy, y "cambiarme a este" se convierte en **"agregar a mis planes"** cuando hay cupo
 (`!plansFull`) — que ya no borra nada.
 
-### 6. `CourseCard` · de qué plan es, y dónde más está
+### 6. `CourseCard` · de qué plan es, dónde más está, y cómo cambiarla
 
 Con `plans.length > 1`, un chip con el código del plan al lado del código de la
-asignatura (`.chip__code`, ya existe). Y en las que vinieron de los dos, la línea de D6:
-"también en 2B10 como `LIBRE ELECCIÓN (L)`". Con un plan, nada de esto se dibuja.
+asignatura (`.chip__code`, ya existe). Con un plan, nada de esto se dibuja.
+
+Y en las que estaban en los dos (`alsoIn`), una línea con **la salida** al caso en que el
+criterio 1 de D6 haya elegido el plan que a esta persona no le sirve:
+
+> también en **2B10** como `LIBRE ELECCIÓN (L)` · 12 grupos — **cambiar a 2B10**
+
+- Es el único camino de vuelta: el catálogo muestra la materia **una sola vez**, así que
+  sin esto no hay forma de elegir el otro plan para ella.
+- "Cambiar" es `remove(itemId viejo)` + `add(item con el otro plan)`, en ese orden. Lo
+  demás se acomoda solo: el grupo elegido se poda por `itemId`
+  (`ScheduleProvider.tsx:31-40`) y el calendario se repinta desde `plan.items`.
+- **Se pierde el grupo elegido de esa materia**, porque los grupos del otro plan no son
+  los mismos. Se avisa en el mismo clic si había uno elegido (`useConfirm`), no después.
+- El conteo de grupos de `alsoIn` solo se muestra si se sabe (`sections !== null`).
 
 ### 7. `CreditsBadge` · el desglose gana una sección
 
@@ -562,8 +698,12 @@ usable. El mensaje va literal — ver [`COMMIT-CONVENTION.md`](COMMIT-CONVENTION
       aparece `tablero.planes.v2` y la v1 desaparece.
 - [ ] `addPlan()` no toca `items`; `removePlan(id)` borra ese plan y solo sus materias —
       las del otro sobreviven, y sus grupos elegidos también.
-- [ ] `add()` devuelve `false` si ya hay una materia con el mismo `code` (D7); el tope es
-      10 con un plan y 15 con dos (D8).
+- [ ] `add()` devuelve `false` si ya hay una materia con el mismo `code` **aunque sea de
+      otro plan** (D7 — por `code`, no por `itemId`), y el tope son 20 materias con uno o
+      con dos planes (D8).
+- [ ] `loadPlan()` con dos materias del mismo `code` guardadas a mano devuelve una.
+- [ ] Los tres `10` escritos a mano —`Semester.tsx:49`, `AddButton.tsx:47` y el comentario
+      de `planContext.ts:5`— leen la constante: con 20 materias la pantalla dice 20.
 - [ ] "Empezar de nuevo" deja el `localStorage` sin `tablero.plan.v1`,
       `tablero.planes.v2`, `tablero.semestre.v2`, `tablero.orden.v1`,
       `tablero.horario.v1` ni `tablero.horario.ancho.v1`.
@@ -584,7 +724,11 @@ Interfaz §1 y §3. El menú entra acá porque es la puerta de vuelta al picker.
 - [ ] Primera visita sin marcar la casilla: **un clic** de la lista al catálogo, igual que
       hoy. Lo único distinto en pantalla es la casilla sin marcar.
 - [ ] Marcándola: el primer plan deja el chip "1 de 2" y **no** navega; el segundo entra
-      al catálogo; nivel y sede se quedaron donde estaban.
+      al catálogo; el nivel se quedó donde estaba.
+- [ ] Elegido el primer plan, **la sede queda congelada** y no hay forma de elegir un
+      segundo plan de otra sede desde la interfaz (D3); soltar el primer chip la
+      descongela.
+- [ ] `addPlan()` devuelve `false` ante un plan de otra sede aunque se lo llame a mano.
 - [ ] Salir a mitad (atrás del navegador) deja un plan elegido y la app funcionando.
 - [ ] Desmarcarla con dos planes pide confirmación y borra solo las materias del segundo.
 - [ ] Volver al picker desde el menú lo encuentra con la casilla marcada y los dos chips.
@@ -607,12 +751,20 @@ feat(web): declarar doble titulación y elegir dos planes al empezar
       mismas facetas.
 - [ ] Con dos, el conteo es la unión deduplicada, y el buscador encuentra materias de los
       dos planes.
-- [ ] Un código presente en los dos aparece **una sola vez**, con la tipología de mayor
-      rango (D6) y contado una vez en las facetas de tipología y créditos.
+- [ ] **La invariante**: un código presente en los dos planes aparece **una sola vez** —
+      buscándolo por código, por nombre, y con cualquier combinación de filtros— y se
+      cuenta una sola vez en el total de la cabecera y en las facetas de tipología y de
+      créditos.
+- [ ] El ganador sigue los tres criterios de D6 en orden: más grupos cuando se sabe de los
+      dos lados, si no la tipología de mayor rango, si no el primer plan elegido.
+- [ ] Con dos planes las dos peticiones llevan `?include=schedules` aunque no haya ningún
+      grupo elegido todavía.
+- [ ] Recargar la página da **el mismo ganador** para la misma materia: el desempate no
+      depende de cuál respuesta llegó primero.
 - [ ] Si un catálogo falla y el otro no, se ve el que respondió y un `Fault` con
       reintento que vuelve a pedir los dos.
-- [ ] `npm test` cubre la regla de D6: divergencia, empate, letra desconocida, código en
-      un solo plan.
+- [ ] `npm test` cubre D6: más grupos gana, `[]` cuenta como cero y ausente como "no se
+      sabe", divergencia de tipología, empate, letra desconocida, código en un solo plan.
 
 ```
 feat(web): unir los catálogos de los dos planes en una sola lista
@@ -648,6 +800,10 @@ feat(web): permitir materias de los dos planes en el mismo semestre
 - [ ] Con un plan, `CourseCard` y `CreditsBadge` se ven **idénticos** a `main`.
 - [ ] Con dos, cada tarjeta muestra el código de su plan; las compartidas dicen dónde más
       están y con qué tipología; el tooltip de créditos desglosa por plan y por tipología.
+- [ ] "Cambiar a 2B10" deja la materia con el otro plan, su tipología y sus grupos, sin
+      tocar el resto de la lista; si había grupo elegido, avisa antes de perderlo.
+- [ ] El total de créditos y el semáforo cuentan las materias de los dos planes juntas
+      (D9), y una materia compartida cuenta una sola vez.
 - [ ] El calendario y el `.ics` salen bien con materias de los dos planes (colores por
       materia, sin eje nuevo).
 
@@ -686,17 +842,26 @@ render, sin fixtures— con **dos** archivos nuevos:
 3. v2 con dos planes de igual `selectionId` → se deduplica.
 4. Basura en la clave (`'{'`, `'[]'`, `null`) → `[]` sin tirar.
 5. `removePlan` deja solo las materias del otro plan.
+6. `addPlan` con un plan de otra sede → `false`, lista intacta (D3).
+7. `add` con un `code` que ya está desde el otro plan → `false` (la invariante).
+8. `loadPlan` con el mismo `code` dos veces guardado → una sola materia.
 
 **`web/src/lib/catalog.test.ts`** (Fase 3), la regla de D6, que es la lógica no trivial de
 esta rama:
 
-1. Mismo código, `FUND. OBLIGATORIA (B)` en A y `LIBRE ELECCIÓN (L)` en B → una fila, con
-   `B`, plan A, y `alsoIn` apuntando a B.
-2. Al revés (el obligatorio en el segundo plan) → gana igual el obligatorio.
-3. Misma letra en los dos → gana el primero elegido, con `alsoIn` puesto.
-4. Letra desconocida o formato raro (`'RARO'`, `''`) → rango 0, no tira.
-5. Códigos que están en un solo plan → pasan tal cual.
-6. Una sola parte → salida de igual largo y orden que la entrada.
+1. **Criterio 1**: 3 grupos en A contra 8 en B, con tipologías cualesquiera → gana B, y
+   `alsoIn` apunta a A. Es el criterio que manda por encima de la tipología.
+2. **`[]` no es ausente**: A con `section_schedules: []` y B con 5 → gana B (0 < 5). A con
+   `undefined` y B con 5 → **no** decide el criterio 1, pasa al 2.
+3. **Criterio 2**: sin conteos de los dos lados, `FUND. OBLIGATORIA (B)` en A contra
+   `LIBRE ELECCIÓN (L)` en B → gana A, con `alsoIn` a B. Y al revés, con el obligatorio
+   en el segundo plan → gana igual el obligatorio.
+4. **El orden nuevo**: `NIVELACIÓN (E)` le gana a `DISCIPLINAR OBLIGATORIA (C)`, y
+   `TRABAJO DE GRADO (P)` le gana a todo (D6).
+5. **Criterio 3**: misma letra y mismos conteos → gana el primero elegido, con `alsoIn`.
+6. Letra desconocida o formato raro (`'RARO'`, `''`) → rango 0, no tira.
+7. Códigos que están en un solo plan → pasan tal cual.
+8. Una sola parte → salida de igual largo y orden que la entrada, sin `alsoIn`.
 
 No se testea React: no hay entorno de render en el repo y montarlo sería traer
 `@testing-library` entero por un popover. Las fases 2, 4 y 5 se verifican a mano.
@@ -728,33 +893,42 @@ No se testea React: no hay entorno de render en el repo y montarlo sería traer
 | Riesgo | Mitigación |
 |---|---|
 | La migración v1→v2 falla y alguien pierde plan y semestre | Primer criterio de la Fase 1, con test. `loadPlans` nunca tira: ante la duda devuelve `[]`, y el peor caso es volver a elegir el plan — el semestre vive en otra clave que no se toca |
-| La regla de tipología esconde grupos (D6) | Es una consecuencia real y declarada: la tarjeta dice dónde más está la materia. Si molesta en uso, la salida es fusionar los grupos de las dos consultas de detalle — más peticiones, se decide con datos |
-| Dos catálogos = ~700 KB y dos misses fríos la primera vez | Los dos van en paralelo y la pantalla de carga ya explica el costo. La segunda visita sale de Postgres |
+| **El criterio de "más grupos" cambia la tipología con la que se inscribiría** una materia obligatoria en un plan y libre en el otro (D6) | Es la consecuencia inevitable de que gane el plan con más opciones. Por eso la tarjeta dice dónde más está la materia y con qué tipología, y deja cambiarla de plan con un clic (interfaz §6) |
+| El ganador de una materia compartida cambia entre visitas, porque alguien midió el detalle desde el otro plan y apareció el conteo | Solo puede pasar **antes** de agregarla: una vez en Mi semestre, la materia se queda con el plan que se guardó. Nada se re-decide a espaldas de nadie |
+| Dos catálogos = ~800 KB (con `?include=schedules`) y dos misses fríos la primera vez | Los dos van en paralelo y la pantalla de carga ya explica el costo. La segunda visita sale de Postgres |
 | La casilla se lee como ruido para la mayoría | Es una casilla sin marcar, sin decisión forzada y sin desplazar la lista. Si molesta, baja al pie del bloque de "Nivel" |
-| La mayoría de un solo plan nota el cambio | Criterio repetido en las fases 2, 3 y 5: con un plan, idéntico a `main` salvo la casilla. Si algo más cambia, es un bug de la rama |
-| 15 materias entre dos planes se quedan cortas | Es una constante (D8). Se sube cuando aparezca el caso, no antes |
+| La mayoría de un solo plan nota el cambio | Criterio repetido en las fases 2, 3 y 5: con un plan, idéntico a `main` salvo la casilla y el tope de 20 |
+| Medir 20 materias se siente lento | ~7 s con la barra de progreso a la vista, y el botón ya salta las que están dentro del cooldown (`useCourseDetails.ts:210-226`). `MAX_ITEMS` es la perilla |
 
 ---
 
-## Preguntas abiertas
+## Decidido, y lo que queda abierto
 
-Ninguna bloquea la implementación: cada una tiene un default puesto en el plan.
+Tres preguntas de la versión anterior de este documento ya tienen respuesta, y quedan
+acá para que nadie las reabra:
 
-1. **`TRABAJO DE GRADO (P)` y `NIVELACIÓN (E)` no entran en "obligatorio > optativo >
-   libre elección".** Default asumido: `P` por encima de las obligatorias (es requisito de
-   grado) y `E` por debajo de libre elección (es nivelación, no cuenta como avance).
-   Cambiar esto es cambiar una tabla de 7 filas en `lib/typology.ts`.
-2. **Si un código está en los dos planes, ¿basta con quedarse con los grupos del plan
-   ganador?** Los grupos visibles dependen del programa, así que el ganador puede mostrar
-   menos. Default: sí, y se avisa en la tarjeta. La alternativa —pedir el detalle a los
-   dos planes y unir los grupos— duplica peticiones para un caso de borde.
-3. **Los mínimos de créditos (6 para inscribir, 10 para cerrar) ¿son por plan o por la
-   inscripción completa?** Default: total global, desglose por plan solo informativo (D9).
-   **No inventar la regla.**
-4. **¿La doble titulación puede cruzar sedes o niveles?** El modelo lo soporta —cada
-   `PlanItem` lleva su `campus`, `faculty` y `level`, y el detalle se pide con los del item
-   (`useCourseDetails.ts:127-129`)—, así que no hay nada que hacer salvo no asumir lo
-   contrario en el copy.
+| Pregunta | Respuesta |
+|---|---|
+| Orden de tipologías | `TRABAJO DE GRADO` > `NIVELACIÓN` > obligatorias > optativas > libre elección (D6). La nivelación arriba de las obligatorias es a propósito |
+| Qué plan gana una materia compartida | El que ve **más grupos**; la tipología es el desempate cuando no se sabe (D6) |
+| Los mínimos de créditos | Por **inscripción completa**, no por plan. `CreditsBadge` no cambia de lógica (D9) |
+| Tope de materias | 20, para uno y para dos planes (D8) |
+| ¿Cruza sedes? | **No.** Los dos planes son de la misma sede, y la interfaz lo impide en vez de confiar (D3) |
+
+Abierto, sin bloquear nada:
+
+1. **¿Los dos planes son siempre del mismo nivel** (dos pregrados)? Si lo son, el nivel
+   se congela junto con la sede en el picker y es un guardia más en `addPlan()`. Mientras
+   no se confirme, el nivel queda libre: bloquear de más es peor que bloquear de menos,
+   porque lo de menos no rompe nada — `PlanItem` lleva su propio `level` y el detalle se
+   pide con el del item (`useCourseDetails.ts:127-129`).
+2. **La materia que está en los dos planes, ¿la inscribe quien quiera por el plan que
+   quiera?** Es la premisa del botón "cambiar a 2B10" (interfaz §6): si el SIA la asigna
+   solo, ese botón sobra y hay que quitarlo.
+3. **¿Hace falta poder unir los grupos de los dos planes en una sola materia?** Hoy la
+   materia se queda con los del plan ganador y se ofrece cambiarla. Unirlos sería pedir
+   el detalle a los dos planes: el doble de POSTs al SIA por materia compartida. Se
+   decide con uso real, no antes.
 
 ---
 
@@ -765,8 +939,12 @@ Ninguna bloquea la implementación: cada una tiene un default puesto en el plan.
 - [ ] `npm test` verde
 - [ ] Probado a mano con **un** plan: la única diferencia contra `main` es la casilla
 - [ ] Probado a mano con **dos** planes: elegirlos de una, buscar en el catálogo unido,
-      un código compartido apareciendo una sola vez con la tipología correcta, agregar de
-      los dos, choque cruzado, quitar uno, exportar `.ics`
+      agregar de los dos, choque cruzado, quitar uno, exportar `.ics`
+- [ ] **La invariante, buscada a propósito**: elegir dos planes con carrera compartida
+      (dos ingenierías de la misma sede sirven), buscar una materia común y confirmar que
+      sale **una sola fila** en el catálogo, una sola en Mi semestre, un solo bloque en el
+      calendario y una sola vez en los créditos
+- [ ] No hay forma de elegir dos planes de sedes distintas desde la interfaz
 - [ ] Probado con `localStorage` de un usuario viejo (v1) — la migración
 - [ ] `/ponytail-review` pasado y aplicado
 - [ ] Comentarios que decían "un solo plan" reescritos, no borrados

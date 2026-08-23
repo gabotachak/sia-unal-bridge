@@ -280,6 +280,7 @@ plausibles y equivocados.
 | [`docs/PLAN.md`](docs/PLAN.md) | Fase 1: la API. Pasos y criterios de aceptación |
 | [`docs/FASE-2.md`](docs/FASE-2.md) | Fase 2: el `Refresher`, concurrencia del crawl y cadencia |
 | [`docs/PLAN-SIACHANGES.md`](docs/PLAN-SIACHANGES.md) | Reconciliar lo que el SIA deja de ofrecer |
+| [`docs/PLAN-DOUBLE-TITULATION.md`](docs/PLAN-DOUBLE-TITULATION.md) | Doble titulación: dos planes en un solo horario (solo front) |
 
 ## Verificar contra el servidor
 

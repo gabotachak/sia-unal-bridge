@@ -1,5 +1,7 @@
 import { CircleCheck, TriangleAlert } from 'lucide-react';
+import { usePlan } from '../hooks/usePlan';
 import {
+  creditsByPlan,
   creditsByTypology,
   creditsLevel,
   MIN_CREDITS_TO_CLOSE,
@@ -46,12 +48,32 @@ export function CreditsBadge({ items }: { items: PlanItem[] }) {
   const note = NOTE[level];
   const breakdown = creditsByTypology(items);
 
+  // Los mínimos son por INSCRIPCIÓN completa, no por plan (D9): el total, el
+  // semáforo y el desglose por tipología no cambian de lógica con dos
+  // planes. Lo único que gana es este desglose por plan, informativo — sin
+  // semáforo propio, porque no hay regla por plan que semaforear.
+  const plans = usePlan().plans;
+  const byPlan = plans.length > 1 ? creditsByPlan(items) : [];
+  const planName = (program: string) =>
+    plans.find((p) => p.program === program)?.programName ?? program;
+
   const content = (
     <>
       <p className="tt-body">
         Estatutos: mínimo {MIN_CREDITS_TO_REGISTER} créditos para inscribir, mínimo{' '}
         {MIN_CREDITS_TO_CLOSE} al cerrar adiciones y cancelaciones.
       </p>
+
+      {byPlan.length > 0 && (
+        <ul className="tt-rows">
+          {byPlan.map((b) => (
+            <li className="tt-row" key={b.program}>
+              <span>{planName(b.program)}</span>
+              <b className="tnum">{b.credits}</b>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {breakdown.length > 0 && (
         <ul className="tt-rows">

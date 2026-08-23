@@ -761,7 +761,7 @@ export function Program({
                     <li key={c.code}>
                       <AppLink
                         className={`row table__row ${isActiveConflict ? 'is-conflict' : ''} ${isPotentialConflict ? 'is-conflict-potential' : ''}`}
-                        to={{ name: 'course', selection: c.plan, code: c.code }}
+                        to={{ name: 'course', selection: c.plan, code: c.code, alsoIn: c.alsoIn }}
                       >
                         <span className="row__code tnum col-code">
                           {c.code}

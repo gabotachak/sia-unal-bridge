@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Clock, Trash2, TriangleAlert, User } from 'lucide-react';
 import type { ClassSession } from '../api/types';
 import type { Row } from '../hooks/useCourseDetails';
+import { usePlan } from '../hooks/usePlan';
 import { formatAge, formatScheduleSummary, groupSchedule, titleCase } from '../lib/format';
 import { itemId } from '../lib/storage';
 import { AppLink } from './AppLink';
@@ -47,6 +48,10 @@ export function CourseCard({
   const totalSeats = all.reduce((n, s) => n + (s.seats?.available ?? 0), 0);
   const noGroups = status === 'done' && detail && all.length === 0;
   const groupName = itemId(item);
+
+  // D10: la sigla del plan por fila, solo con doble titulación. Con un plan
+  // esta tarjeta es byte por byte la de `main`.
+  const showPlan = usePlan().plans.length > 1;
 
   /**
    * Una materia de PEAMA puede traer 20+ grupos. Sin tope, cada tarjeta de
@@ -153,7 +158,22 @@ export function CourseCard({
     <li className={`card ${status === 'loading' ? 'is-loading' : ''}`}>
       <header className="card__head table__row">
         <span className="card__code tnum col-code">{item.code}</span>
-        {nameLink}
+        {showPlan ? (
+          <span className="card__namecell">
+            <Tooltip
+              content={
+                <p className="tt-body">
+                  Se cuenta en <b>{item.program}</b> como <code>{item.typology}</code>
+                </p>
+              }
+            >
+              <span className="chip__code tnum card__plan-tag">{item.program}</span>
+            </Tooltip>
+            {nameLink}
+          </span>
+        ) : (
+          nameLink
+        )}
         <Tooltip
           content={
             <>

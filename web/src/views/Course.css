@@ -28,6 +28,20 @@
    valores, y ese medio milímetro de diferencia entre pantallas es de lo
    que está hecha la sensación de estar en dos apps distintas. */
 
+/* A qué plan se atribuye esta materia — solo con doble titulación (D6,
+   PLAN-DOUBLE-TITULATION.md). Un párrafo, no un tooltip: acá hay sitio de
+   sobra, y es donde alguien elige grupo antes de inscribirse. */
+.course__plan-note {
+  max-width: 46rem;
+  margin: 0 0 var(--gap-lg);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.course__plan-note code {
+  font-size: 0.95em;
+}
+
 .course__desc-wrap {
   max-width: 46rem;
   margin: 0 0 var(--gap-lg);

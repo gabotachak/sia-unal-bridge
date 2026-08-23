@@ -44,3 +44,19 @@ export function creditsByTypology(items: Pick<PlanItem, 'typology' | 'credits'>[
     .map(([typology, credits]) => ({ typology, credits }))
     .sort((a, b) => b.credits - a.credits);
 }
+
+export type CreditsByPlan = { program: string; credits: number };
+
+/** El total desglosado por PLAN — solo tiene sentido con doble titulación
+ *  (D9, PLAN-DOUBLE-TITULATION.md). Los mínimos de los estatutos se miden
+ *  por INSCRIPCIÓN completa, no por plan: esto es puramente informativo,
+ *  hermano de `creditsByTypology`, misma forma y mismo orden. */
+export function creditsByPlan(items: Pick<PlanItem, 'program' | 'credits'>[]): CreditsByPlan[] {
+  const totals = new Map<string, number>();
+  for (const item of items) {
+    totals.set(item.program, (totals.get(item.program) ?? 0) + item.credits);
+  }
+  return [...totals.entries()]
+    .map(([program, credits]) => ({ program, credits }))
+    .sort((a, b) => b.credits - a.credits);
+}

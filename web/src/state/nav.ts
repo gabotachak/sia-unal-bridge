@@ -26,7 +26,21 @@ import type { Selection } from '../lib/storage';
 export type Screen =
   | { name: 'plan-picker' }
   | { name: 'program'; selection: Selection }
-  | { name: 'course'; selection: Selection; code: string; from?: 'semester' | 'schedule' }
+  | {
+      name: 'course';
+      selection: Selection;
+      code: string;
+      from?: 'semester' | 'schedule';
+      /**
+       * Cómo figura esta asignatura en el OTRO plan, con doble titulación
+       * (D6, PLAN-DOUBLE-TITULATION.md). Solo se sabe si se llegó desde el
+       * catálogo unido (`MergedCourse.alsoIn`, Program.tsx): desde Mi
+       * semestre u Horario no hay de dónde sacarlo —`PlanItem` no lo
+       * guarda— y pedir el otro catálogo solo para esto sería una petición
+       * de ~350 KB por una frase.
+       */
+      alsoIn?: { plan: Selection; typology: string };
+    }
   | { name: 'semester' }
   | { name: 'schedule' }
   | { name: 'donate' };

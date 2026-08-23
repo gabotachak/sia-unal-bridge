@@ -21,7 +21,7 @@ import type { Screen } from '../state/nav';
 import './Course.css';
 
 export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }> }) {
-  const { selection: sel, code, from } = screen;
+  const { selection: sel, code, from, alsoIn } = screen;
   const { level, campus, faculty, program } = sel;
 
   const scope = { level, campus, faculty };
@@ -214,6 +214,27 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
               }}
             />
           </header>
+
+          {/* A qué plan se atribuye esta materia — solo con doble
+              titulación, y solo cuando ESTE plan es uno de los míos (D6,
+              interfaz §7). `alsoIn` solo se sabe si se llegó desde el
+              catálogo unido: desde Mi semestre u Horario la frase se queda
+              en su primera mitad — no se pide el otro catálogo por una
+              línea. */}
+          {plan.plans.length > 1 && plan.owns(sel) && (
+            <p className="course__plan-note">
+              Esta asignatura se está contando en tu plan <b>{program}</b> (
+              <code>{data.typology}</code>).{' '}
+              {alsoIn ? (
+                <>
+                  En {alsoIn.plan.program} figura como <code>{alsoIn.typology}</code>. Los grupos de
+                  abajo son los que ve {program}.
+                </>
+              ) : (
+                <>Los grupos de abajo son los que ve {program}.</>
+              )}
+            </p>
+          )}
 
           {data.description && <CourseDescription text={data.description} />}
 

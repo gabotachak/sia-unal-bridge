@@ -37,30 +37,35 @@ armar — la que más falta le hace.
 | | Quiere | Su fricción si lo hacemos mal |
 |---|---|---|
 | **Un plan** (la mayoría) | Que nada cambie | Preguntas de más en el onboarding; controles nuevos que nunca va a usar |
-| **Dos planes** (la minoría) | Que exista, y enterarse | Descubrirlo semanas después; y una vez adentro, pagar peaje de pestañas y menús cada vez que busca una materia |
+| **Dos planes** (la minoría) | Que exista, y enterarse al empezar | No enterarse hasta tener el semestre armado; y una vez adentro, pagar peaje de pestañas y menús cada vez que busca una materia |
 
 Todo lo que sigue está subordinado a esas dos reglas a la vez:
 
-1. **Con un solo plan, la interfaz cambia en tres cosas y en ninguna más** (lista exacta
-   abajo). El flujo principal —buscar, agregar, medir cupos, armar el horario, exportar—
-   no se toca ni un píxel.
-2. **Con dos, no hay modo aparte.** Se declara una vez al principio, y después la app es
-   la misma: **un catálogo, un semestre, un horario**.
+1. **Con un solo plan, el flujo es el de hoy, clic por clic.** Cambian dos cosas y
+   ninguna más (lista exacta abajo). Buscar, agregar, medir cupos, armar el horario,
+   exportar: ni un píxel.
+2. **Con dos, no hay modo aparte.** Se declara **al empezar**, se eligen los dos planes
+   ahí mismo, y después la app es la misma: **un catálogo, un semestre, un horario**.
 
-### Los tres cambios que ve la mayoría
+### Los dos cambios que ve la mayoría
 
-Ni uno más. Si aparece un cuarto, es un bug de la rama:
+Ni uno más. Si aparece un tercero, es un bug de la rama:
 
 | # | Qué ve | Dónde | Por qué |
 |---|---|---|---|
 | 1 | Una **casilla sin marcar**, "Estudio doble titulación" | `PlanPicker`, sobre "Nivel" | Es la puerta de la minoría, y la única forma de que se enteren de que existe. No pide decisión: se ignora y la pantalla se comporta igual que hoy |
 | 2 | El tope de materias pasa de **10 a 20** | `AddButton`, `Semester` | Decisión explícita (D8). Toca a todos porque el costo de medir no depende de cuántos planes haya |
-| 3 | El chip del plan **abre un menú** en vez de disparar "empezar de nuevo" directo | `Topbar` | Un clic más en la única acción destructiva de la app — que hoy se dispara por error al tocar el chip— y, a cambio, una puerta no destructiva para cambiar de plan, que hoy **no existe** |
 
-Los tres son deliberados. El resto de la interfaz —el catálogo, la ficha, Mi semestre, Mi
-horario, el calendario, el `.ics`, los filtros, el orden, los cupos— tiene que quedar
+Los dos son deliberados. El resto de la interfaz —la barra, el catálogo, la ficha, Mi
+semestre, Mi horario, el calendario, el `.ics`, los filtros, el orden, los cupos— queda
 **idéntico a `main`** para quien tiene un plan: todo lo nuevo va detrás de
 `plans.length > 1`.
+
+**Y no hay ninguna forma nueva de llegar a ningún lado.** Nada de menús nuevos en la
+barra, ni de "agregar un segundo plan" a mitad de semestre: la doble titulación se declara
+al empezar y se eligen los dos planes de una. Quien ya venía con un plan y quiere pasar a
+dos, empieza de nuevo — el mismo botón destructivo que existe hoy, con la misma
+confirmación. Ver [Declararse tarde](#declararse-tarde-se-empieza-de-cero).
 
 ---
 
@@ -225,24 +230,41 @@ Idéntico para los dos, salvo por lo que hay dentro de las listas:
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│ SIA Bridge      [2A74 · 2B10 ▾]         ▤  ☑  📅  ☕  ◐│  ← el chip lista los dos
-├────────────────────────────────────────────────────────┤
+│ SIA Bridge      [2A74 · 2B10 🗑]         ▤  ☑  📅  ☕  ◐│  ← el mismo chip de hoy,
+├────────────────────────────────────────────────────────┤     con los dos códigos
 │  plan 2A74 · 2B10                                      │
-│  Catálogo                                1 187 asignat.│  ← la unión, deduplicada
+│  Catálogo                                  988 asignat.│  ← la unión, deduplicada
 │  [buscar…] [tipología ▾] [créditos ▾] [con cupo]       │  ← los mismos filtros
 └────────────────────────────────────────────────────────┘
 ```
 
 - **Un solo buscador** para las materias de los dos planes.
 - **Un solo "Mi semestre"** y **un solo "Mi horario"**, como ya son hoy.
-- Sin pestañas, sin plan activo, sin cambiar de contexto.
+- Sin pestañas, sin plan activo, sin menús nuevos, sin cambiar de contexto.
+- El chip de la barra hace **exactamente lo de hoy** —empezar de nuevo, con su
+  confirmación—; lo único distinto es que lista los dos códigos.
 
-### Y si se entera tarde
+### Declararse tarde: se empieza de cero
 
-El chip de la barra abre un menú con "cambiar mis planes", que lleva al mismo
-`PlanPicker` con la casilla — que ahora aparece marcada o no según lo que ya tenga. Es la
-misma puerta, de vuelta. (Hoy no existe ninguna: la única forma de cambiar de plan es
-"empezar de nuevo", que borra todo. Ver [interfaz §3](#3-la-barra--el-menú-del-chip).)
+No hay puerta lateral. Quien ya venía con un plan y descubre que puede tener dos usa el
+mismo camino que existe hoy para cambiar de plan: **empezar de nuevo** desde el chip de la
+barra, que borra plan y semestre con su confirmación de siempre, y volver a elegir — ahora
+marcando la casilla y eligiendo los dos.
+
+Es deliberado, y es lo que mantiene la promesa de arriba:
+
+- **No aparece ningún control nuevo** para la mayoría. Un menú de planes en la barra
+  habría sido un elemento nuevo en la pantalla de todos para servir a unos pocos.
+- **No hay un segundo camino** por el que un plan entre a la lista, así que no hay dos
+  formas de llegar al mismo estado que puedan divergir.
+- El semestre armado con un plan **no sirve tal cual** para dos: las materias que ya
+  estaban se quedan igual, sí, pero la persona va a rehacer su selección con el doble de
+  catálogo a la vista. Conservarlo a medias sería el peor de los dos mundos.
+
+Costo: quien se declara tarde rearma su semestre. Es una acción de una vez por semestre,
+sobre una lista de materias que se rehace en un par de minutos, y a cambio la app no
+carga con un flujo entero —agregar y quitar planes en caliente— que solo existiría para
+ese caso.
 
 ---
 
@@ -289,8 +311,8 @@ se hace cumplir en vez de confiar:
 - En el picker, elegido el primer plan, **la sede y el nivel quedan fijos** y sus chips se
   deshabilitan con una nota corta ("la doble titulación es dentro de una sede y un
   nivel"). Un estado imposible que no se puede tipear es mejor que uno validado después.
-- `addPlan()` rechaza —devuelve `false`— un plan cuya sede o cuyo nivel no sean los del
-  primero. El guardia va en la función compartida, no en la pantalla.
+- `select()` rechaza —devuelve `false` y no toca nada— una lista de dos planes que no
+  compartan sede y nivel. El guardia va en la función compartida, no en la pantalla.
 
 No es solo higiene de dominio: **es lo que hace segura la deduplicación por `code`**. La
 identidad de una asignatura en la base es `(campus_code, code)` (`DATA-MODEL.md`, tabla
@@ -300,17 +322,27 @@ por definición idénticos** en los dos: viven en `course`, que es por sede, no 
 `course_program`. Lo único que puede diferir es la tipología y qué grupos se ven — que es
 exactamente lo que resuelve D6, y nada más.
 
-### D4 · Cambiar de plan **no borra nada**. Quitar un plan borra **solo lo suyo**
+### D4 · Los planes se eligen **de una sola vez**, y cambiarlos borra el semestre
 
-Es el corazón del cambio. Hoy `select()` limpia `items` al detectar otro plan
-(`PlanProvider.tsx:78-87`). En el modelo nuevo:
+No hay "agregar un segundo plan" ni "quitar uno" en caliente: el conjunto de planes se
+fija al elegirlo y no se toca más. Es la regla de hoy, con "un plan" cambiado por "el
+conjunto de planes":
 
 | Acción | Efecto sobre `items` |
 |---|---|
-| Agregar un plan | **ninguno** |
-| Quitar un plan (soltar un chip, o desmarcar la casilla) | borra solo los `items` de ese plan |
-| Reemplazar el único plan (la mayoría, sin casilla) | borra todo, con confirmación — como hoy |
+| Elegir el mismo conjunto otra vez | **ninguno** — igual que hoy al re-elegir el mismo plan |
+| Elegir un conjunto distinto | borra todo, con la confirmación de siempre |
 | Empezar de nuevo | borra todo, como hoy |
+
+Así **la única operación sigue siendo `select()`**, ahora sobre una lista de 1 o 2. No
+entran al modelo `addPlan`, `removePlan` ni `plansFull`: la pantalla que elige maneja su
+propio borrador —el chip "1 de 2"— y recién al final llama a `select([a, b])` una vez.
+
+> Descartado (era la propuesta anterior de este documento): agregar y quitar planes a
+> mitad de semestre, con su menú en la barra. Metía un control nuevo en la pantalla de
+> todos para servir a unos pocos, un segundo camino para llegar al mismo estado, y tres
+> operaciones más en `PlanApi`. Quien se declara tarde empieza de nuevo, que es el camino
+> que ya existe. Ver [Declararse tarde](#declararse-tarde-se-empieza-de-cero).
 
 ### D5 · El catálogo es la **unión** de los dos, deduplicada por código
 
@@ -506,20 +538,20 @@ export type PlanApi = {
   full: boolean;                    // items.length >= MAX_ITEMS (20, D8)
   /** El primer plan. Mismo significado de siempre para quien tiene uno. */
   selection: Selection | null;
-  /** Fija el plan ÚNICO: reemplaza la lista entera. Es lo que usa quien no
-   *  marcó la casilla. Con items guardados, quien llama confirma antes. */
-  select: (s: Selection) => void;
 
-  // ── nuevo ───────────────────────────────────────────────────
-  /** Mis planes, en orden de elección. 0, 1 o 2. */
+  // ── nuevo: dos campos, y ninguna operación de más ────────────
+  /** Mis planes, en orden de elección. 1 o 2 (o 0 antes de elegir). */
   plans: Selection[];
   owns: (s: Pick<Selection, 'level' | 'campus' | 'program'>) => boolean;
-  /** Agrega un plan si hay cupo. No borra nada. */
-  addPlan: (s: Selection) => boolean;
-  /** Quita un plan Y las materias de ese plan. No confirma: quien llama
-   *  ya preguntó (useConfirm). */
-  removePlan: (id: string) => void;
-  plansFull: boolean;
+  /**
+   * Fija el conjunto de planes. Uno o dos, de una sola vez (D4).
+   *
+   * Mismo conjunto que ya estaba ⇒ no borra nada (es volver al tablero).
+   * Conjunto distinto ⇒ borra el semestre entero, como hoy; quien llama ya
+   * confirmó. Devuelve false y no toca nada si los dos no comparten sede y
+   * nivel (D3), o si son más de MAX_PLANS.
+   */
+  select: (next: Selection[]) => boolean;
 };
 ```
 
@@ -650,32 +682,35 @@ Va debajo del párrafo de entrada (`PlanPicker.tsx:160-171`) y encima de "Nivel"
 
 > ☐ **Estudio doble titulación** — elige tus dos planes; el horario los junta.
 
-Estado local (`useState`), **no** entra a `nav.ts` ni a `localStorage`: se deriva de lo
-que ya hay (`plans.length > 1`) al montar, así que volver a esta pantalla la encuentra
-marcada sola.
+Estado local (`useState`), **no** entra a `nav.ts` ni a `localStorage`: nace de lo que ya
+hay (`plans.length > 1`) al montar, así que volver a esta pantalla la encuentra marcada
+sola.
+
+**Toda la elección de dos planes vive en un borrador local de esta pantalla**
+(`const [draft, setDraft] = useState<Selection[]>([])`), y `plan.select()` se llama **una
+sola vez**, con la lista completa. Es lo que evita que existan estados intermedios
+guardados: mientras no haya dos, no se tocó nada de lo que hay en el navegador.
+
+Con la casilla **sin marcar** (la mayoría): la pantalla es la de hoy, con `choose()`
+llamando a `select([p])` — que reemplaza el plan único, con la confirmación de siempre si
+hay materias guardadas. Ni un clic de diferencia.
 
 Con la casilla **marcada**:
 
-- Arriba de la lista, los planes ya elegidos como chips con su `×`, y el contador
-  "1 de 2".
-- `choose()` llama a `addPlan()`. Si con eso quedan dos, navega al catálogo; si es el
-  primero, **se queda** y espera el segundo.
-- Con dos elegidos, las filas quedan deshabilitadas ("suelta uno para cambiarlo").
-- **Elegido el primero, la sede y el nivel se congelan** (D3): sus chips quedan
-  deshabilitados con la nota "la doble titulación es dentro de una sede y un nivel", y la
-  lista sigue mostrando los planes de esa sede. Soltar el primer chip los descongela.
-- Con los dos escalones fijos, el segundo plan está literalmente a un clic del primero:
-  la lista ya está en pantalla y no hay nada más que elegir.
+- El primer clic en un plan **no navega**: lo mete al borrador y lo muestra como chip con
+  su `×`, con el contador "1 de 2".
+- **Con el primero elegido, la sede y el nivel se congelan** (D3): sus chips quedan
+  deshabilitados con la nota "la doble titulación es dentro de una sede y un nivel". El
+  `×` del chip los descongela.
+- El segundo clic llama a `select([a, b])` y navega al catálogo. Con los dos escalones
+  fijos, está literalmente a un clic del primero.
+- Los planes ya en el borrador salen marcados y deshabilitados en la lista
+  (`PlanPicker.tsx:291-293`, `mine` mira el borrador y no solo `plans`).
 
-Con la casilla **sin marcar** (la mayoría): la pantalla es la de hoy, con `choose()`
-llamando a `select()` — que reemplaza el plan único, con la confirmación de siempre si
-hay materias guardadas.
-
-**Desmarcarla teniendo dos planes** suelta el segundo: confirma con `useConfirm`, diciendo
-cuántas materias se van.
-
-En todos los casos, `mine` (`PlanPicker.tsx:291-293`) marca **todos** los planes que ya
-tengo, no solo el primero.
+**Marcarla o desmarcarla nunca borra nada por sí sola**: solo cambia cómo se comporta el
+próximo clic en un plan. Quien tenía dos planes y desmarca, elige uno y ese `select([p])`
+—un conjunto distinto— es el que borra, con la confirmación de siempre. La casilla no es
+una acción, es un modo de elegir.
 
 ### 2. Catálogo (`views/Program.tsx`) · la unión
 
@@ -707,36 +742,26 @@ const courses = useMemo(() => mergeCatalogs([...]), [a.data, b.data, mine]);
 - Con **un** plan, `mergeCatalogs` de una sola parte es un `map`: mismo orden, mismo
   largo, misma pantalla que `main`.
 
-### 3. La barra · el menú del chip
+### 3. La barra · el chip lista los dos, y hace lo mismo de siempre
 
-Hoy el chip (`Topbar.tsx:104-112`) es rótulo y botón de "empezar de nuevo" a la vez, con
-caneca. Con dos planes tiene que listar dos códigos, y hace falta una puerta no
-destructiva de vuelta al `PlanPicker` — que **hoy no existe**: la única forma de cambiar
-de plan es borrarlo todo.
+**No hay menú.** El chip (`Topbar.tsx:104-112`) sigue siendo lo que es hoy: rótulo y
+botón de "empezar de nuevo", con su caneca y su confirmación. Lo único que cambia es que
+con dos planes muestra los dos códigos.
 
 ```
-┌─ Mis planes ─────────────────────────────┐
-│ 2A74  Ingeniería de sistemas     Bogotá  │
-│ 2B10  Diseño industrial          Bogotá  │
-│ ────────────────────────────────────────  │
-│ ⇄ Cambiar mis planes                      │  → PlanPicker (la casilla hace el resto)
-│ 🗑 Empezar de nuevo                        │  → el startOver de hoy, con su confirmación
-└──────────────────────────────────────────┘
+[2A74 · 2B10  Bogotá 🗑]
 ```
 
-- **Implementación: el atributo nativo `popover`** (`<button popovertarget>` + `<div
-  popover>`): capa superior, cierre al hacer clic afuera y `Esc` gratis, sin dependencias
-  ni lógica de click-outside. Posicionado con CSS absoluto relativo a `.bar__inner` —
-  **no** con anchor positioning, que todavía no está en todos lados.
-- Fallback si `popover` da guerra: el `<dialog>` de `components/Confirm.tsx`. **Ninguna
-  librería de menús.**
-- Con un plan el menú tiene una fila y las dos acciones. El costo para la mayoría es un
-  clic extra en algo que se hace una vez cada varios meses — y deja de ser posible tocar
-  el chip por error y encontrarse un diálogo de borrar todo.
+- Con un plan se ve **exactamente igual que en `main`**, hasta el ancho.
+- Con dos, los códigos van juntos y el nombre largo del plan se cae: no caben dos y el
+  código es lo que identifica. El nombre completo queda en el `title`/tooltip.
+- El texto de la confirmación de "empezar de nuevo" (`Topbar.tsx:40-73`) menciona los dos
+  planes y el total de materias — es la misma frase, en plural.
 - Móvil: `.tabbar` (`components/TabBar.tsx`) **no cambia**.
 
-Accesibilidad: `aria-expanded` en el disparador; cada acción es un `<button>`; orden de
-tabulación el del DOM.
+> Descartado: el menú de planes con "agregar", "quitar" y "cambiar". Es el control nuevo
+> que la mayoría no pidió, y con D4 no tiene nada que ofrecer: los planes se eligen de
+> una sola vez. Sin él, esta rama no agrega **ni un elemento** a la barra.
 
 ### 4. `AddButton` · se cae un `if`, se agrega otro
 
@@ -751,12 +776,15 @@ Y el guardia de D7 (mismo `code` ya en la lista desde el otro plan), con su tool
 propio: "Ya está en tu semestre desde el plan 2A74. Se inscribe por un solo plan." El
 estado visual ya existe: `Ban` + `disabled`, sin CSS nuevo.
 
-### 5. Catálogo ajeno · el aviso deja de ser un muro
+### 5. Catálogo ajeno · igual que hoy, con `owns` en vez de igualdad
 
-`foreign` (`Program.tsx:386`) pasa de "no es el plan activo" a **"no es ninguno de mis
-planes"** (`!plan.owns(sel)`). Ahí el catálogo se pinta solo (no unido), se queda el aviso
-de hoy, y "cambiarme a este" se convierte en **"agregar a mis planes"** cuando hay cupo
-(`!plansFull`) — que ya no borra nada.
+`foreign` (`Program.tsx:386`) pasa de "no es mi plan" a **"no es ninguno de mis planes"**
+(`!plan.owns(sel)`). Ahí el catálogo se pinta solo (no unido) y el aviso es el de hoy,
+palabra por palabra, con sus dos salidas: "volver al mío" y "cambiarme a este" — que
+llama a `select([sel])`, borra el semestre y confirma antes, como siempre.
+
+**No aparece un "agregar a mis planes"**: agregar un plan a mitad de sesión no existe
+(D4).
 
 ### 6. `CourseCard` y las filas del catálogo · de qué plan es, al pasar el mouse
 
@@ -825,8 +853,10 @@ usable. El mensaje va literal — ver [`COMMIT-CONVENTION.md`](COMMIT-CONVENTION
       aparece `tablero.planes.v2`.
 - [ ] La v1 **sigue existiendo** después de migrar (seguro de rollback), y con las dos
       claves presentes manda siempre la v2 — aunque la v1 diga otro plan.
-- [ ] `addPlan()` no toca `items`; `removePlan(id)` borra ese plan y solo sus materias —
-      las del otro sobreviven, y sus grupos elegidos también.
+- [ ] `select([a, b])` guarda los dos planes; llamarlo con el **mismo conjunto** no borra
+      el semestre, y con un conjunto distinto lo borra entero (D4).
+- [ ] `select()` devuelve `false` y no toca nada si los dos planes no comparten sede y
+      nivel, o si son más de `MAX_PLANS` (D3).
 - [ ] `add()` devuelve `false` si ya hay una materia con el mismo `code` **aunque sea de
       otro plan** (D7 — por `code`, no por `itemId`), y el tope son 20 materias con uno o
       con dos planes (D8).
@@ -846,7 +876,8 @@ feat(web): guardar varios planes de estudios en vez de uno
 **Archivos**: `web/src/views/PlanPicker.tsx` (+ `.css`), `web/src/components/Topbar.tsx`
 (+ `.css`).
 
-Interfaz §1 y §3. El menú entra acá porque es la puerta de vuelta al picker.
+Interfaz §1 y §3. `Topbar` entra solo para que el chip liste dos códigos: **no hay menú
+nuevo**.
 
 **Criterio de aceptación**
 
@@ -855,16 +886,15 @@ Interfaz §1 y §3. El menú entra acá porque es la puerta de vuelta al picker.
 - [ ] Marcándola: el primer plan deja el chip "1 de 2" y **no** navega; el segundo entra
       al catálogo.
 - [ ] Elegido el primer plan, **sede y nivel quedan congelados** y no hay forma de elegir
-      un segundo plan de otra sede ni de otro nivel desde la interfaz (D3); soltar el
-      primer chip los descongela.
-- [ ] `addPlan()` devuelve `false` ante un plan de otra sede o de otro nivel aunque se lo
-      llame a mano.
-- [ ] Salir a mitad (atrás del navegador) deja un plan elegido y la app funcionando.
-- [ ] Desmarcarla con dos planes pide confirmación y borra solo las materias del segundo.
-- [ ] Volver al picker desde el menú lo encuentra con la casilla marcada y los dos chips.
-- [ ] El menú: lista los planes, "cambiar mis planes", "empezar de nuevo"; `Esc` lo
-      cierra, el foco vuelve al chip, se navega con teclado; en móvil se usa con el pulgar
-      sin taparse con `.tabbar`.
+      un segundo plan de otra sede ni de otro nivel desde la interfaz (D3); el `×` del
+      chip los descongela.
+- [ ] Salir a mitad del borrador (atrás del navegador, cerrar la pestaña) **no deja nada
+      guardado**: con un solo plan en el borrador, `localStorage` sigue como estaba.
+- [ ] Marcar o desmarcar la casilla **no borra nada por sí sola**; lo que borra es elegir
+      un conjunto de planes distinto, con su confirmación.
+- [ ] Con un plan, la barra se ve idéntica a `main`; con dos, el chip lista los dos
+      códigos y "empezar de nuevo" los nombra a los dos en la confirmación.
+- [ ] En la barra **no hay ningún control nuevo**.
 
 ```
 feat(web): declarar doble titulación y elegir dos planes al empezar
@@ -910,8 +940,8 @@ feat(web): unir los catálogos de los dos planes en una sola lista
       de su fila (el ganador de D6 si estaba en los dos).
 - [ ] Una materia ya agregada no se puede volver a agregar por el otro plan (D7), con su
       tooltip.
-- [ ] En un plan que no es mío, el aviso ofrece "agregar a mis planes" (con cupo) o
-      "cambiarme a este" (lleno).
+- [ ] En un plan que no es mío, el aviso es el de hoy —"volver al mío" y "cambiarme a
+      este", con su confirmación destructiva—, sin opciones nuevas.
 - [ ] **La prueba que importa**: con un grupo elegido en una materia del plan A, las
       materias del plan B que chocan contra él salen marcadas en el catálogo, sin pedir
       nada nuevo al back.
@@ -981,13 +1011,14 @@ render, sin fixtures— con **dos** archivos nuevos:
 
 1. v1 presente y v2 ausente → migra, conserva el plan, y **deja la v1 donde estaba**.
 2. v1 y v2 presentes y distintas → manda la v2, la v1 ni se lee.
-2. v2 con tres planes guardados a mano → se recorta a `MAX_PLANS`.
-3. v2 con dos planes de igual `selectionId` → se deduplica.
-4. Basura en la clave (`'{'`, `'[]'`, `null`) → `[]` sin tirar.
-5. `removePlan` deja solo las materias del otro plan.
-6. `addPlan` con un plan de otra sede, o de otro nivel → `false`, lista intacta (D3).
-7. `add` con un `code` que ya está desde el otro plan → `false` (la invariante).
-8. `loadPlan` con el mismo `code` dos veces guardado → una sola materia.
+3. v2 con tres planes guardados a mano → se recorta a `MAX_PLANS`.
+4. v2 con dos planes de igual `selectionId` → se deduplica.
+5. Basura en la clave (`'{'`, `'[]'`, `null`) → `[]` sin tirar.
+6. `select` con el **mismo** conjunto → no toca `items`; con uno **distinto** → los borra.
+7. `select` con dos planes de distinta sede, o de distinto nivel → `false` y nada cambia
+   (D3).
+8. `add` con un `code` que ya está desde el otro plan → `false` (la invariante).
+9. `loadPlan` con el mismo `code` dos veces guardado → una sola materia.
 
 **`web/src/lib/catalog.test.ts`** (Fase 3), la regla de D6, que es la lógica no trivial de
 esta rama:
@@ -1007,7 +1038,7 @@ esta rama:
    respuesta da el mismo ganador.
 
 No se testea React: no hay entorno de render en el repo y montarlo sería traer
-`@testing-library` entero por un popover. Las fases 2, 4 y 5 se verifican a mano.
+`@testing-library` entero por una casilla. Las fases 2, 4 y 5 se verifican a mano.
 
 ---
 
@@ -1015,17 +1046,17 @@ No se testea React: no hay entorno de render en el repo y montarlo sería traer
 
 - **ponytail** (activo por hook, nivel `full`): la escalera manda. Antes de escribir un
   componente nuevo, buscar el que ya existe — `Confirm`, `Tooltip`, `IconButton`,
-  `SearchInput`, `.chips`, `.chip.is-on`, `.btn` cubren casi todo. La casilla es un
-  `<input type="checkbox">` nativo y el menú es `popover` nativo: **ninguna dependencia
-  nueva** en esta rama. Al terminar, `/ponytail-review` (Fase 6).
-- **frontend-design**: útil para el menú del chip, la fila de chips "1 de 2" y el chip de
-  plan en la tarjeta, **con un guardarraíl**: este repo ya tiene identidad visual cerrada
-  en `web/src/styles/tokens.css`, y la skill está pensada para *proponer* una. Se usa para
-  jerarquía, espaciado y estados — **no** para elegir tipografías, paletas ni un lenguaje
-  visual nuevo. Si el resultado no se puede pintar con los tokens que ya existen, está
-  mal.
-- **context7**: para dudas de API real —`popover` / `popovertarget`, `<dialog>`,
-  React 19— antes que tirar de memoria. `resolve-library-id` → `query-docs`.
+  `SearchInput`, `.chips`, `.chip.is-on`, `.btn` cubren **todo** lo de esta rama. La
+  casilla es un `<input type="checkbox">` nativo. **Ninguna dependencia nueva y ningún
+  componente nuevo**: si aparece uno, sobra. Al terminar, `/ponytail-review` (Fase 6).
+- **frontend-design**: el alcance es chico a propósito — la casilla, la fila de chips
+  "1 de 2" y el chip de plan en la tarjeta—, y va **con un guardarraíl**: este repo ya
+  tiene identidad visual cerrada en `web/src/styles/tokens.css`, y la skill está pensada
+  para *proponer* una. Se usa para jerarquía, espaciado y estados — **no** para elegir
+  tipografías, paletas ni un lenguaje visual nuevo. Si el resultado no se puede pintar con
+  los tokens que ya existen, está mal.
+- **context7**: para dudas de API real —`<input type="checkbox">` controlado, React 19—
+  antes que tirar de memoria. `resolve-library-id` → `query-docs`.
 - **caveman**: solo estilo de conversación. Commits, cuerpo del PR y comentarios del
   código van en prosa normal, en español, como el resto del repo.
 
@@ -1042,6 +1073,7 @@ No se testea React: no hay entorno de render en el repo y montarlo sería traer
 | Dos catálogos = ~700 KB y dos misses fríos la primera vez | Los dos van en paralelo y la pantalla de carga ya explica el costo. La segunda visita sale de Postgres |
 | La casilla se lee como ruido para la mayoría | Es una casilla sin marcar, sin decisión forzada y sin desplazar la lista. Si molesta, baja al pie del bloque de "Nivel" |
 | La mayoría de un solo plan nota el cambio | Criterio repetido en las fases 2, 3 y 5: con un plan, idéntico a `main` salvo la casilla y el tope de 20 |
+| Quien se declara doble titulación tarde tiene que empezar de cero | Es la decisión (D4), no un efecto colateral: a cambio, la barra no gana ningún control y no hay dos caminos al mismo estado. La confirmación de "empezar de nuevo" ya dice exactamente qué se pierde |
 | Medir 20 materias se siente lento | ~7 s con la barra de progreso a la vista, y el botón ya salta las que están dentro del cooldown (`useCourseDetails.ts:210-226`). `MAX_ITEMS` es la perilla |
 
 ---
@@ -1062,6 +1094,8 @@ Quedan acá para que nadie las reabra a mitad de la implementación:
 | ¿Cruza sedes o niveles? | **No.** Los dos planes son de la misma sede y del mismo nivel, y la interfaz lo impide en vez de confiar (D3) |
 | ¿Hay tope académico de créditos? | **No.** Solo mínimos (6 y 10). El tope de 20 materias es nuestro, por el costo de la ronda de medición, y así se explica en la interfaz — nunca como si fuera regla de la universidad |
 | Compatibilidad con lo ya guardado | La v1 se lee y **no** se borra: es el seguro de rollback. Se limpia un release después, en un commit aparte |
+| ¿Se puede agregar un segundo plan a mitad de semestre? | **No.** Los dos se eligen al empezar; declararse tarde es empezar de nuevo, por el mismo botón que ya existe (D4) |
+| ¿Cuántos controles nuevos ve la mayoría? | **Uno**: la casilla del picker. La barra, el catálogo y las listas no ganan ni un elemento |
 
 Lo único que queda por decidir es lo que solo se puede decidir con uso real: si a alguien
 le hace falta ver, en una materia compartida, los grupos que ve el **otro** plan. Costaría
@@ -1076,7 +1110,7 @@ hace hasta que alguien lo pida.
 - [ ] `npx oxlint` limpio
 - [ ] `npm test` verde
 - [ ] Probado a mano con **un** plan: las únicas diferencias contra `main` son las tres
-      de la lista (casilla, tope de 20, menú del chip). Cualquier cuarta es un bug
+      de la lista (la casilla y el tope de 20). Cualquier tercera es un bug
 - [ ] Probado a mano con **dos** planes: elegirlos de una, buscar en el catálogo unido,
       agregar de los dos, choque cruzado, quitar uno, exportar `.ics`
 - [ ] **La invariante, buscada a propósito**: elegir dos planes con carrera compartida

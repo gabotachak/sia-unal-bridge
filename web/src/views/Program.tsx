@@ -406,7 +406,7 @@ export function Program({
       });
       if (!ok) return;
     }
-    select(sel);
+    select([sel]);
   }
 
   return (

@@ -31,14 +31,21 @@ export function Topbar() {
   const [ask, confirmDialog] = useConfirm();
   const { screen } = useNav();
   const sel = plan.selection;
+  const double = plan.plans.length > 1;
 
-  /** Empezar de nuevo. Borra el plan y el semestre —todo lo guardado menos el
-   *  tema— y deja el onboarding tal como se ve la primera vez.
+  /** Empezar de nuevo. Borra los planes y el semestre —todo lo guardado menos
+   *  el tema— y deja el onboarding tal como se ve la primera vez.
+   *
+   *  Es la ÚNICA forma de declararse doble titulación tarde o de cambiar de
+   *  plan (D4, PLAN-DOUBLE-TITULATION.md): no hay "agregar un segundo plan"
+   *  en caliente, así que este mismo botón sirve para las dos cosas.
    *
    *  Confirma siempre: es la única acción de la app que destruye datos y no
    *  tiene deshacer. */
   async function startOver() {
     const n = plan.items.length;
+    const planWord = double ? 'los planes' : 'el plan';
+    const planNames = plan.plans.map((p) => p.programName).join(' y ');
     const ok = await ask({
       title: 'Empezar de nuevo',
       danger: true,
@@ -47,13 +54,13 @@ export function Topbar() {
         n > 0 ? (
           <>
             <p>
-              Se borran el plan <b>{sel?.programName}</b> y{' '}
+              Se borran {planWord} <b>{planNames}</b> y{' '}
               {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi semestre.
             </p>
             <p>No se puede deshacer.</p>
           </>
         ) : (
-          <p>Se borra el plan elegido y todo vuelve al comienzo.</p>
+          <p>Se borran {planWord} elegidos y todo vuelve al comienzo.</p>
         ),
     });
     if (!ok) return;
@@ -100,11 +107,23 @@ export function Topbar() {
             que hay debajo, y al tocarlo se empieza de cero. No es un selector
             —cambiar de plan sin más dejaba un semestre a medio borrar— así que
             no lleva el chevron de "elegí entre varios" sino una caneca, que es
-            lo que de verdad pasa al tocarlo. */}
+            lo que de verdad pasa al tocarlo.
+
+            Con un plan es BYTE POR BYTE el de `main` (D2, D4). Con dos, los
+            códigos van juntos y el nombre se cae: no caben dos, y el código
+            es lo que identifica — el nombre completo queda en el título del
+            botón. */}
         {sel && (
-          <button type="button" className="planchip" onClick={startOver}>
-            <span className="planchip__code tnum">{sel.program}</span>
-            <span className="planchip__name">{sentence(sel.programName)}</span>
+          <button
+            type="button"
+            className="planchip"
+            onClick={startOver}
+            title={double ? planLabelTitle(plan.plans) : undefined}
+          >
+            <span className="planchip__code tnum">
+              {double ? plan.plans.map((p) => p.program).join(' · ') : sel.program}
+            </span>
+            {!double && <span className="planchip__name">{sentence(sel.programName)}</span>}
             <span className="planchip__campus">{sel.campusName.replace(/^SEDE\s+/i, '')}</span>
             <Trash2 className="planchip__caret" size={14} strokeWidth={STROKE} aria-hidden="true" />
             <span className="sr-only">Empezar de nuevo</span>
@@ -188,4 +207,10 @@ export function Topbar() {
       {confirmDialog}
     </header>
   );
+}
+
+/** El nombre completo de los dos planes, para el `title` del chip: con dos
+ *  códigos ya no cabe el nombre en la barra (ver el chip más arriba). */
+function planLabelTitle(plans: { programName: string }[]): string {
+  return plans.map((p) => sentence(p.programName)).join(' · ');
 }

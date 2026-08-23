@@ -50,6 +50,50 @@
   margin-top: var(--gap);
 }
 
+/* ── La casilla de doble titulación (PLAN-DOUBLE-TITULATION.md) ────
+   Un <input type="checkbox"> nativo, no un toggle pintado: es la puerta de
+   la minoría y no vale la pena un componente nuevo para una casilla. */
+
+.dt-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap-lg);
+  color: var(--text-dim);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  cursor: pointer;
+}
+.dt-check input {
+  margin-top: 0.2rem;
+  flex: none;
+  accent-color: var(--accent);
+}
+.dt-check b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.dt-draft {
+  margin: 0 0 var(--gap-lg);
+}
+
+/* El × que descongela sede y nivel: mismo hueco que el resto de iconos
+   dentro de un `.chip`, pero clicable aparte del chip mismo. */
+.dt-draft__x {
+  display: inline-flex;
+  margin-left: 0.1rem;
+  color: inherit;
+  opacity: 0.7;
+}
+.dt-draft__x:hover {
+  opacity: 1;
+}
+
+.dt-draft__count {
+  margin: 0;
+}
+
 /* ── Un escalón ─────────────────────────────────────────────────── */
 
 .step {

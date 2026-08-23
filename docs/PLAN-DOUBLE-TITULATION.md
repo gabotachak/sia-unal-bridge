@@ -81,8 +81,9 @@ planes y uno que dice mentiras.
 distintos: perfecto para no colisionar en el estado, inútil para deduplicar de cara a la
 persona. Lo que hay que comparar es el código de la asignatura.
 
-Y `code` alcanza **porque los dos planes son de la misma sede** ([D3](#d3--dos-planes-de-la-misma-sede)):
-la identidad de una asignatura en la base es `(campus_code, code)`, no `code` a secas.
+Y `code` alcanza **porque los dos planes son de la misma sede**
+([D3](#d3--dos-planes-misma-sede-y-mismo-nivel)): la identidad de una asignatura en la
+base es `(campus_code, code)`, no `code` a secas.
 
 Dónde se garantiza, superficie por superficie:
 
@@ -243,7 +244,7 @@ adónde apunta el icono de catálogo de la barra).
 > minoría y metía un campo de estado nuevo en `localStorage`. La unión hace las dos cosas
 > mejor con menos código.
 
-### D3 · Dos planes, **de la misma sede**
+### D3 · Dos planes, **misma sede y mismo nivel**
 
 Doble titulación son dos, y la casilla lo dice literalmente. Con dos elegidos, las filas
 de la lista quedan deshabilitadas hasta que se suelte una — mismo patrón de botón apagado
@@ -254,14 +255,15 @@ de la lista quedan deshabilitadas hasta que se suelte una — mismo patrón de b
 export const MAX_PLANS = 2;
 ```
 
-**Y los dos son de la misma sede**: la doble titulación no cruza sedes. No es una
-suposición nuestra, es cómo funciona, así que se hace cumplir en vez de confiar:
+**Y los dos son de la misma sede y del mismo nivel**: la doble titulación no cruza sedes
+ni mezcla pregrado con posgrado. No es una suposición nuestra, es cómo funciona, así que
+se hace cumplir en vez de confiar:
 
-- En el picker, elegido el primer plan, **la sede queda fija** y sus chips se
-  deshabilitan con una nota corta ("la doble titulación es dentro de una sede"). Un
-  estado imposible que no se puede tipear es mejor que uno validado después.
-- `addPlan()` rechaza —devuelve `false`— un plan cuya sede no sea la del primero. El
-  guardia va en la función compartida, no en la pantalla.
+- En el picker, elegido el primer plan, **la sede y el nivel quedan fijos** y sus chips se
+  deshabilitan con una nota corta ("la doble titulación es dentro de una sede y un
+  nivel"). Un estado imposible que no se puede tipear es mejor que uno validado después.
+- `addPlan()` rechaza —devuelve `false`— un plan cuya sede o cuyo nivel no sean los del
+  primero. El guardia va en la función compartida, no en la pantalla.
 
 No es solo higiene de dominio: **es lo que hace segura la deduplicación por `code`**. La
 identidad de una asignatura en la base es `(campus_code, code)` (`DATA-MODEL.md`, tabla
@@ -376,6 +378,10 @@ que existe el tablero, y con dos planes se queda corta antes todavía.
 de cuántos planes haya, y dos constantes serían dos cosas que mantener sincronizadas para
 no ganar nada.
 
+Y **es un límite nuestro, no de la universidad**: los estatutos ponen mínimos (6 y 10
+créditos), no máximos. El texto que lo explica —el tooltip de `AddButton`— tiene que
+sonar a límite de la app, nunca a regla académica.
+
 ```ts
 /** Tope deliberado: 20. El techo real es la ronda de medición —una petición
  *  de detalle por materia, 4 en paralelo—, ~7 s con la barra de progreso a la
@@ -421,7 +427,8 @@ un objeto.
 ```ts
 /** v2: varios planes, en orden de elección. La v1 guardaba un solo objeto. */
 const PICK_KEY = 'tablero.planes.v2';
-/** La clave vieja, que solo se lee para migrar. */
+/** La clave vieja. Se lee para migrar y NO se borra: es el seguro de
+ *  rollback. Ver "Compatibilidad" más abajo. */
 const PICK_KEY_V1 = 'tablero.plan.v1';
 
 export function loadPlans(): Selection[];        // migra de v1 si hace falta
@@ -430,15 +437,22 @@ export function savePlans(p: Selection[]): void; // vacío ⇒ borra las dos cla
 
 Reglas de `loadPlans()`, en este orden:
 
-1. Si hay v2 válida, se usa; cada plan se valida campo por campo como ya hace
-   `loadSelection` (`storage.ts:115-132`). Nunca confiar en lo guardado.
+1. **Si hay v2 válida, manda v2** —siempre, sin mirar la v1—; cada plan se valida campo
+   por campo como ya hace `loadSelection` (`storage.ts:115-132`). Nunca confiar en lo
+   guardado.
 2. Se deduplica por `selectionId` y se recorta a `MAX_PLANS`.
-3. Si no hay v2 pero sí v1: `[loadSelection()]`, se escribe la v2 y **se borra la v1**.
+3. Si no hay v2 pero sí v1: `[loadSelection()]` y se escribe la v2. **La v1 se deja donde
+   está** (ver [Compatibilidad](#compatibilidad-con-lo-que-ya-hay-en-los-navegadores)).
    Esta migración es lo único que separa a un usuario actual de perder su plan al
    desplegar.
 4. Sin nada: `[]`.
 
-`clearStored()` (`storage.ts:158-168`) borra **las dos** claves, v1 incluida.
+La regla 1 es la que hace que la 3 sea segura: con la v1 viva pero ignorada, nada puede
+resucitar un plan viejo por encima del actual.
+
+`clearStored()` (`storage.ts:158-168`) sí borra **las dos** claves: empezar de nuevo tiene
+que dejar el navegador como estaba antes de la primera visita, y ahí no hay rollback que
+proteger.
 
 > **La clave del semestre —`tablero.semestre.v2`— no se toca.** `PlanItem` no cambia de
 > forma, y bumpearla le borraría el semestre a todo el mundo por nada.
@@ -535,6 +549,74 @@ de "el que llegó primero por la red": el resultado tiene que ser el mismo en ca
 
 ---
 
+## Compatibilidad con lo que ya hay en los navegadores
+
+Esto se despliega sobre gente que ya tiene su plan y su semestre guardados, y sobre
+pestañas abiertas en ese momento. Nada de eso puede romperse.
+
+### Las seis claves, y cuál se mueve
+
+| Clave | ¿Cambia? | Qué ve un build viejo |
+|---|---|---|
+| `tablero.semestre.v2` (las materias) | **no**, ni la clave ni la forma | lo mismo de siempre |
+| `tablero.plan.v1` (el plan) | se lee para migrar y **se deja**; ya no se escribe | su plan de siempre |
+| `tablero.planes.v2` (los planes) | nueva | nada: no la conoce y la ignora |
+| `tablero.horario.v1` (grupo elegido) | no | lo mismo |
+| `tablero.orden.v1` (orden de tablas) | no | lo mismo |
+| `tablero.horario.ancho.v1` | no | lo mismo |
+
+**Una sola clave nueva y ninguna clave vieja rota.** `PlanItem` no cambia de forma, así
+que el semestre —lo que de verdad duele perder— ni se toca.
+
+### Caso 1 · Recarga normal después del deploy
+
+Es lo que le pasa a todo el mundo. `loadPlans()` encuentra v1, escribe v2 y sigue. El
+plan y las materias quedan donde estaban, y la persona no se entera de nada salvo por la
+casilla nueva en la pantalla de elegir plan.
+
+### Caso 2 · Una pestaña abierta durante el deploy
+
+El bundle es **uno solo** (`dist/assets/index-*.js`, sin `import()` dinámicos) y **no hay
+service worker**, así que una pestaña viva tiene todo el código en memoria y sigue
+funcionando con el modelo viejo hasta que alguien la recargue. No hay chunks que se
+pidan tarde y devuelvan 404 porque el `dist/` del servidor ya se reemplazó.
+
+Lo que sí comparten una pestaña vieja y una nueva es `localStorage`:
+
+- **Las materias**: misma clave, misma forma. La pestaña vieja puede terminar viendo
+  materias de dos planes y no se rompe — su `+` deshabilita las que considera ajenas y su
+  tope de 10 solo impide agregar, nunca esconde lo guardado.
+- **El plan**: la vieja lee y escribe v1, la nueva v2. Cada una con su clave, sin
+  pisarse, y la regla "si hay v2, manda v2" impide que una escritura tardía de la vieja
+  resucite nada.
+- Lo único que queda cojo: "empezar de nuevo" **desde la pestaña vieja** borra la v1 pero
+  no la v2, así que el plan reaparece. Es una pestaña que quedó atrás; recargar lo
+  arregla. No se hace nada por eso.
+
+### Caso 3 · Rollback del deploy
+
+El que obliga a **no borrar la v1**. Si volvemos al build anterior con la v1 borrada, ese
+build no encuentra plan, muestra el onboarding, y al elegir uno cae en la rama de
+"adoptar sin plan previo" (`PlanProvider.tsx:80-87`), que **filtra `items` y borra en
+silencio las materias que no son de ese plan**. Es decir: el rollback le costaría a un
+doble titulación la mitad de su semestre.
+
+Con la v1 intacta, el build viejo se reencuentra con el plan de siempre, no filtra nada,
+y lo peor que pasa es que el segundo plan queda invisible hasta que se vuelva a
+desplegar.
+
+Costo de dejarla: una clave muerta de ~200 bytes. **Se borra en un commit aparte
+(`chore:`), un release después**, cuando el deploy nuevo esté firme — no antes, y no
+"aprovechando" este PR.
+
+### La API no entra en esto
+
+No cambia el contrato, así que **no hay que coordinar el orden de los despliegues**: un
+cliente viejo y uno nuevo le hablan igual al mismo servidor, y `web` y `api` son imágenes
+separadas (`docs/PLAN-CI-CD.md`). Es la ventaja de que la feature sea 100% de front.
+
+---
+
 ## La interfaz, pantalla por pantalla
 
 ### 1. `PlanPicker` · la casilla
@@ -555,11 +637,11 @@ Con la casilla **marcada**:
 - `choose()` llama a `addPlan()`. Si con eso quedan dos, navega al catálogo; si es el
   primero, **se queda** y espera el segundo.
 - Con dos elegidos, las filas quedan deshabilitadas ("suelta uno para cambiarlo").
-- **Elegido el primero, la sede se congela** (D3): los chips de sede quedan
-  deshabilitados con la nota "la doble titulación es dentro de una sede", y el buscador
-  sigue filtrando los planes de esa sede. Soltar el primer chip la descongela.
-- El nivel tampoco hay que volver a tocarlo: el componente no se desmonta, así que el
-  segundo plan está a un clic del primero.
+- **Elegido el primero, la sede y el nivel se congelan** (D3): sus chips quedan
+  deshabilitados con la nota "la doble titulación es dentro de una sede y un nivel", y la
+  lista sigue mostrando los planes de esa sede. Soltar el primer chip los descongela.
+- Con los dos escalones fijos, el segundo plan está literalmente a un clic del primero:
+  la lista ya está en pantalla y no hay nada más que elegir.
 
 Con la casilla **sin marcar** (la mayoría): la pantalla es la de hoy, con `choose()`
 llamando a `select()` — que reemplaza el plan único, con la confirmación de siempre si
@@ -694,8 +776,10 @@ usable. El mensaje va literal — ver [`COMMIT-CONVENTION.md`](COMMIT-CONVENTION
 
 **Criterio de aceptación**
 
-- [ ] Con `tablero.plan.v1` y **sin** v2: al cargar, el plan y las materias siguen ahí,
-      aparece `tablero.planes.v2` y la v1 desaparece.
+- [ ] Con `tablero.plan.v1` y **sin** v2: al cargar, el plan y las materias siguen ahí, y
+      aparece `tablero.planes.v2`.
+- [ ] La v1 **sigue existiendo** después de migrar (seguro de rollback), y con las dos
+      claves presentes manda siempre la v2 — aunque la v1 diga otro plan.
 - [ ] `addPlan()` no toca `items`; `removePlan(id)` borra ese plan y solo sus materias —
       las del otro sobreviven, y sus grupos elegidos también.
 - [ ] `add()` devuelve `false` si ya hay una materia con el mismo `code` **aunque sea de
@@ -724,11 +808,12 @@ Interfaz §1 y §3. El menú entra acá porque es la puerta de vuelta al picker.
 - [ ] Primera visita sin marcar la casilla: **un clic** de la lista al catálogo, igual que
       hoy. Lo único distinto en pantalla es la casilla sin marcar.
 - [ ] Marcándola: el primer plan deja el chip "1 de 2" y **no** navega; el segundo entra
-      al catálogo; el nivel se quedó donde estaba.
-- [ ] Elegido el primer plan, **la sede queda congelada** y no hay forma de elegir un
-      segundo plan de otra sede desde la interfaz (D3); soltar el primer chip la
-      descongela.
-- [ ] `addPlan()` devuelve `false` ante un plan de otra sede aunque se lo llame a mano.
+      al catálogo.
+- [ ] Elegido el primer plan, **sede y nivel quedan congelados** y no hay forma de elegir
+      un segundo plan de otra sede ni de otro nivel desde la interfaz (D3); soltar el
+      primer chip los descongela.
+- [ ] `addPlan()` devuelve `false` ante un plan de otra sede o de otro nivel aunque se lo
+      llame a mano.
 - [ ] Salir a mitad (atrás del navegador) deja un plan elegido y la app funcionando.
 - [ ] Desmarcarla con dos planes pide confirmación y borra solo las materias del segundo.
 - [ ] Volver al picker desde el menú lo encuentra con la casilla marcada y los dos chips.
@@ -822,9 +907,20 @@ feat(web): marcar de qué plan es cada materia con dos titulaciones
   peor que ninguno.
 - Actualizar `web/README.md` ("Decisiones que conviene no deshacer") y este documento a
   **Estado: implementado**.
+- **No** borrar `tablero.plan.v1` en este PR: es el seguro de rollback. Queda anotado acá
+  para el release siguiente, cuando el deploy esté firme.
 
 ```
 docs(web): actualizar el porqué del estado del plan tras doble titulación
+```
+
+### Después, y no en este PR
+
+Un release más tarde, con el deploy nuevo asentado, un commit de una línea que quita la
+lectura de la v1 y la borra de `localStorage`:
+
+```
+chore(web): dejar de leer el plan guardado en el formato viejo
 ```
 
 ---
@@ -837,12 +933,13 @@ render, sin fixtures— con **dos** archivos nuevos:
 
 **`web/src/lib/plans.test.ts`** (Fase 1), un caso por regla que puede romper datos:
 
-1. v1 presente y v2 ausente → migra, conserva el plan, borra la v1.
+1. v1 presente y v2 ausente → migra, conserva el plan, y **deja la v1 donde estaba**.
+2. v1 y v2 presentes y distintas → manda la v2, la v1 ni se lee.
 2. v2 con tres planes guardados a mano → se recorta a `MAX_PLANS`.
 3. v2 con dos planes de igual `selectionId` → se deduplica.
 4. Basura en la clave (`'{'`, `'[]'`, `null`) → `[]` sin tirar.
 5. `removePlan` deja solo las materias del otro plan.
-6. `addPlan` con un plan de otra sede → `false`, lista intacta (D3).
+6. `addPlan` con un plan de otra sede, o de otro nivel → `false`, lista intacta (D3).
 7. `add` con un `code` que ya está desde el otro plan → `false` (la invariante).
 8. `loadPlan` con el mismo `code` dos veces guardado → una sola materia.
 
@@ -893,6 +990,7 @@ No se testea React: no hay entorno de render en el repo y montarlo sería traer
 | Riesgo | Mitigación |
 |---|---|
 | La migración v1→v2 falla y alguien pierde plan y semestre | Primer criterio de la Fase 1, con test. `loadPlans` nunca tira: ante la duda devuelve `[]`, y el peor caso es volver a elegir el plan — el semestre vive en otra clave que no se toca |
+| **Hay que hacer rollback y el build viejo borra el semestre** al re-adoptar el plan (`PlanProvider.tsx:80-87`) | La v1 no se borra en este PR, así que el build viejo se reencuentra con su plan y no filtra nada. Ver [Compatibilidad](#compatibilidad-con-lo-que-ya-hay-en-los-navegadores), caso 3 |
 | **El criterio de "más grupos" cambia la tipología con la que se inscribiría** una materia obligatoria en un plan y libre en el otro (D6) | Es la consecuencia inevitable de que gane el plan con más opciones. Por eso la tarjeta dice dónde más está la materia y con qué tipología, y deja cambiarla de plan con un clic (interfaz §6) |
 | El ganador de una materia compartida cambia entre visitas, porque alguien midió el detalle desde el otro plan y apareció el conteo | Solo puede pasar **antes** de agregarla: una vez en Mi semestre, la materia se queda con el plan que se guardó. Nada se re-decide a espaldas de nadie |
 | Dos catálogos = ~800 KB (con `?include=schedules`) y dos misses fríos la primera vez | Los dos van en paralelo y la pantalla de carga ya explica el costo. La segunda visita sale de Postgres |
@@ -913,19 +1011,17 @@ acá para que nadie las reabra:
 | Qué plan gana una materia compartida | El que ve **más grupos**; la tipología es el desempate cuando no se sabe (D6) |
 | Los mínimos de créditos | Por **inscripción completa**, no por plan. `CreditsBadge` no cambia de lógica (D9) |
 | Tope de materias | 20, para uno y para dos planes (D8) |
-| ¿Cruza sedes? | **No.** Los dos planes son de la misma sede, y la interfaz lo impide en vez de confiar (D3) |
+| ¿Cruza sedes o niveles? | **No.** Los dos planes son de la misma sede y del mismo nivel, y la interfaz lo impide en vez de confiar (D3) |
+| ¿Hay tope académico de créditos? | **No.** Solo mínimos (6 y 10). El tope de 20 materias es nuestro, por el costo de la ronda de medición, y así se explica en la interfaz — nunca como si fuera regla de la universidad |
+| Compatibilidad con lo ya guardado | La v1 se lee y **no** se borra: es el seguro de rollback. Se limpia un release después, en un commit aparte |
 
 Abierto, sin bloquear nada:
 
-1. **¿Los dos planes son siempre del mismo nivel** (dos pregrados)? Si lo son, el nivel
-   se congela junto con la sede en el picker y es un guardia más en `addPlan()`. Mientras
-   no se confirme, el nivel queda libre: bloquear de más es peor que bloquear de menos,
-   porque lo de menos no rompe nada — `PlanItem` lleva su propio `level` y el detalle se
-   pide con el del item (`useCourseDetails.ts:127-129`).
-2. **La materia que está en los dos planes, ¿la inscribe quien quiera por el plan que
+1. **La materia que está en los dos planes, ¿la inscribe quien quiera por el plan que
    quiera?** Es la premisa del botón "cambiar a 2B10" (interfaz §6): si el SIA la asigna
-   solo, ese botón sobra y hay que quitarlo.
-3. **¿Hace falta poder unir los grupos de los dos planes en una sola materia?** Hoy la
+   solo, ese botón sobra y hay que quitarlo. Mientras tanto se deja, que es la opción
+   reversible.
+2. **¿Hace falta poder unir los grupos de los dos planes en una sola materia?** Hoy la
    materia se queda con los del plan ganador y se ofrece cambiarla. Unirlos sería pedir
    el detalle a los dos planes: el doble de POSTs al SIA por materia compartida. Se
    decide con uso real, no antes.
@@ -945,7 +1041,11 @@ Abierto, sin bloquear nada:
       sale **una sola fila** en el catálogo, una sola en Mi semestre, un solo bloque en el
       calendario y una sola vez en los créditos
 - [ ] No hay forma de elegir dos planes de sedes distintas desde la interfaz
-- [ ] Probado con `localStorage` de un usuario viejo (v1) — la migración
+- [ ] Probado con `localStorage` de un usuario viejo (v1) — la migración, y que la v1
+      sigue ahí después
+- [ ] **Probado el rollback**: con la rama desplegada y dos planes elegidos, servir el
+      build de `main` y confirmar que vuelve el plan de siempre y que **no se borró
+      ninguna materia**
 - [ ] `/ponytail-review` pasado y aplicado
 - [ ] Comentarios que decían "un solo plan" reescritos, no borrados
 

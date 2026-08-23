@@ -41,10 +41,26 @@ armar — la que más falta le hace.
 
 Todo lo que sigue está subordinado a esas dos reglas a la vez:
 
-1. **Con un solo plan, la interfaz no cambia en nada** salvo una casilla sin marcar en la
-   pantalla de elegir plan.
+1. **Con un solo plan, la interfaz cambia en tres cosas y en ninguna más** (lista exacta
+   abajo). El flujo principal —buscar, agregar, medir cupos, armar el horario, exportar—
+   no se toca ni un píxel.
 2. **Con dos, no hay modo aparte.** Se declara una vez al principio, y después la app es
    la misma: **un catálogo, un semestre, un horario**.
+
+### Los tres cambios que ve la mayoría
+
+Ni uno más. Si aparece un cuarto, es un bug de la rama:
+
+| # | Qué ve | Dónde | Por qué |
+|---|---|---|---|
+| 1 | Una **casilla sin marcar**, "Estudio doble titulación" | `PlanPicker`, sobre "Nivel" | Es la puerta de la minoría, y la única forma de que se enteren de que existe. No pide decisión: se ignora y la pantalla se comporta igual que hoy |
+| 2 | El tope de materias pasa de **10 a 20** | `AddButton`, `Semester` | Decisión explícita (D8). Toca a todos porque el costo de medir no depende de cuántos planes haya |
+| 3 | El chip del plan **abre un menú** en vez de disparar "empezar de nuevo" directo | `Topbar` | Un clic más en la única acción destructiva de la app — que hoy se dispara por error al tocar el chip— y, a cambio, una puerta no destructiva para cambiar de plan, que hoy **no existe** |
+
+Los tres son deliberados. El resto de la interfaz —el catálogo, la ficha, Mi semestre, Mi
+horario, el calendario, el `.ics`, los filtros, el orden, los cupos— tiene que quedar
+**idéntico a `main`** para quien tiene un plan: todo lo nuevo va detrás de
+`plans.length > 1`.
 
 ---
 
@@ -1059,7 +1075,8 @@ hace hasta que alguien lo pida.
 - [ ] `npx tsc -b --noEmit` limpio
 - [ ] `npx oxlint` limpio
 - [ ] `npm test` verde
-- [ ] Probado a mano con **un** plan: la única diferencia contra `main` es la casilla
+- [ ] Probado a mano con **un** plan: las únicas diferencias contra `main` son las tres
+      de la lista (casilla, tope de 20, menú del chip). Cualquier cuarta es un bug
 - [ ] Probado a mano con **dos** planes: elegirlos de una, buscar en el catálogo unido,
       agregar de los dos, choque cruzado, quitar uno, exportar `.ics`
 - [ ] **La invariante, buscada a propósito**: elegir dos planes con carrera compartida

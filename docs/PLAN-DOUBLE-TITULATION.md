@@ -50,16 +50,27 @@ Todo lo que sigue está subordinado a esas dos reglas a la vez:
 
 ## La forma de la solución, en una frase
 
-**El doble titulación no navega dos catálogos: navega uno que es la suma de los dos.**
+**Dos planes son dos fuentes para el mismo horario y la misma inscripción. No se duplica
+nada.**
 
-No hay pestañas, no hay "plan activo", no hay que acordarse de en cuál se está. Se
-declara la doble titulación con una casilla al elegir plan, se eligen dos, y de ahí en
-adelante el catálogo es la unión de los dos conjuntos de asignaturas, con una única regla
-para los códigos que aparecen en los dos: **obligatorio > optativo > libre elección**.
+De ahí sale todo lo demás. El doble titulación no navega dos catálogos: navega uno que es
+la suma de los dos. No hay pestañas, no hay "plan activo", no hay que acordarse de en cuál
+se está. Se declara la doble titulación con una casilla al elegir plan, se eligen dos, y
+de ahí en adelante el catálogo es la unión de los dos conjuntos de asignaturas, con una
+única regla para los códigos que aparecen en los dos: **la tipología de mayor rango
+manda**.
 
 Eso es lo que hace que la feature no cueste nada de aprender — y, de paso, hace el código
 **más chico** que la alternativa de pestañas: sin plan activo no hay estado que guardar,
 que persistir ni que sincronizar.
+
+Y marca el límite de hasta dónde llega este tablero: **somos informativos, no somos el
+SIA.** No inscribimos a nadie ni decidimos por cuál plan queda una materia; eso pasa en
+el SIA y no acá. Lo nuestro es mostrar el dato correcto y decir de dónde salió. Por eso,
+cuando una asignatura está en los dos planes, se le da el rango más alto y **se aclara a
+qué plan la estamos atribuyendo** — y ahí se acaba nuestra responsabilidad. Nada de
+botones para "cambiarla de plan": sería fingir un control sobre la inscripción que no
+tenemos.
 
 ---
 
@@ -299,33 +310,14 @@ leer de este plan.
 > rompe el buscador y duplica los códigos compartidos, que es justo lo que hay que
 > resolver.
 
-### D6 · Qué plan gana cuando un código está en los dos
+### D6 · Qué plan gana cuando un código está en los dos: **el de mayor rango**
 
 Que pase está confirmado: de 22 códigos compartidos entre planes de Bogotá, **8 divergen
-en tipología** (`GOTCHAS.md` §17). Tres criterios, en orden. El primero que decide,
-decide.
+en tipología** (`GOTCHAS.md` §17). Gana la tipología de mayor rango, y con ella su plan.
+Empate → el primer plan elegido.
 
-| # | Criterio | Cuándo aplica |
-|---|---|---|
-| 1 | **Más grupos**: gana el plan que ve más | Solo si el catálogo trae `section_schedules` de los **dos** lados |
-| 2 | **Tipología de mayor rango** (tabla abajo) | Siempre: la tipología viene en el listado |
-| 3 | **El primer plan elegido** | Empate en todo lo anterior |
-
-**Criterio 1 · más opciones gana.** Los grupos visibles dependen del programa —relación
-de subconjunto estricto, `CLAUDE.md`—, así que el plan que ve más grupos es el que deja
-armar más horarios. El dato sale de `section_schedules` (`api/types.ts:55-63`) y hay que
-leerlo con cuidado: **ausente = nadie pidió el detalle desde ese plan** (no se sabe);
-**`[]` = se pidió y no hay grupos** (se sabe, y es cero). Solo se compara cuando los dos
-lados lo traen; con uno solo no se inventa nada y pasa el turno al criterio 2.
-
-Por eso **con dos planes el catálogo se pide siempre con `?include=schedules`**, y no
-solo cuando hay horario armado (`Program.tsx:77-81`): son ~44 KB sobre ~358 KB por plan,
-y es lo que hace que este criterio se pueda aplicar. Aun así, para los códigos que nadie
-midió todavía manda el criterio 2 — es el caso normal, no la excepción.
-
-**Criterio 2 · la tipología.** La letra entre paréntesis es la clave estable, no la frase
-(el SIA cambia de vocabulario entre vistas, `GOTCHAS.md` §17): `FUND. OBLIGATORIA (B)` →
-`B`.
+La letra entre paréntesis es la clave estable, no la frase (el SIA cambia de vocabulario
+entre vistas, `GOTCHAS.md` §17): `FUND. OBLIGATORIA (B)` → `B`.
 
 | Rango | Tipología (literal del SIA) | Letra |
 |---:|---|---|
@@ -339,18 +331,38 @@ midió todavía manda el criterio 2 — es el caso normal, no la excepción.
 > ordenamiento: bloquea el avance del plan, así que es lo más urgente de inscribir. No lo
 > "arregles" en un refactor.
 
-Consecuencias que hay que saber:
+**Por qué el rango y no "el plan que ve más grupos"**, que era la propuesta anterior de
+este documento: porque no inscribimos a nadie. Un criterio que mira cuántos grupos ve
+cada plan estaría optimizando una decisión —por cuál plan queda la materia— **que se toma
+en el SIA, no acá**. El rango, en cambio, responde la única pregunta que este tablero sí
+tiene que contestar bien: *qué es esta materia para vos, lo más exigente que sea en
+alguno de tus dos planes*. Y de paso se ahorra el `?include=schedules` extra, un conteo
+que a veces no existe, y un resultado que cambiaba entre visitas.
+
+Consecuencias:
 
 - **`PlanItem.typology` es el literal del plan ganador**, crudo, tal como lo manda el
   SIA. No se normaliza ni se traduce: es dato de ellos (convención de idioma,
   `CLAUDE.md`).
-- **El desglose de créditos por tipología cuenta la materia una sola vez**, en la
-  tipología del plan ganador.
-- **El criterio 1 puede ganarle al 2**, y eso tiene consecuencia académica: una materia
-  obligatoria en A y de libre elección en B, con más grupos en B, se queda con B — y
-  entonces se ve, se cuenta y se inscribiría **como libre elección**. Por eso no se
-  decide en silencio: la tarjeta dice dónde más está y con qué tipología, y deja
-  cambiarla de plan con un clic (interfaz §6).
+- **El desglose de créditos cuenta la materia una sola vez**, en la tipología del plan
+  ganador.
+- **Los grupos que se ven son los del plan ganador.** Los grupos visibles dependen del
+  programa (subconjunto estricto, `CLAUDE.md`), así que el otro plan podría ver alguno
+  más. No lo perseguimos: lo que se hace es **decir de qué plan estamos hablando** — en
+  la ficha de la materia y en el hover de la tarjeta (interfaz §6 y §7). Ahí se acaba
+  nuestro trabajo.
+- Determinismo: el resultado depende solo de la tipología y del orden de elección de los
+  planes, así que **es el mismo en cada carga**, sin importar qué respuesta llegó primero
+  ni qué se midió antes.
+- **Filtrar por `LIBRE ELECCIÓN (L)` ya no muestra las materias que el otro plan tiene
+  como obligatorias.** Es correcto, no un efecto colateral: si es obligatoria de uno de
+  tus planes, la vas a cursar como obligatoria, no como electiva. El filtro dice la
+  verdad de lo que esa materia es *para vos*.
+
+Y una nota de volumen: la unión **no es la suma**. La mitad de libre elección de cada
+catálogo sale del buscador de electivas, que es por sede (`API.md`), así que los dos
+planes comparten cientos de códigos —casi todos con la misma tipología en los dos, y por
+eso empatados—. Dos planes de ~694 asignaturas no dan 1 388 filas: dan bastantes menos.
 
 ### D7 · Una asignatura, un plan: no se agrega dos veces el mismo `code`
 
@@ -515,37 +527,33 @@ export function typologyRank(raw: string): number;
 
 ```ts
 export type MergedCourse = CourseSummary & {
-  /** De qué plan salió esta fila: lo que arma su PlanItem y su itemId. */
+  /** De qué plan salió esta fila: lo que arma su PlanItem y su itemId, y lo
+   *  que se le dice a la persona (interfaz §6 y §7). */
   plan: Selection;
-  /** El mismo código visto desde el otro plan, si estaba. Alimenta la línea
-   *  informativa de la tarjeta y el botón de cambiarla de plan. */
-  alsoIn?: { plan: Selection; typology: string; sections: number | null };
+  /** El mismo código visto desde el otro plan, si estaba. Solo informativo:
+   *  con qué tipología aparece allá. */
+  alsoIn?: { plan: Selection; typology: string };
 };
 
-/** Une los catálogos de 1 o 2 planes. Dedup por `code` con los tres
- *  criterios de D6. Con un solo plan es un map sobre la lista: mismo orden,
- *  mismo largo, sin `alsoIn`. */
+/** Une los catálogos de 1 o 2 planes. Dedup por `code` con la regla de D6.
+ *  Con un solo plan es un map sobre la lista: mismo orden, mismo largo, sin
+ *  `alsoIn`. */
 export function mergeCatalogs(
   parts: { plan: Selection; courses: CourseSummary[] }[],
 ): MergedCourse[];
 ```
 
-El desempate, entero (D6). `sections` es `c.section_schedules?.length ?? null`, y `null`
-significa "no se sabe", que **no** es lo mismo que 0:
+El desempate entero es esto (D6):
 
 ```ts
-function wins(a: CourseSummary, b: CourseSummary): boolean {
-  const [sa, sb] = [countOf(a), countOf(b)];       // number | null
-  if (sa !== null && sb !== null && sa !== sb) return sa > sb;   // 1
-  const [ra, rb] = [typologyRank(a.typology), typologyRank(b.typology)];
-  if (ra !== rb) return ra > rb;                                 // 2
-  return true;  // 3: `a` es el del primer plan elegido — se queda
-}
+// `a` viene del plan elegido primero. En empate se queda `a`.
+const wins = (a: CourseSummary, b: CourseSummary) =>
+  typologyRank(a.typology) >= typologyRank(b.typology);
 ```
 
-El orden de `parts` **es** el orden de elección de los planes, así que el criterio 3 sale
-solo de recorrer en orden y no reemplazar en caso de empate. Nada de `Math.random`, nada
-de "el que llegó primero por la red": el resultado tiene que ser el mismo en cada carga.
+El orden de `parts` **es** el orden de elección de los planes, así que recorrer en orden y
+no reemplazar en caso de empate ya da el desempate estable. Nada de `Math.random`, nada de
+"el que llegó primero por la red": el resultado es el mismo en cada carga.
 
 ---
 
@@ -658,10 +666,8 @@ tengo, no solo el primero.
 ```tsx
 const mine = plan.owns(sel) ? plan.plans : [sel];   // plan ajeno ⇒ solo ese
 
-// Con dos planes los horarios se piden SIEMPRE: son el criterio 1 de D6, no
-// solo el marcado de choques. Ver el comentario de Program.tsx:60-73.
-const inc = mine.length > 1 || hasSchedule ? 'schedules' : undefined;
-
+// `inc` no cambia: sigue siendo 'schedules' solo cuando hay horario armado
+// contra el que chocar (Program.tsx:60-81). La fusión no lo necesita.
 const a = useApi<CoursesResponse>(routes.courses(scope(mine[0]), mine[0].program, inc));
 const b = useApi<CoursesResponse>(
   mine[1] ? routes.courses(scope(mine[1]), mine[1].program, inc) : null,
@@ -736,26 +742,49 @@ planes"** (`!plan.owns(sel)`). Ahí el catálogo se pinta solo (no unido), se qu
 de hoy, y "cambiarme a este" se convierte en **"agregar a mis planes"** cuando hay cupo
 (`!plansFull`) — que ya no borra nada.
 
-### 6. `CourseCard` · de qué plan es, dónde más está, y cómo cambiarla
+### 6. `CourseCard` y las filas del catálogo · de qué plan es, al pasar el mouse
 
 Con `plans.length > 1`, un chip con el código del plan al lado del código de la
 asignatura (`.chip__code`, ya existe). Con un plan, nada de esto se dibuja.
 
-Y en las que estaban en los dos (`alsoIn`), una línea con **la salida** al caso en que el
-criterio 1 de D6 haya elegido el plan que a esta persona no le sirve:
+El chip lleva `Tooltip` —el componente que ya existe— y ahí va la aclaración, que es
+**todo** lo que se dice al respecto en una lista:
 
-> también en **2B10** como `LIBRE ELECCIÓN (L)` · 12 grupos — **cambiar a 2B10**
+> **Se cuenta en 2A74** como `FUND. OBLIGATORIA (B)`
+> También está en 2B10, como `LIBRE ELECCIÓN (L)`.
 
-- Es el único camino de vuelta: el catálogo muestra la materia **una sola vez**, así que
-  sin esto no hay forma de elegir el otro plan para ella.
-- "Cambiar" es `remove(itemId viejo)` + `add(item con el otro plan)`, en ese orden. Lo
-  demás se acomoda solo: el grupo elegido se poda por `itemId`
-  (`ScheduleProvider.tsx:31-40`) y el calendario se repinta desde `plan.items`.
-- **Se pierde el grupo elegido de esa materia**, porque los grupos del otro plan no son
-  los mismos. Se avisa en el mismo clic si había uno elegido (`useConfirm`), no después.
-- El conteo de grupos de `alsoIn` solo se muestra si se sabe (`sections !== null`).
+**La segunda línea solo cuando la tipología del otro plan es distinta**, no cada vez que
+haya `alsoIn`. El motivo es de volumen: la mitad de libre elección del catálogo sale del
+buscador de electivas, que es **por sede** (`API.md`, "sin filtro son dos POSTs"), así que
+los dos planes comparten cientos de códigos con la **misma** tipología. Decir "también
+está en 2B10, como `LIBRE ELECCIÓN (L)`" en cada uno de esos sería ruido puro: el chip ya
+dice a qué plan se atribuye, y no hay ninguna diferencia que aclarar.
 
-### 7. `CreditsBadge` · el desglose gana una sección
+**Sin botones**: no hay "cambiar de plan", no hay acción. Somos informativos (D6); quien
+decide por cuál plan queda la materia es el SIA al inscribir, y fingir lo contrario con un
+botón sería peor que no decir nada.
+
+### 7. `Course` (la ficha) · lo mismo, dicho entero
+
+`views/Course.tsx` ya recibe el plan desde el que se abrió (`screen.selection`, que con la
+unión es el plan ganador). Con dos planes, y solo con dos, una línea bajo el encabezado —
+no un tooltip, que acá hay sitio de sobra:
+
+> Esta asignatura se está contando en tu plan **2A74** (`FUND. OBLIGATORIA (B)`). En 2B10
+> figura como `LIBRE ELECCIÓN (L)`. Los grupos de abajo son los que ve 2A74.
+
+Es el lugar donde importa decirlo completo: la ficha es donde alguien mira los grupos uno
+por uno antes de inscribirse, así que es donde tiene que quedar claro **desde qué plan se
+está mirando** — sobre todo porque los grupos visibles dependen del programa (D6).
+
+Un detalle de implementación que hay que aceptar en vez de pelear: **el "en 2B10 figura
+como…" solo se sabe si se llegó desde el catálogo**, que es de donde sale `alsoIn`.
+Abriendo la ficha desde Mi semestre o Mi horario, la pantalla solo tiene el `PlanItem` —
+que lleva su plan y su tipología, no la del otro— y entonces la línea se queda en su
+primera mitad, que es la que importa. **No se pide el otro catálogo para completarla**:
+sería una petición de ~350 KB para una frase.
+
+### 8. `CreditsBadge` · el desglose gana una sección
 
 Total y semáforo igual que hoy (D9). Con dos planes el tooltip muestra primero el
 desglose **por plan** y debajo el de tipología. La función nueva es hermana de
@@ -840,16 +869,16 @@ feat(web): declarar doble titulación y elegir dos planes al empezar
       buscándolo por código, por nombre, y con cualquier combinación de filtros— y se
       cuenta una sola vez en el total de la cabecera y en las facetas de tipología y de
       créditos.
-- [ ] El ganador sigue los tres criterios de D6 en orden: más grupos cuando se sabe de los
-      dos lados, si no la tipología de mayor rango, si no el primer plan elegido.
-- [ ] Con dos planes las dos peticiones llevan `?include=schedules` aunque no haya ningún
-      grupo elegido todavía.
-- [ ] Recargar la página da **el mismo ganador** para la misma materia: el desempate no
-      depende de cuál respuesta llegó primero.
+- [ ] El ganador es el de **tipología de mayor rango** (D6), y en empate el primer plan
+      elegido. Recargar la página da el mismo ganador: no depende de cuál respuesta llegó
+      primero ni de qué se midió antes.
+- [ ] `?include=schedules` se sigue pidiendo **solo** cuando hay grupos elegidos, igual
+      que en `main`: la fusión no lo necesita.
 - [ ] Si un catálogo falla y el otro no, se ve el que respondió y un `Fault` con
       reintento que vuelve a pedir los dos.
-- [ ] `npm test` cubre D6: más grupos gana, `[]` cuenta como cero y ausente como "no se
-      sabe", divergencia de tipología, empate, letra desconocida, código en un solo plan.
+- [ ] `npm test` cubre D6: divergencia de tipología en los dos sentidos, el orden nuevo
+      (`E` le gana a `C`, `P` le gana a todo), empate, letra desconocida, código en un
+      solo plan.
 
 ```
 feat(web): unir los catálogos de los dos planes en una sola lista
@@ -875,25 +904,26 @@ feat(web): unir los catálogos de los dos planes en una sola lista
 feat(web): permitir materias de los dos planes en el mismo semestre
 ```
 
-### Fase 5 · Leer un semestre mezclado
+### Fase 5 · Decir a qué plan estamos atribuyendo cada materia
 
-**Archivos**: `web/src/components/CourseCard.tsx` (+ `.css`),
-`web/src/components/CreditsBadge.tsx`, `web/src/lib/credits.ts`.
+**Archivos**: `web/src/components/CourseCard.tsx` (+ `.css`), `web/src/views/Course.tsx`
+(+ `.css`), `web/src/components/CreditsBadge.tsx`, `web/src/lib/credits.ts`.
 
 **Criterio de aceptación**
 
-- [ ] Con un plan, `CourseCard` y `CreditsBadge` se ven **idénticos** a `main`.
-- [ ] Con dos, cada tarjeta muestra el código de su plan; las compartidas dicen dónde más
-      están y con qué tipología; el tooltip de créditos desglosa por plan y por tipología.
-- [ ] "Cambiar a 2B10" deja la materia con el otro plan, su tipología y sus grupos, sin
-      tocar el resto de la lista; si había grupo elegido, avisa antes de perderlo.
+- [ ] Con un plan, `CourseCard`, `Course` y `CreditsBadge` se ven **idénticos** a `main`.
+- [ ] Con dos, cada fila y cada tarjeta llevan el código de su plan, y el hover dice en
+      cuál se cuenta y con qué tipología —y, si estaba en los dos, cómo figura en el otro.
+- [ ] La ficha de la materia lo dice entero en una línea, incluido que los grupos que se
+      ven son los del plan que la gana (interfaz §7).
+- [ ] **Ningún control para cambiar de plan una materia**: es informativo y nada más.
 - [ ] El total de créditos y el semáforo cuentan las materias de los dos planes juntas
-      (D9), y una materia compartida cuenta una sola vez.
+      (D9), y una materia compartida cuenta una sola vez, en la tipología ganadora.
 - [ ] El calendario y el `.ics` salen bien con materias de los dos planes (colores por
       materia, sin eje nuevo).
 
 ```
-feat(web): marcar de qué plan es cada materia con dos titulaciones
+feat(web): decir a qué plan se atribuye cada materia con dos titulaciones
 ```
 
 ### Fase 6 · Pulido y poda
@@ -946,19 +976,19 @@ render, sin fixtures— con **dos** archivos nuevos:
 **`web/src/lib/catalog.test.ts`** (Fase 3), la regla de D6, que es la lógica no trivial de
 esta rama:
 
-1. **Criterio 1**: 3 grupos en A contra 8 en B, con tipologías cualesquiera → gana B, y
-   `alsoIn` apunta a A. Es el criterio que manda por encima de la tipología.
-2. **`[]` no es ausente**: A con `section_schedules: []` y B con 5 → gana B (0 < 5). A con
-   `undefined` y B con 5 → **no** decide el criterio 1, pasa al 2.
-3. **Criterio 2**: sin conteos de los dos lados, `FUND. OBLIGATORIA (B)` en A contra
-   `LIBRE ELECCIÓN (L)` en B → gana A, con `alsoIn` a B. Y al revés, con el obligatorio
-   en el segundo plan → gana igual el obligatorio.
-4. **El orden nuevo**: `NIVELACIÓN (E)` le gana a `DISCIPLINAR OBLIGATORIA (C)`, y
+1. `FUND. OBLIGATORIA (B)` en A contra `LIBRE ELECCIÓN (L)` en B → una fila, tipología
+   `B`, plan A, y `alsoIn` apuntando a B con su literal.
+2. Al revés —el obligatorio en el **segundo** plan— → gana igual el obligatorio, y ahora
+   `alsoIn` apunta al primero. El orden de elección no puede ganarle al rango.
+3. **El orden nuevo**: `NIVELACIÓN (E)` le gana a `DISCIPLINAR OBLIGATORIA (C)`, y
    `TRABAJO DE GRADO (P)` le gana a todo (D6).
-5. **Criterio 3**: misma letra y mismos conteos → gana el primero elegido, con `alsoIn`.
-6. Letra desconocida o formato raro (`'RARO'`, `''`) → rango 0, no tira.
-7. Códigos que están en un solo plan → pasan tal cual.
-8. Una sola parte → salida de igual largo y orden que la entrada, sin `alsoIn`.
+4. Empate de rango (misma letra, o `B` contra `C`) → gana el primer plan elegido, con
+   `alsoIn` puesto.
+5. Letra desconocida o formato raro (`'RARO'`, `''`) → rango 0, no tira.
+6. Códigos que están en un solo plan → pasan tal cual, sin `alsoIn`.
+7. Una sola parte → salida de igual largo y orden que la entrada, sin `alsoIn`.
+8. El resultado no depende de `section_schedules`: el mismo par con y sin horarios en la
+   respuesta da el mismo ganador.
 
 No se testea React: no hay entorno de render en el repo y montarlo sería traer
 `@testing-library` entero por un popover. Las fases 2, 4 y 5 se verifican a mano.
@@ -991,40 +1021,36 @@ No se testea React: no hay entorno de render en el repo y montarlo sería traer
 |---|---|
 | La migración v1→v2 falla y alguien pierde plan y semestre | Primer criterio de la Fase 1, con test. `loadPlans` nunca tira: ante la duda devuelve `[]`, y el peor caso es volver a elegir el plan — el semestre vive en otra clave que no se toca |
 | **Hay que hacer rollback y el build viejo borra el semestre** al re-adoptar el plan (`PlanProvider.tsx:80-87`) | La v1 no se borra en este PR, así que el build viejo se reencuentra con su plan y no filtra nada. Ver [Compatibilidad](#compatibilidad-con-lo-que-ya-hay-en-los-navegadores), caso 3 |
-| **El criterio de "más grupos" cambia la tipología con la que se inscribiría** una materia obligatoria en un plan y libre en el otro (D6) | Es la consecuencia inevitable de que gane el plan con más opciones. Por eso la tarjeta dice dónde más está la materia y con qué tipología, y deja cambiarla de plan con un clic (interfaz §6) |
-| El ganador de una materia compartida cambia entre visitas, porque alguien midió el detalle desde el otro plan y apareció el conteo | Solo puede pasar **antes** de agregarla: una vez en Mi semestre, la materia se queda con el plan que se guardó. Nada se re-decide a espaldas de nadie |
-| Dos catálogos = ~800 KB (con `?include=schedules`) y dos misses fríos la primera vez | Los dos van en paralelo y la pantalla de carga ya explica el costo. La segunda visita sale de Postgres |
+| Alguien cree que el tablero decide por cuál plan se le cuenta una materia | Somos informativos: el chip y la ficha dicen a qué plan la estamos **atribuyendo** y con qué tipología, y no hay ningún control que sugiera que eso se puede cambiar desde acá (D6, interfaz §6 y §7) |
+| Los grupos que se ven son los del plan ganador, y el otro plan podría ver alguno más | Se dice en la ficha, que es donde alguien elige grupo. Perseguirlo sería pedir el detalle a los dos planes: el doble de POSTs al SIA por materia compartida |
+| Dos catálogos = ~700 KB y dos misses fríos la primera vez | Los dos van en paralelo y la pantalla de carga ya explica el costo. La segunda visita sale de Postgres |
 | La casilla se lee como ruido para la mayoría | Es una casilla sin marcar, sin decisión forzada y sin desplazar la lista. Si molesta, baja al pie del bloque de "Nivel" |
 | La mayoría de un solo plan nota el cambio | Criterio repetido en las fases 2, 3 y 5: con un plan, idéntico a `main` salvo la casilla y el tope de 20 |
 | Medir 20 materias se siente lento | ~7 s con la barra de progreso a la vista, y el botón ya salta las que están dentro del cooldown (`useCourseDetails.ts:210-226`). `MAX_ITEMS` es la perilla |
 
 ---
 
-## Decidido, y lo que queda abierto
+## Decidido
 
-Tres preguntas de la versión anterior de este documento ya tienen respuesta, y quedan
-acá para que nadie las reabra:
+Todas las preguntas de las versiones anteriores de este documento tienen respuesta.
+Quedan acá para que nadie las reabra a mitad de la implementación:
 
 | Pregunta | Respuesta |
 |---|---|
 | Orden de tipologías | `TRABAJO DE GRADO` > `NIVELACIÓN` > obligatorias > optativas > libre elección (D6). La nivelación arriba de las obligatorias es a propósito |
-| Qué plan gana una materia compartida | El que ve **más grupos**; la tipología es el desempate cuando no se sabe (D6) |
+| Qué plan gana una materia compartida | El de **tipología de mayor rango**; empate → el primer plan elegido (D6) |
+| ¿Y el plan que ve más grupos? | **Descartado.** Optimizaba una decisión que se toma en el SIA, no acá. Ver el porqué en D6 |
+| ¿Se puede cambiar de plan una materia desde el tablero? | **No.** Somos informativos: se dice a qué plan se atribuye y con qué tipología, y ahí termina (D6, interfaz §6 y §7) |
 | Los mínimos de créditos | Por **inscripción completa**, no por plan. `CreditsBadge` no cambia de lógica (D9) |
 | Tope de materias | 20, para uno y para dos planes (D8) |
 | ¿Cruza sedes o niveles? | **No.** Los dos planes son de la misma sede y del mismo nivel, y la interfaz lo impide en vez de confiar (D3) |
 | ¿Hay tope académico de créditos? | **No.** Solo mínimos (6 y 10). El tope de 20 materias es nuestro, por el costo de la ronda de medición, y así se explica en la interfaz — nunca como si fuera regla de la universidad |
 | Compatibilidad con lo ya guardado | La v1 se lee y **no** se borra: es el seguro de rollback. Se limpia un release después, en un commit aparte |
 
-Abierto, sin bloquear nada:
-
-1. **La materia que está en los dos planes, ¿la inscribe quien quiera por el plan que
-   quiera?** Es la premisa del botón "cambiar a 2B10" (interfaz §6): si el SIA la asigna
-   solo, ese botón sobra y hay que quitarlo. Mientras tanto se deja, que es la opción
-   reversible.
-2. **¿Hace falta poder unir los grupos de los dos planes en una sola materia?** Hoy la
-   materia se queda con los del plan ganador y se ofrece cambiarla. Unirlos sería pedir
-   el detalle a los dos planes: el doble de POSTs al SIA por materia compartida. Se
-   decide con uso real, no antes.
+Lo único que queda por decidir es lo que solo se puede decidir con uso real: si a alguien
+le hace falta ver, en una materia compartida, los grupos que ve el **otro** plan. Costaría
+pedir el detalle a los dos planes —el doble de POSTs al SIA por materia— así que no se
+hace hasta que alguien lo pida.
 
 ---
 

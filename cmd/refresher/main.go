@@ -5,7 +5,7 @@
 // Its own pool, not the API's: a detail sweep occupies its connections for
 // hours, and sharing would make every real user request compete with it and
 // come back 503 busy — the error docs/API.md reserves for spikes, served for
-// nine hours straight. The invariant is conexiones(api) + conexiones(job) ≤ 8.
+// nine hours straight. The invariant is conexiones(api) + conexiones(job) ≤ 80.
 package main
 
 import (
@@ -124,11 +124,12 @@ func main() {
 	}
 }
 
-// maxTotalConnections is the measured ceiling: 8 concurrent SIA sessions with
-// no errors and no throttling. It is a courtesy limit shared between the two
+// maxTotalConnections is the measured ceiling: 80 concurrent SIA sessions with
+// no errors and no throttling (88 already shows ~4.5% failures,
+// docs/OPEN-QUESTIONS.md §5). It is a courtesy limit shared between the two
 // processes, which is why crossing it is a warning here and not a silent
 // success.
-const maxTotalConnections = 8
+const maxTotalConnections = 80
 
 func pick(flagVal, cfgVal int) int {
 	if flagVal > 0 {

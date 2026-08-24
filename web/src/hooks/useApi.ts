@@ -49,6 +49,7 @@ export function useApi<T>(path: string | null): State<T> {
 
   const reload = useCallback((overridePath?: string) => {
     override.current = overridePath ?? null;
+    setLoading(true);
     setNonce((n) => n + 1);
   }, []);
 
@@ -70,9 +71,13 @@ export function useApi<T>(path: string | null): State<T> {
   }, [path, reload]);
 
   useEffect(() => {
-    if (!path) return;
     const target = override.current ?? path;
     override.current = null;
+    
+    if (!target) {
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
     const startedAt = Date.now();
@@ -116,7 +121,9 @@ export function useApi<T>(path: string | null): State<T> {
         }
       }
     })().finally(() => {
-      if (!cancelled) setLoading(false);
+      if (!cancelled) {
+        setLoading(false);
+      }
     });
 
     // Lo que devuelve useEffect se ejecuta al desmontar o antes de repetirse.

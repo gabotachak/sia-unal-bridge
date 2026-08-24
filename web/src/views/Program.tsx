@@ -4,6 +4,7 @@ import {
   Check,
   CornerUpLeft,
   HelpCircle,
+  Loader2,
   SlidersHorizontal,
   Ticket,
   TriangleAlert,
@@ -22,7 +23,7 @@ import { AppLink } from '../components/AppLink';
 import { AvailabilityFields } from '../components/AvailabilityPicker';
 import { useConfirm } from '../components/Confirm';
 import { AddButton } from '../components/AddButton';
-import { Empty, Fault, Loading } from '../components/States';
+import { Empty, Fault } from '../components/States';
 import { SearchInput } from '../components/SearchInput';
 import { SeatsFigure } from '../components/Seats';
 import { TableHead } from '../components/TableHead';
@@ -78,9 +79,13 @@ export function Program({
    */
   const mine = plan.owns(sel) ? plan.plans : [sel];
 
+  const { availability } = useCatalogFilters();
+
   /**
    * Los horarios de los grupos se piden en la MISMA respuesta del catálogo
-   * —y solo si hay un horario armado contra el que chocar.
+   * —y solo si hay un horario armado contra el que chocar, o el filtro de
+   * horario del catálogo está activo (necesita el mismo detalle para saber
+   * qué materia encaja).
    *
    * Antes esto era un prefetch aparte: hasta 40 peticiones de detalle, una
    * por asignatura, elegidas por orden alfabético. Con 200 asignaturas
@@ -89,12 +94,13 @@ export function Program({
    * de goteo. En la respuesta del catálogo son ~44 KB sobre 358 KB y cero
    * peticiones de más.
    *
-   * Sin nada elegido no se pide: no hay con qué chocar, así que no habría
-   * nada que marcar y sería peso puro.
+   * Sin nada elegido ni filtro de horario no se pide: no hay con qué
+   * chocar ni qué evaluar, así que no habría nada que marcar y sería peso
+   * puro.
    */
   const { selection: scheduleSelection } = useScheduleSelection();
   const hasSchedule = Object.keys(scheduleSelection).length > 0;
-  const include = hasSchedule ? 'schedules' : undefined;
+  const include = hasSchedule || isAvailabilityActive(availability) ? 'schedules' : undefined;
 
   // Hooks FIJOS, sin condicional: `useApi` acepta `null` y no pide nada —lo
   // mismo que ya hace este archivo para no pedir el directorio sin sede. Con
@@ -137,6 +143,19 @@ export function Program({
   );
 
   /**
+   * Experimento: medir en segundo plano, sin botón, las materias del
+   * catálogo más viejas que STALE_SEATS_SECONDS —el mismo criterio que ya
+   * usan `sortKeyOf`/`hasRoom` para pintar el signo de pregunta.
+   *
+   * Una sola pasada por catálogo (guardia con `ref`, igual que el scroll):
+   * sin ella, `reload()` al final volvería a armar `courses` y dispararía
+   * la pasada otra vez. Mismo pool de 4 que Mi semestre —no es más agresivo
+   * que abrir el plan entero— y `max_age=STALE_SEATS_SECONDS` deja al
+   * servidor decidir si de verdad hace falta preguntarle al SIA.
+   */
+
+
+  /**
    * Los filtros.
    *
    * Tipología y créditos son conjuntos, no un valor: "3 o 4 créditos" y
@@ -162,7 +181,6 @@ export function Program({
     setOnlyOpen,
     hideConflicts,
     setHideConflicts,
-    availability,
     setAvailability,
     showFacets,
     setShowFacets,
@@ -581,12 +599,32 @@ export function Program({
         )}
       </header>
 
+      {/* Skeleton: el catálogo tarda entre 3 y 8 s en un miss frío.
+          En vez de bloquear toda la pantalla con un Loading centrado,
+          se pintan filas fantasmas que tienen la misma rejilla que las
+          reales: el encabezado se ve, el número de columnas no cambia
+          y el layout no salta cuando llegan los datos. */}
       {!bothSettled && !anyData && (
-        <Loading
-          elapsed={Math.max(a.elapsed, b.elapsed)}
-          attempt={Math.max(a.attempt, b.attempt)}
-          what="Trayendo el catálogo"
-        />
+        <div className="table">
+          <ul className="rows" aria-busy="true" aria-label="Cargando catálogo">
+            {catalogSkeletonRows.map((widths, i) => (
+              <li key={i} className="table__row row--skeleton">
+                {/* código — --t-micro */}
+                <span className="skel skel--sm" style={{ width: widths[0] }} />
+                {/* nombre — --t-body */}
+                <span className="skel" style={{ width: widths[1] }} />
+                {/* tipología */}
+                <span className="skel skel--tag" />
+                {/* créditos */}
+                <span className="skel skel--sm" style={{ width: '1.2rem', marginLeft: 'auto' }} />
+                {/* cupos */}
+                <span className="skel" style={{ width: widths[2], marginLeft: 'auto' }} />
+                {/* acción */}
+                <span className="skel skel--tag" style={{ marginLeft: 'auto', opacity: 0.4 }} />
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {anyData && (
@@ -1021,10 +1059,23 @@ function PlanTypologyInfo({
 function SeatsCell({
   seats,
   askedAt,
+  measuring = false,
 }: {
   seats?: MergedCourse['seats'];
   askedAt?: string | null;
+  /** True mientras la medición automática de esta fila está en vuelo. */
+  measuring?: boolean;
 }) {
+  // Prioridad máxima: si hay una petición activa para este código, mostrar
+  // el shimmer en vez del `?` — el dato llegará pronto y el UI lo sabe.
+  if (measuring) {
+    return (
+      <span className="row__seats is-unknown col-seats" aria-label="Midiendo cupos">
+        <Loader2 size={15} strokeWidth={2} className="skel--spin" aria-hidden="true" />
+        <span className="sr-only">Midiendo cupos…</span>
+      </span>
+    );
+  }
   if (!seats) {
     if (!askedAt) {
       return (
@@ -1223,3 +1274,27 @@ function hasRoom(c: MergedCourse): boolean {
     (Date.now() - Date.parse(c.detail_fetched_at)) / 1000 > STALE_SEATS_SECONDS
   );
 }
+
+/**
+ * Anchos de las pastillas skeleton de cada fila del catálogo mientras carga.
+ * Tres valores por fila: [código, nombre, cupos]. El nombre varía entre el
+ * 35 % y el 80 % del ancho disponible para que las filas no parezcan clones.
+ * Constante de módulo: no se recrea en cada render.
+ */
+const catalogSkeletonRows: [string, string, string][] = [
+  ['4.5rem', '72%', '3rem'],
+  ['5rem',   '55%', '2.5rem'],
+  ['4rem',   '80%', '3.5rem'],
+  ['5.5rem', '45%', '2rem'],
+  ['4.5rem', '68%', '3rem'],
+  ['5rem',   '38%', '2.5rem'],
+  ['4rem',   '76%', '3rem'],
+  ['5.5rem', '60%', '3.5rem'],
+  ['4.5rem', '50%', '2rem'],
+  ['5rem',   '82%', '3rem'],
+  ['4rem',   '42%', '2.5rem'],
+  ['5.5rem', '65%', '3rem'],
+  ['4.5rem', '35%', '2rem'],
+  ['5rem',   '78%', '3.5rem'],
+  ['4rem',   '58%', '3rem'],
+];

@@ -8,7 +8,7 @@ import { getDetail, putDetail } from '../lib/detailCache';
 import { itemId, type PlanItem } from '../lib/storage';
 
 /** El pool del back son 4 sesiones ADF. Pedir de a más no acelera nada. */
-const CONCURRENCY = 4;
+export const CONCURRENCY = 4;
 
 export type Row = {
   item: PlanItem;

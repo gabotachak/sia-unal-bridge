@@ -1,4 +1,4 @@
-.PHONY: run test migrate migrate-down migrate-test lint check-env deploy-web deploy-web-test deploy-api deploy-jobs
+.PHONY: run test migrate migrate-down migrate-test lint check-env deploy-web deploy-web-test deploy-api deploy-jobs run-jobs
 
 # Variables for deployment
 GIT_TAG ?= $(shell git describe --tags --always)
@@ -47,3 +47,13 @@ deploy-api:
 
 deploy-jobs:
 	docker compose --profile jobs build refresher
+
+# Corrida manual del refresher, ej: make run-jobs MODE=detail SCOPE=global WORKERS=80
+MODE ?= reference
+SCOPE ?=
+WORKERS ?= 2
+CAMPUS ?=
+run-jobs:
+	docker compose run --rm refresher \
+		--mode=$(MODE) $(if $(SCOPE),--scope=$(SCOPE)) \
+		--workers=$(WORKERS) $(if $(CAMPUS),--campus=$(CAMPUS))

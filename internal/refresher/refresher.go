@@ -45,6 +45,10 @@ const (
 	ScopeHot    = "hot"
 )
 
+// progressLogInterval throttles the "refresher: progress" line — enough to
+// watch a manual run without flooding the log on an automatic one.
+const progressLogInterval = 10 * time.Second
+
 type Options struct {
 	Mode  string
 	Scope string
@@ -106,8 +110,9 @@ type refresher struct {
 	// abort is the run context's cancel: the circuit breaker's only power.
 	abort func()
 
-	mu     sync.Mutex
-	rep    *Report
+	mu       sync.Mutex
+	rep      *Report
+	lastProg time.Time // throttle for the progress log in record()
 	fails  int  // consecutive program failures
 	broken bool // circuit breaker tripped
 }
@@ -274,6 +279,13 @@ func (r *refresher) record(unit string, courses int, skipped bool, err error) {
 	}
 
 	visited := r.rep.ProgramsOK + r.rep.ProgramsFailed + r.rep.ProgramsSkipped
+	if now := time.Now(); now.Sub(r.lastProg) >= progressLogInterval {
+		r.lastProg = now
+		r.log.Info("refresher: progress",
+			"programs", fmt.Sprintf("%d/%d", visited, r.rep.ProgramsTotal),
+			"courses_ok", r.rep.CoursesOK, "failed", r.rep.ProgramsFailed,
+			"elapsed", now.Sub(r.rep.StartedAt).Round(time.Second))
+	}
 	tooManyInARow := r.fails >= maxConsecutiveFailures
 	tooManyOverall := visited >= breakerMinSample &&
 		float64(r.rep.ProgramsFailed) > breakerErrorRate*float64(visited)

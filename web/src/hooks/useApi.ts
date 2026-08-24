@@ -41,6 +41,7 @@ export function useApi<T>(path: string | null): State<T> {
   const [elapsed, setElapsed] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const [nonce, setNonce] = useState(0);
+  const [updatedAt, setUpdatedAt] = useState(Date.now());
 
   // useRef guarda un valor SIN provocar repintados. Acá sirve para saber si
   // la respuesta que llegó sigue siendo la que interesa: si el usuario navegó
@@ -49,6 +50,7 @@ export function useApi<T>(path: string | null): State<T> {
 
   const reload = useCallback((overridePath?: string) => {
     override.current = overridePath ?? null;
+    setLoading(true);
     setNonce((n) => n + 1);
   }, []);
 
@@ -116,7 +118,10 @@ export function useApi<T>(path: string | null): State<T> {
         }
       }
     })().finally(() => {
-      if (!cancelled) setLoading(false);
+      if (!cancelled) {
+        setLoading(false);
+        setUpdatedAt(Date.now());
+      }
     });
 
     // Lo que devuelve useEffect se ejecuta al desmontar o antes de repetirse.
@@ -128,5 +133,5 @@ export function useApi<T>(path: string | null): State<T> {
     };
   }, [path, nonce]);
 
-  return { data, error, loading, elapsed, attempt, reload };
+  return { data, error, loading, elapsed, attempt, reload, updatedAt };
 }

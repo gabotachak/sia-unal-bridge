@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
   Check,
   CornerUpLeft,
   HelpCircle,
+  Loader2,
   SlidersHorizontal,
   Ticket,
   TriangleAlert,
@@ -24,7 +25,7 @@ import { AppLink } from '../components/AppLink';
 import { AvailabilityFields } from '../components/AvailabilityPicker';
 import { useConfirm } from '../components/Confirm';
 import { AddButton } from '../components/AddButton';
-import { Empty, Fault, Loading } from '../components/States';
+import { Empty, Fault } from '../components/States';
 import { SearchInput } from '../components/SearchInput';
 import { SeatsFigure } from '../components/Seats';
 import { TableHead } from '../components/TableHead';
@@ -155,6 +156,9 @@ export function Program({
    * servidor decidir si de verdad hace falta preguntarle al SIA.
    */
   const autoMeasured = useRef(false);
+  const [measuringCodes, setMeasuringCodes] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   useEffect(() => {
     if (autoMeasured.current || !bothSettled || courses.length === 0) return;
     autoMeasured.current = true;
@@ -168,21 +172,21 @@ export function Program({
     if (stale.length === 0) return;
 
     void pooled(stale, CONCURRENCY, async (c) => {
+      setMeasuringCodes((prev) => { const s = new Set(prev); s.add(c.code); return s; });
       const path = routes.course(scopeOf(c.plan), c.plan.program, c.code, STALE_SEATS_SECONDS);
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          await get<CourseDetail>(path);
-          return;
-        } catch (e) {
-          // 429: otra pestaña la midió justo ahora, no es un fallo — no
-          // reintentar. Transitorio (sesión caducada, pool lleno): mismo
-          // criterio y backoff que useCourseDetails. Cualquier otro error se
-          // deja pasar tras agotar los intentos — la próxima vez que se abra
-          // el catálogo lo reintenta.
-          if (e instanceof ApiError && e.status === 429) return;
-          if (!isTransient(e) || attempt === MAX_RETRIES) return;
-          await sleep(backoffMs(attempt));
+      try {
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            await get<CourseDetail>(path);
+            return;
+          } catch (e) {
+            if (e instanceof ApiError && e.status === 429) return;
+            if (!isTransient(e) || attempt === MAX_RETRIES) return;
+            await sleep(backoffMs(attempt));
+          }
         }
+      } finally {
+        setMeasuringCodes((prev) => { const s = new Set(prev); s.delete(c.code); return s; });
       }
     }).then(reload);
     // `reload` fuera a propósito: cambia de identidad en cada render y la
@@ -634,12 +638,32 @@ export function Program({
         )}
       </header>
 
+      {/* Skeleton: el catálogo tarda entre 3 y 8 s en un miss frío.
+          En vez de bloquear toda la pantalla con un Loading centrado,
+          se pintan filas fantasmas que tienen la misma rejilla que las
+          reales: el encabezado se ve, el número de columnas no cambia
+          y el layout no salta cuando llegan los datos. */}
       {!bothSettled && !anyData && (
-        <Loading
-          elapsed={Math.max(a.elapsed, b.elapsed)}
-          attempt={Math.max(a.attempt, b.attempt)}
-          what="Trayendo el catálogo"
-        />
+        <div className="table">
+          <ul className="rows" aria-busy="true" aria-label="Cargando catálogo">
+            {catalogSkeletonRows.map((widths, i) => (
+              <li key={i} className="table__row row--skeleton">
+                {/* código — --t-micro */}
+                <span className="skel skel--sm" style={{ width: widths[0] }} />
+                {/* nombre — --t-body */}
+                <span className="skel" style={{ width: widths[1] }} />
+                {/* tipología */}
+                <span className="skel skel--tag" />
+                {/* créditos */}
+                <span className="skel skel--sm" style={{ width: '1.2rem', marginLeft: 'auto' }} />
+                {/* cupos */}
+                <span className="skel" style={{ width: widths[2], marginLeft: 'auto' }} />
+                {/* acción */}
+                <span className="skel skel--tag" style={{ marginLeft: 'auto', opacity: 0.4 }} />
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {anyData && (
@@ -984,6 +1008,7 @@ export function Program({
                         <SeatsCell
                           seats={c.seats}
                           askedAt={c.detail_fetched_at}
+                          measuring={measuringCodes.has(c.code)}
                         />
                         <AddButton
                           item={{
@@ -1074,10 +1099,23 @@ function PlanTypologyInfo({
 function SeatsCell({
   seats,
   askedAt,
+  measuring = false,
 }: {
   seats?: MergedCourse['seats'];
   askedAt?: string | null;
+  /** True mientras la medición automática de esta fila está en vuelo. */
+  measuring?: boolean;
 }) {
+  // Prioridad máxima: si hay una petición activa para este código, mostrar
+  // el shimmer en vez del `?` — el dato llegará pronto y el UI lo sabe.
+  if (measuring) {
+    return (
+      <span className="row__seats is-unknown col-seats" aria-label="Midiendo cupos">
+        <Loader2 size={15} strokeWidth={2} className="skel--spin" aria-hidden="true" />
+        <span className="sr-only">Midiendo cupos…</span>
+      </span>
+    );
+  }
   if (!seats) {
     if (!askedAt) {
       return (
@@ -1276,3 +1314,27 @@ function hasRoom(c: MergedCourse): boolean {
     (Date.now() - Date.parse(c.detail_fetched_at)) / 1000 > STALE_SEATS_SECONDS
   );
 }
+
+/**
+ * Anchos de las pastillas skeleton de cada fila del catálogo mientras carga.
+ * Tres valores por fila: [código, nombre, cupos]. El nombre varía entre el
+ * 35 % y el 80 % del ancho disponible para que las filas no parezcan clones.
+ * Constante de módulo: no se recrea en cada render.
+ */
+const catalogSkeletonRows: [string, string, string][] = [
+  ['4.5rem', '72%', '3rem'],
+  ['5rem',   '55%', '2.5rem'],
+  ['4rem',   '80%', '3.5rem'],
+  ['5.5rem', '45%', '2rem'],
+  ['4.5rem', '68%', '3rem'],
+  ['5rem',   '38%', '2.5rem'],
+  ['4rem',   '76%', '3rem'],
+  ['5.5rem', '60%', '3.5rem'],
+  ['4.5rem', '50%', '2rem'],
+  ['5rem',   '82%', '3rem'],
+  ['4rem',   '42%', '2.5rem'],
+  ['5.5rem', '65%', '3rem'],
+  ['4.5rem', '35%', '2rem'],
+  ['5rem',   '78%', '3.5rem'],
+  ['4rem',   '58%', '3rem'],
+];

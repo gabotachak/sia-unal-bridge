@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Building2,
   Check,
+  Combine,
   GraduationCap,
   Layers,
   TriangleAlert,
@@ -21,7 +22,7 @@ import { Layout } from '../components/Layout';
 import { SearchInput } from '../components/SearchInput';
 import { useConfirm } from '../components/Confirm';
 import { Empty, Fault, Loading } from '../components/States';
-import { fold, sentence } from '../lib/format';
+import { abbreviateEngineering, fold, sentence } from '../lib/format';
 import { planCodes, planNames, planSelection, selectionId, type Selection } from '../lib/storage';
 import { useNav } from '../state/nav';
 import './PlanPicker.css';
@@ -68,6 +69,13 @@ export function PlanPicker() {
   // Con el primer plan del borrador puesto, sede y nivel quedan fijos (D3):
   // la doble titulación no cruza sedes ni mezcla niveles.
   const locked = draft.length > 0;
+
+  // Elegir sede revela doble titulación + plan más abajo; el scroll los sigue
+  // solo, en vez de dejar que el clic entierre lo nuevo fuera de vista.
+  const revealRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (campus) revealRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [campus]);
 
   const levels = useApi<LevelsResponse>(routes.levels());
   const campuses = useApi<CampusesResponse>(routes.campuses(level));
@@ -143,7 +151,7 @@ export function PlanPicker() {
                 </>
               ) : (
                 <>
-                  Pasar a <b>{nextPlans[0].programName}</b> reinicia el tablero.
+                  Pasar a <b>{abbreviateEngineering(nextPlans[0].programName)}</b> reinicia el tablero.
                 </>
               )}
             </p>
@@ -229,7 +237,8 @@ export function PlanPicker() {
             </>
           ) : (
             <>
-              Tu plan es <b>{current.programName}</b> en {current.campusName.replace(/^SEDE\s+/i, '')}.
+              Tu plan es <b>{abbreviateEngineering(current.programName)}</b> en{' '}
+              {current.campusName.replace(/^SEDE\s+/i, '')}.
             </>
           )}
         </p>
@@ -254,56 +263,26 @@ export function PlanPicker() {
         )}
       </header>
 
-      {/* La puerta de la minoría, y la única forma de que se enteren de que
-          existe. No pide decisión: sin marcar, la pantalla es la de hoy. */}
-      <label className="dt-check rise" style={{ animationDelay: '150ms' }}>
-        <input
-          type="checkbox"
-          checked={double}
-          onChange={(e) => {
-            setDouble(e.target.checked);
-            setDraft([]);
-          }}
-        />
-        <span>
-          <b>Estudio doble titulación</b> — elige tus dos planes; el horario los junta.
-        </span>
-      </label>
-
-      {double && (
-        <div className="dt-draft rise" style={{ animationDelay: '170ms' }}>
-          {draft.length === 0 ? (
-            <p className="step__hint">Elige tu primer plan más abajo.</p>
-          ) : (
-            <div className="chips">
-              <span className="chip is-on">
-                <Check size={14} strokeWidth={2.5} aria-hidden="true" />
-                {draft[0].program}
-                <button
-                  type="button"
-                  className="dt-draft__x"
-                  onClick={() => setDraft([])}
-                  aria-label={`Quitar ${draft[0].program} del borrador`}
-                >
-                  <X size={12} strokeWidth={2} aria-hidden="true" />
-                </button>
-              </span>
-              <span className="step__hint dt-draft__count tnum">1 de 2 — elige el segundo.</span>
-            </div>
-          )}
-        </div>
-      )}
-
+      {/* Nada de la cascada se muestra hasta tener los niveles: son la base
+          de todo lo demás (sede depende de nivel), y mostrar Sede/Doble
+          titulación/Plan vacíos mientras tanto es mostrar una elección que
+          todavía no existe. */}
+      {levels.error ? (
+        <Fault error={levels.error} onRetry={() => levels.reload()} />
+      ) : !levels.data ? (
+        <Loading elapsed={levels.elapsed} attempt={levels.attempt} what="Trayendo los niveles" />
+      ) : (
+        <>
       {/* ── 1. Nivel ─────────────────────────────────────────────────
           No está hardcodeado a los tres de siempre: sale de /v1/levels,
           igual que en el back. Si la UNAL agrega uno, aparece acá solo. */}
-      <section className="step rise" style={{ animationDelay: '180ms' }}>
+      <section className="step rise" style={{ animationDelay: '150ms' }}>
         <h2 className="step__label">
           <GraduationCap size={16} strokeWidth={1.75} aria-hidden="true" />
           Nivel
         </h2>
         <div className="chips">
-          {(levels.data?.levels ?? []).map((l) => (
+          {levels.data.levels.map((l) => (
             <button
               key={l.slug}
               className={`chip ${l.slug === level ? 'is-on' : ''}`}
@@ -320,7 +299,7 @@ export function PlanPicker() {
       </section>
 
       {/* ── 2. Sede ───────────────────────────────────────────────── */}
-      <section className="step rise" style={{ animationDelay: '230ms' }}>
+      <section className="step rise" style={{ animationDelay: '200ms' }}>
         <h2 className="step__label">
           <Building2 size={16} strokeWidth={1.75} aria-hidden="true" />
           Sede
@@ -352,22 +331,88 @@ export function PlanPicker() {
         {locked && <p className="step__hint">La doble titulación es dentro de una sede y un nivel.</p>}
       </section>
 
-      {/* ── 3. Plan ───────────────────────────────────────────────── */}
-      <section className="step rise" style={{ animationDelay: '280ms' }}>
-        <h2 className="step__label">
-          <Layers size={16} strokeWidth={1.75} aria-hidden="true" />
-          Plan de estudios
-          {total > 0 && (
-            <span className="step__count tnum">
-              {shown === total ? total : `${shown}/${total}`}
-            </span>
-          )}
-        </h2>
+      {/* Paso a paso: sin sede no hay qué doble-titular ni qué plan listar,
+          así que ninguna de las dos secciones existe todavía — no es un
+          hint pidiendo sede, es que la pregunta no aplica aún. En cuanto
+          `campus` tiene valor, las dos entran de una con `.rise` (el mismo
+          fundido de toda la pantalla: nada nuevo que enseñar). */}
+      {campus && (
+        <div ref={revealRef}>
+          {/* La puerta de la minoría, y la única forma de que se enteren de
+              que existe. Chips sí/no en vez de checkbox: mismo componente
+              que nivel y sede, mutuamente excluyentes — nunca los dos
+              prendidos ni los dos apagados. "No" es el default, así la
+              pantalla sin tocar es la de hoy. */}
+          <section className="step rise" style={{ animationDelay: '50ms' }}>
+            <h2 className="step__label">
+              <Combine size={16} strokeWidth={1.75} aria-hidden="true" />
+              ¿Doble titulación?
+            </h2>
+            <div className="chips">
+              <button
+                className={`chip ${!double ? 'is-on' : ''}`}
+                onClick={() => {
+                  setDouble(false);
+                  setDraft([]);
+                }}
+                aria-pressed={!double}
+              >
+                {!double && <Check size={14} strokeWidth={2.5} aria-hidden="true" />}
+                No
+              </button>
+              <button
+                className={`chip ${double ? 'is-on' : ''}`}
+                onClick={() => {
+                  setDouble(true);
+                  setDraft([]);
+                }}
+                aria-pressed={double}
+              >
+                {double && <Check size={14} strokeWidth={2.5} aria-hidden="true" />}
+                Sí
+              </button>
+            </div>
+            {/* El progreso del borrador vive DENTRO de esta sección, como
+                una variante del hint de siempre — no una segunda caja
+                aparte con su propio chip de tamaño completo. Ese pill del
+                tamaño de "Sí"/"No" al lado de una frase suelta se leía como
+                un elemento roto, no como el segundo paso de la misma
+                pregunta. */}
+            {double && draft.length > 0 ? (
+              <p className="step__hint dt-draft">
+                <span className="chip chip--sm is-on">
+                  <Check size={12} strokeWidth={2.5} aria-hidden="true" />
+                  {draft[0].program}
+                  <button
+                    type="button"
+                    className="dt-draft__x"
+                    onClick={() => setDraft([])}
+                    aria-label={`Quitar ${draft[0].program} del borrador`}
+                  >
+                    <X size={11} strokeWidth={2} aria-hidden="true" />
+                  </button>
+                </span>{' '}
+                elegido — falta el segundo, más abajo.
+              </p>
+            ) : (
+              <p className="step__hint">
+                {double ? 'Elige tu primer plan más abajo.' : 'Elige tus dos planes; el horario los junta.'}
+              </p>
+            )}
+          </section>
 
-        {!campus ? (
-          <p className="step__hint">Elige una sede para ver sus planes.</p>
-        ) : (
-          <>
+          {/* ── Plan ─────────────────────────────────────────────────── */}
+          <section className="step rise" style={{ animationDelay: '100ms' }}>
+            <h2 className="step__label">
+              <Layers size={16} strokeWidth={1.75} aria-hidden="true" />
+              Plan de estudios
+              {total > 0 && (
+                <span className="step__count tnum">
+                  {shown === total ? total : `${shown}/${total}`}
+                </span>
+              )}
+            </h2>
+
             <SearchInput
               value={q}
               onChange={setQ}
@@ -442,9 +487,11 @@ export function PlanPicker() {
                   </section>
                 ))
               ))}
-          </>
-        )}
-      </section>
+          </section>
+        </div>
+      )}
+        </>
+      )}
     </Layout>
   );
 }

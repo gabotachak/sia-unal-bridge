@@ -1,0 +1,38 @@
+/* Catálogo, la ficha de una materia y Mi semestre/Mi horario pintan "a qué
+   plan se atribuye esto" con el mismo componente (PlanAttributionRow.tsx):
+   el código en `.row__plan-tag` y la tipología en el `.tag` de una letra,
+   los mismos de la tabla del catálogo — no una frase con `<code>` suelto. */
+
+/* Flujo de texto normal, NO flex: con un nombre largo en un teléfono
+   angosto, un `.plan-attr-row` en flex mueve el tag entero a su propia
+   línea al envolver —queda huérfano, separado del nombre que etiqueta—.
+   En flujo normal el tag es una palabra más: envuelve pegado al final del
+   nombre, en la misma línea en la que cae. */
+.plan-attr-row {
+  margin: 0;
+  font-size: var(--t-small);
+  line-height: 1.9;
+  color: var(--text-dim);
+}
+.plan-attr-row + .plan-attr-row {
+  margin-top: var(--gap-xs);
+}
+/* El plan "propio" —de quien son los grupos que se ven abajo— es el único
+   que se destaca. */
+.plan-attr-row--mine {
+  color: var(--text);
+}
+.plan-attr-row .row__plan-tag {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: var(--gap-sm);
+}
+/* `.tag` (table.css) es `display: grid; width: 100%` porque en la tabla lo
+   angosta la columna `col-typ` (2.4rem) del grid. Acá no hay grid que lo
+   angoste, así que se fija el mismo ancho a mano. */
+.plan-attr-row .tag {
+  display: inline-grid;
+  width: 2.4rem;
+  vertical-align: middle;
+  margin-left: var(--gap-sm);
+}

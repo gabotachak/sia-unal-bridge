@@ -1,0 +1,30 @@
+/* El código de siempre + un ícono chico pegado — inline-flex porque
+   `col-code` es angosto a propósito (table.css) y el ícono tiene que
+   quedar en la misma línea que el número, no forzar su propia fila. */
+.code-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color var(--fast) var(--ease-out);
+}
+.code-copy__icon {
+  flex: none;
+  opacity: 0.6;
+  transition: opacity var(--fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .code-copy:hover {
+    color: var(--accent);
+  }
+  .code-copy:hover .code-copy__icon {
+    opacity: 1;
+  }
+}
+.code-copy.is-copied {
+  color: var(--accent);
+}
+.code-copy.is-copied .code-copy__icon {
+  opacity: 1;
+}

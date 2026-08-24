@@ -11,6 +11,8 @@ import { useScheduleSelection } from '../hooks/useScheduleSelection';
 import { Layout } from '../components/Layout';
 import { AppLink } from '../components/AppLink';
 import { AddButton } from '../components/AddButton';
+import { CopyCode } from '../components/CopyCode';
+import { PlanAttributionRow } from '../components/PlanAttributionRow';
 import { Empty, Fault, Loading } from '../components/States';
 import { Seats } from '../components/Seats';
 import { Tooltip } from '../components/Tooltip';
@@ -191,7 +193,7 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
           <header className="head head--stack">
             <div>
               <p className="eyebrow tnum">
-                {data.code}
+                <CopyCode code={data.code} className="" />
                 <span className="head__dot">·</span>
                 {data.credits} créditos
                 <span className="head__dot">·</span>
@@ -218,22 +220,24 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
           {/* A qué plan se atribuye esta materia — solo con doble
               titulación, y solo cuando ESTE plan es uno de los míos (D6,
               interfaz §7). `alsoIn` solo se sabe si se llegó desde el
-              catálogo unido: desde Mi semestre u Horario la frase se queda
-              en su primera mitad — no se pide el otro catálogo por una
-              línea. */}
+              catálogo unido: desde Mi semestre u Horario la fila de abajo no
+              aparece — no se pide el otro catálogo por una línea.
+              `PlanAttributionRow` (components/): el mismo diseño que el
+              catálogo y Mi semestre/Mi horario, no un tercero. */}
           {plan.plans.length > 1 && plan.owns(sel) && (
-            <p className="course__plan-note">
-              Esta asignatura se está contando en tu plan <b>{program}</b> (
-              <code>{data.typology}</code>).{' '}
-              {alsoIn ? (
-                <>
-                  En {alsoIn.plan.program} figura como <code>{alsoIn.typology}</code>. Los grupos de
-                  abajo son los que ve {program}.
-                </>
-              ) : (
-                <>Los grupos de abajo son los que ve {program}.</>
+            <div className="course__plan-note">
+              <PlanAttributionRow
+                attr={{ plan: sel, typology: data.typology }}
+                plans={plan.plans}
+                mine
+              />
+              {alsoIn && (
+                <PlanAttributionRow
+                  attr={{ plan: alsoIn.plan, typology: alsoIn.typology }}
+                  plans={plan.plans}
+                />
               )}
-            </p>
+            </div>
           )}
 
           {data.description && <CourseDescription text={data.description} />}

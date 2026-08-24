@@ -4,6 +4,8 @@
 // la pestaña. Es lo único que necesita esta app: no hay login ni servidor de
 // preferencias, y la lista del semestre es de quien tiene el navegador abierto.
 
+import { abbreviateEngineering } from './format';
+
 /** Todo bajo una clave con versión: si mañana cambia la forma, se sube a v2
  *  y los datos viejos se ignoran solos en vez de romper la página. */
 const KEY = 'tablero.semestre.v2';
@@ -158,7 +160,7 @@ export function selectionId(s: Pick<Selection, 'level' | 'campus' | 'program'>):
  *  y Matemáticas". Un solo formateador para toda la app —Topbar, PlanPicker,
  *  Program— en vez de reescribir el `.join(' y ')` en cada sitio. */
 export function planNames(plans: readonly Pick<Selection, 'programName'>[]): string {
-  return plans.map((p) => p.programName).join(' y ');
+  return plans.map((p) => abbreviateEngineering(p.programName)).join(' y ');
 }
 
 /** Los códigos de uno o dos planes, para el chip y el eyebrow: "2A74" o

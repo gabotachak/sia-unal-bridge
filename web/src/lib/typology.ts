@@ -3,9 +3,18 @@
 
 /** La letra entre paréntesis: 'FUND. OBLIGATORIA (B)' → 'B'. Es lo estable;
  *  la frase cambia de vocabulario entre vistas del SIA (GOTCHAS.md §17).
- *  Sin paréntesis, o vacío → '' — no tira. */
+ *  Sin paréntesis → los 3 primeros caracteres, para que el tag (Program.tsx,
+ *  Course.tsx) siempre tenga algo corto que mostrar. */
 export function typologyLetter(raw: string): string {
-  return raw.match(/\(([^)]+)\)/)?.[1] ?? '';
+  return raw.match(/\(([^)]+)\)/)?.[1] ?? raw.slice(0, 3);
+}
+
+/** El color del tag: 'FUND. OBLIGATORIA (B)' → 'obligatoria'. */
+export function typologySlug(t: string): string {
+  if (t.startsWith('LIBRE')) return 'libre';
+  if (t.includes('OBLIGATORIA')) return 'obligatoria';
+  if (t.includes('OPTATIVA')) return 'optativa';
+  return 'otra';
 }
 
 /** Rango de exigencia (D6): a mayor rango, más urgente inscribirla. La

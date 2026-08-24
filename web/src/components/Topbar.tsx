@@ -3,10 +3,12 @@ import { AppLink } from './AppLink';
 import { useConfirm } from './Confirm';
 import { useTheme } from '../hooks/useTheme';
 import { usePlan } from '../hooks/usePlan';
-import { sentence } from '../lib/format';
+import { planColorVar } from '../lib/courseColors';
+import { abbreviateEngineering, sentence } from '../lib/format';
 import { clearStored, planCodes, planNames } from '../lib/storage';
 import { useNav } from '../state/nav';
 import { IconButton } from './IconButton';
+import { Tooltip } from './Tooltip';
 import './Topbar.css';
 
 /** El tamaño de todos los iconos de la barra. Uno solo, o el borde inferior
@@ -83,6 +85,22 @@ export function Topbar() {
   const themeLabel =
     theme === 'system' ? 'Tema: el del sistema' : theme === 'light' ? 'Tema: claro' : 'Tema: oscuro';
 
+  // El botón en sí, sin el hover: con un plan el nombre ya está escrito en
+  // `.planchip__name` y repetirlo en un tooltip sería ruido en cada paso del
+  // mouse. Con dos, el nombre se cayó de la barra (arriba) y el tooltip es lo
+  // único que lo dice completo.
+  const planChip = sel && (
+    <button type="button" className="planchip" onClick={startOver}>
+      <span className="planchip__code tnum">{double ? planCodes(plan.plans) : sel.program}</span>
+      {!double && (
+        <span className="planchip__name">{abbreviateEngineering(sentence(sel.programName))}</span>
+      )}
+      <span className="planchip__campus">{sel.campusName.replace(/^SEDE\s+/i, '')}</span>
+      <Trash2 className="planchip__caret" size={14} strokeWidth={STROKE} aria-hidden="true" />
+      <span className="sr-only">Empezar de nuevo</span>
+    </button>
+  );
+
   return (
     <header className="bar">
       <div className="bar__inner">
@@ -111,24 +129,37 @@ export function Topbar() {
             lo que de verdad pasa al tocarlo.
 
             Con un plan es BYTE POR BYTE el de `main` (D2, D4). Con dos, los
-            códigos van juntos y el nombre se cae: no caben dos, y el código
-            es lo que identifica — el nombre completo queda en el título del
-            botón. */}
-        {sel && (
-          <button
-            type="button"
-            className="planchip"
-            onClick={startOver}
-            title={double ? planLabelTitle(plan.plans) : undefined}
+            códigos van juntos y el nombre se cae: no caben dos, y el nombre
+            completo queda en el mismo hover que usa el resto de la app
+            (Tooltip), no en un `title` nativo aparte. */}
+        {double ? (
+          <Tooltip
+            content={
+              <>
+                {/* `.tt-row` es para pares label/valor con `space-between` —
+                    con nombres de largo distinto entre los dos planes,
+                    empujaba cada nombre a un punto distinto y desalineaba el
+                    código. `.plan-attr-row` (components/PlanAttributionRow.css)
+                    en vez de `PlanAttributionRow` en sí: acá no hay tipología
+                    que atribuir, solo el código pegado al nombre. */}
+                {plan.plans.map((p) => (
+                  <p className="plan-attr-row" key={p.program}>
+                    <span
+                      className="chip__code tnum row__plan-tag"
+                      style={{ color: planColorVar(p.program, plan.plans) }}
+                    >
+                      {p.program}
+                    </span>
+                    {abbreviateEngineering(sentence(p.programName))}
+                  </p>
+                ))}
+              </>
+            }
           >
-            <span className="planchip__code tnum">
-              {double ? planCodes(plan.plans) : sel.program}
-            </span>
-            {!double && <span className="planchip__name">{sentence(sel.programName)}</span>}
-            <span className="planchip__campus">{sel.campusName.replace(/^SEDE\s+/i, '')}</span>
-            <Trash2 className="planchip__caret" size={14} strokeWidth={STROKE} aria-hidden="true" />
-            <span className="sr-only">Empezar de nuevo</span>
-          </button>
+            {planChip}
+          </Tooltip>
+        ) : (
+          planChip
         )}
 
         {/* Los tres destinos llevan `iconbtn--dest`: es lo que los esconde
@@ -208,10 +239,4 @@ export function Topbar() {
       {confirmDialog}
     </header>
   );
-}
-
-/** El nombre completo de los dos planes, para el `title` del chip: con dos
- *  códigos ya no cabe el nombre en la barra (ver el chip más arriba). */
-function planLabelTitle(plans: { programName: string }[]): string {
-  return plans.map((p) => sentence(p.programName)).join(' · ');
 }

@@ -9,6 +9,7 @@ import {
   sumCredits,
   type CreditsLevel,
 } from '../lib/credits';
+import { abbreviateEngineering } from '../lib/format';
 import type { PlanItem } from '../lib/storage';
 import { Tooltip } from './Tooltip';
 import './CreditsBadge.css';
@@ -55,7 +56,7 @@ export function CreditsBadge({ items }: { items: PlanItem[] }) {
   const plans = usePlan().plans;
   const byPlan = plans.length > 1 ? creditsByPlan(items) : [];
   const planName = (program: string) =>
-    plans.find((p) => p.program === program)?.programName ?? program;
+    abbreviateEngineering(plans.find((p) => p.program === program)?.programName ?? program);
 
   const content = (
     <>

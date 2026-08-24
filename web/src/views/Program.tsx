@@ -27,13 +27,16 @@ import { SearchInput } from '../components/SearchInput';
 import { SeatsFigure } from '../components/Seats';
 import { TableHead } from '../components/TableHead';
 import { Tooltip } from '../components/Tooltip';
+import { CopyCode } from '../components/CopyCode';
+import { PlanAttributionRow, type PlanAttribution } from '../components/PlanAttributionRow';
 import type { TableCol } from '../lib/table';
 import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
 import { useTableSort } from '../hooks/useTableSort';
-import { fold, formatAge, sentence } from '../lib/format';
+import { abbreviateEngineering, fold, formatAge, sentence } from '../lib/format';
 import { classifyConflict, type SectionLike } from '../lib/conflicts';
 import { useDetailCache } from '../lib/detailCache';
 import { mergeCatalogs, type MergedCourse } from '../lib/catalog';
+import { typologyLetter, typologySlug } from '../lib/typology';
 import {
   DEFAULT_AVAILABILITY,
   courseFitsAvailability,
@@ -153,6 +156,8 @@ export function Program({
     setTypols,
     creds,
     setCreds,
+    progs,
+    setProgs,
     onlyOpen,
     setOnlyOpen,
     hideConflicts,
@@ -290,10 +295,17 @@ export function Program({
   const facets = useMemo(() => {
     const byTypology = new Map<string, number>();
     const byCredits = new Map<number, number>();
+    const byProgram = new Map<string, number>();
     for (const c of courses) {
       if (c.typology)
         byTypology.set(c.typology, (byTypology.get(c.typology) ?? 0) + 1);
       byCredits.set(c.credits, (byCredits.get(c.credits) ?? 0) + 1);
+      byProgram.set(c.plan.program, (byProgram.get(c.plan.program) ?? 0) + 1);
+      if (c.alsoIn)
+        byProgram.set(
+          c.alsoIn.plan.program,
+          (byProgram.get(c.alsoIn.plan.program) ?? 0) + 1,
+        );
     }
     return {
       typologies: [...byTypology.keys()].sort((a, b) =>
@@ -302,6 +314,7 @@ export function Program({
       credits: [...byCredits.keys()].sort((a, b) => a - b),
       byTypology,
       byCredits,
+      byProgram,
     };
   }, [courses]);
 
@@ -319,6 +332,12 @@ export function Program({
         return false;
       if (typols.size && !typols.has(c.typology)) return false;
       if (creds.size && !creds.has(c.credits)) return false;
+      if (
+        progs.size &&
+        !progs.has(c.plan.program) &&
+        !(c.alsoIn && progs.has(c.alsoIn.plan.program))
+      )
+        return false;
       if (onlyOpen && !hasRoom(c)) return false;
       if (hideConflicts) {
         const id = courseId(c);
@@ -345,6 +364,7 @@ export function Program({
     q,
     typols,
     creds,
+    progs,
     onlyOpen,
     hideConflicts,
     conflictCourseIds,
@@ -356,7 +376,7 @@ export function Program({
 
   const total = courses.length;
   const facetCount =
-    typols.size + creds.size + (isAvailabilityActive(availability) ? 1 : 0);
+    typols.size + creds.size + progs.size + (isAvailabilityActive(availability) ? 1 : 0);
   const filtering = !!q || facetCount > 0 || onlyOpen || hideConflicts;
 
   /**
@@ -408,13 +428,53 @@ export function Program({
     });
   }
 
+  /**
+   * Mismo truco que `pickTypology`: con doble titulación solo hay dos
+   * carreras posibles, y marcar las dos filtra igual que no marcar
+   * ninguna —así que elegir la segunda vacía el filtro en vez de sumarla.
+   */
+  function pickProgram(
+    next:
+      | ReadonlySet<string>
+      | ((prev: ReadonlySet<string>) => ReadonlySet<string>),
+  ) {
+    setProgs((prev) => {
+      const resolved = typeof next === 'function' ? next(prev) : next;
+      return resolved.size === mine.length && mine.length > 1 ? new Set() : resolved;
+    });
+  }
+
   function clearAll() {
     setQ('');
     setTypols(new Set());
     setCreds(new Set());
+    setProgs(new Set());
     setOnlyOpen(false);
     setHideConflicts(false);
     setAvailability(DEFAULT_AVAILABILITY);
+  }
+
+  // El código y la tipología de un plan que se le enseñan al usuario, no la
+  // que decide `mergeCatalogs` (D6): esa manda para saber qué grupos se ven
+  // y qué tipología cuenta créditos — no puede cambiar con un filtro. Pero
+  // mostrar SIEMPRE al mismo plan "ganador" mientras alguien filtra por el
+  // OTRO se leía como que el catálogo se contradice con su propio filtro.
+  // Acá se decide solo lo que se PINTA:
+  //   - libre elección compartida entre los dos: ninguno "gana" de verdad
+  //     (misma tipología en los dos), así que se enseñan los dos.
+  //   - si no, y hay un solo plan filtrado, ESE se enseña primero.
+  const filterProgram = progs.size === 1 ? [...progs][0] : null;
+
+  function attributionOf(c: MergedCourse) {
+    let primary: PlanAttribution = { plan: c.plan, typology: c.typology };
+    if (!c.alsoIn) return { primary, secondary: undefined };
+    let secondary: PlanAttribution = { plan: c.alsoIn.plan, typology: c.alsoIn.typology };
+    // El filtro manda sobre la prioridad de D6: quien filtra por un plan
+    // quiere VERLO primero, así rompa el desempate por rango.
+    if (filterProgram && secondary.plan.program === filterProgram && primary.plan.program !== filterProgram) {
+      [primary, secondary] = [secondary, primary];
+    }
+    return { primary, secondary };
   }
 
   /**
@@ -486,7 +546,7 @@ export function Program({
               </>
             ) : (
               <>
-                el tuyo es <b>{plan.selection?.programName}</b>
+                el tuyo es <b>{abbreviateEngineering(plan.selection?.programName ?? '')}</b>
               </>
             )}
             . Puedes mirar todo lo que quieras, pero para agregar materias al semestre tienes que
@@ -633,6 +693,31 @@ export function Program({
             className={`filters ${showFacets ? 'is-open' : ''}`}
             id="facetas"
           >
+            {/* Solo con doble titulación (D6): elegir una carrera deja solo
+                lo que cuenta para ella —lo compartido entre las dos sigue
+                saliendo—, y marcar las dos es lo mismo que no marcar
+                ninguna, igual que "todas menos libre elección". */}
+            {mine.length > 1 && (
+              <div className="filters__row">
+                <span className="filters__label">carrera</span>
+                <div className="chips">
+                  {mine.map((m) => (
+                    <button
+                      key={m.program}
+                      className={`chip chip--sm ${progs.has(m.program) ? 'is-on' : ''}`}
+                      onClick={() => pickProgram((s) => toggle(s, m.program))}
+                      aria-pressed={progs.has(m.program)}
+                    >
+                      {abbreviateEngineering(sentence(m.programName))}
+                      <span className="chip__code tnum">
+                        {facets.byProgram.get(m.program) ?? 0}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="filters__row">
               <span className="filters__label">tipología</span>
               <div className="chips">
@@ -771,15 +856,14 @@ export function Program({
                   const isPotentialConflict =
                     conflictCourseIds.potential.has(id);
                   const inConflict = isActiveConflict || isPotentialConflict;
+                  const attr = mine.length > 1 ? attributionOf(c) : null;
                   return (
                     <li key={c.code}>
                       <AppLink
                         className={`row table__row ${isActiveConflict ? 'is-conflict' : ''} ${isPotentialConflict ? 'is-conflict-potential' : ''}`}
                         to={{ name: 'course', selection: c.plan, code: c.code, alsoIn: c.alsoIn }}
                       >
-                        <span className="row__code tnum col-code">
-                          {c.code}
-                        </span>
+                        <CopyCode code={c.code} className="row__code tnum col-code" />
                         <span className="row__name">
                           {inConflict && (
                             <Tooltip
@@ -808,12 +892,6 @@ export function Program({
                               </span>
                             </Tooltip>
                           )}
-                          {/* De qué plan es esta fila — solo con doble
-                              titulación (D6, interfaz §6). Vive en la celda
-                              del nombre, que es la que cede ancho: la del
-                              código es angosta a propósito y no tiene sitio
-                              para un segundo token. */}
-                          {mine.length > 1 && <PlanTag course={c} />}
                           <Tooltip
                             content={
                               <p className="tt-title">{sentence(c.name)}</p>
@@ -827,16 +905,24 @@ export function Program({
                         </span>
                         <Tooltip
                           content={
-                            <>
-                              <p className="tt-eyebrow">Tipología</p>
-                              <p className="tt-title">{c.typology}</p>
-                            </>
+                            attr ? (
+                              <PlanTypologyInfo
+                                primary={attr.primary}
+                                secondary={attr.secondary}
+                                plans={mine}
+                              />
+                            ) : (
+                              <>
+                                <p className="tt-eyebrow">Tipología</p>
+                                <p className="tt-title">{c.typology}</p>
+                              </>
+                            )
                           }
                         >
                           <span
-                            className={`tag tag--${slugTypology(c.typology)} col-typ`}
+                            className={`tag tag--${typologySlug(attr?.primary.typology ?? c.typology)} col-typ`}
                           >
-                            {shortTypology(c.typology)}
+                            {typologyLetter(attr?.primary.typology ?? c.typology)}
                           </span>
                         </Tooltip>
                         <span className="row__credits tnum col-cr">
@@ -878,34 +964,39 @@ export function Program({
 }
 
 /**
- * De qué plan es esta fila, y —al pasar el mouse— cómo figura en el otro si
- * el código está en los dos (D6, interfaz §6). Solo se dibuja con doble
- * titulación: con un plan, `main` no gana ni un elemento.
+ * Cómo cuenta esta materia en cada uno de mis planes — el contenido del
+ * hover de la letra de tipología (col-typ). Antes había además un chip por
+ * plan pegado al nombre (PlanTag); se quitó por pedido explícito —comía
+ * espacio de lectura sin decir nada que este hover no dijera ya— así que
+ * esto quedó como el único lugar donde se ve la atribución.
+ *
+ * `primary`/`secondary` ya vienen decididos por `attributionOf`: acá no se
+ * elige nada, solo se pinta con `PlanAttributionRow` (components/), la
+ * misma que usan Course.tsx y CourseCard.tsx (PLAN-DOUBLE-TITULATION.md D6
+ * interfaz §7).
  */
-function PlanTag({ course: c }: { course: MergedCourse }) {
+function PlanTypologyInfo({
+  primary,
+  secondary,
+  plans,
+}: {
+  primary: PlanAttribution;
+  secondary?: PlanAttribution;
+  plans: readonly Selection[];
+}) {
   return (
-    <Tooltip
-      content={
-        <>
-          <p className="tt-body">
-            Se cuenta en <b>{c.plan.program}</b> como <code>{c.typology}</code>
-          </p>
-          {/* Solo cuando la tipología del otro plan es DISTINTA: decirlo
-              cuando coincide sería ruido puro (D6, interfaz §6) —la mitad de
-              libre elección se comparte entre los dos planes con la misma
-              tipología en los dos. */}
-          {c.alsoIn && c.alsoIn.typology !== c.typology && (
-            <p className="tt-body">
-              También está en {c.alsoIn.plan.program}, como <code>{c.alsoIn.typology}</code>.
-            </p>
-          )}
-        </>
-      }
-    >
-      <span className="chip__code tnum row__plan-tag">{c.plan.program}</span>
-    </Tooltip>
+    <>
+      <PlanAttributionRow attr={primary} plans={plans} mine />
+      {/* Si la materia está en el otro plan, se dice siempre — coincida o no
+          la tipología. Antes se callaba cuando coincidía ("ruido puro"),
+          pero eso era tratar la coincidencia como si no hubiera "ganador"
+          que anunciar; el punto es al revés: coincidan o no, es información
+          real sobre AMBOS planes, y callarla es lo que se leía raro. */}
+      {secondary && <PlanAttributionRow attr={secondary} plans={plans} />}
+    </>
   );
 }
+
 
 /**
  * Los cupos de la asignatura, sumados sobre los grupos que este plan ve.
@@ -1131,16 +1222,4 @@ function hasRoom(c: MergedCourse): boolean {
     !c.detail_fetched_at ||
     (Date.now() - Date.parse(c.detail_fetched_at)) / 1000 > STALE_SEATS_SECONDS
   );
-}
-
-/** 'FUND. OBLIGATORIA (B)' → 'B'. La letra entre paréntesis es lo que informa. */
-function shortTypology(t: string): string {
-  return t.match(/\(([^)]+)\)/)?.[1] ?? t.slice(0, 3);
-}
-
-function slugTypology(t: string): string {
-  if (t.startsWith('LIBRE')) return 'libre';
-  if (t.includes('OBLIGATORIA')) return 'obligatoria';
-  if (t.includes('OPTATIVA')) return 'optativa';
-  return 'otra';
 }

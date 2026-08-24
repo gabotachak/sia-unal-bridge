@@ -39,22 +39,6 @@
   }
 }
 
-/* Envuelve el nombre y el chip de plan (doble titulación,
-   PLAN-DOUBLE-TITULATION.md). Solo se monta con dos planes; con uno, el
-   grid child directo sigue siendo `.card__name`, igual que en `main`. */
-.card__namecell {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  min-width: 0;
-}
-.card__plan-tag {
-  flex: none;
-  padding: 0.1rem 0.35rem;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-sm);
-}
-
 .card__name {
   min-width: 0;
   overflow: hidden;

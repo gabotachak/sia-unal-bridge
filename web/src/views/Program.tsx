@@ -9,11 +9,13 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { routes, STALE_SEATS_SECONDS } from '../api/client';
-import type { CoursesResponse } from '../api/types';
+import { ApiError, get, routes, STALE_SEATS_SECONDS } from '../api/client';
+import type { CourseDetail, CoursesResponse } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { useCatalogFilters } from '../hooks/useCatalogFilters';
-import { useCourseDetails } from '../hooks/useCourseDetails';
+import { CONCURRENCY, useCourseDetails } from '../hooks/useCourseDetails';
+import { pooled } from '../lib/pooled';
+import { MAX_RETRIES, backoffMs, isTransient, sleep } from '../lib/retry';
 import { usePlan } from '../hooks/usePlan';
 import { useScheduleConflicts } from '../hooks/useScheduleConflicts';
 import { useScheduleSelection } from '../hooks/useScheduleSelection';
@@ -135,6 +137,53 @@ export function Program({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [a.data, b.data, mine[0], mine[1]],
   );
+
+  /**
+   * Experimento: medir en segundo plano, sin botón, las materias del
+   * catálogo más viejas que STALE_SEATS_SECONDS —el mismo criterio que ya
+   * usan `sortKeyOf`/`hasRoom` para pintar el signo de pregunta.
+   *
+   * Una sola pasada por catálogo (guardia con `ref`, igual que el scroll):
+   * sin ella, `reload()` al final volvería a armar `courses` y dispararía
+   * la pasada otra vez. Mismo pool de 4 que Mi semestre —no es más agresivo
+   * que abrir el plan entero— y `max_age=STALE_SEATS_SECONDS` deja al
+   * servidor decidir si de verdad hace falta preguntarle al SIA.
+   */
+  const autoMeasured = useRef(false);
+  useEffect(() => {
+    if (autoMeasured.current || !bothSettled || courses.length === 0) return;
+    autoMeasured.current = true;
+
+    const stale = courses.filter((c) =>
+      c.seats
+        ? (Date.now() - Date.parse(c.seats.measured_at)) / 1000 > STALE_SEATS_SECONDS
+        : !c.detail_fetched_at ||
+          (Date.now() - Date.parse(c.detail_fetched_at)) / 1000 > STALE_SEATS_SECONDS,
+    );
+    if (stale.length === 0) return;
+
+    void pooled(stale, CONCURRENCY, async (c) => {
+      const path = routes.course(scopeOf(c.plan), c.plan.program, c.code, STALE_SEATS_SECONDS);
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          await get<CourseDetail>(path);
+          return;
+        } catch (e) {
+          // 429: otra pestaña la midió justo ahora, no es un fallo — no
+          // reintentar. Transitorio (sesión caducada, pool lleno): mismo
+          // criterio y backoff que useCourseDetails. Cualquier otro error se
+          // deja pasar tras agotar los intentos — la próxima vez que se abra
+          // el catálogo lo reintenta.
+          if (e instanceof ApiError && e.status === 429) return;
+          if (!isTransient(e) || attempt === MAX_RETRIES) return;
+          await sleep(backoffMs(attempt));
+        }
+      }
+    }).then(reload);
+    // `reload` fuera a propósito: cambia de identidad en cada render y la
+    // guardia de `autoMeasured` ya asegura que esto corre una sola vez.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bothSettled, courses]);
 
   /**
    * Los filtros.

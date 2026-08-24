@@ -174,25 +174,58 @@ export function Program({
     void pooled(stale, CONCURRENCY, async (c) => {
       setMeasuringCodes((prev) => { const s = new Set(prev); s.add(c.code); return s; });
       const path = routes.course(scopeOf(c.plan), c.plan.program, c.code, STALE_SEATS_SECONDS);
-      try {
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-          try {
-            await get<CourseDetail>(path);
-            return;
-          } catch (e) {
-            if (e instanceof ApiError && e.status === 429) return;
-            if (!isTransient(e) || attempt === MAX_RETRIES) return;
-            await sleep(backoffMs(attempt));
-          }
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          await get<CourseDetail>(path);
+          return;
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 429) return;
+          if (!isTransient(e) || attempt === MAX_RETRIES) return;
+          await sleep(backoffMs(attempt));
         }
-      } finally {
-        setMeasuringCodes((prev) => { const s = new Set(prev); s.delete(c.code); return s; });
       }
+      // No `finally` para limpiar measuringCodes por curso: si se hiciera
+      // acá, la celda volvería a `?` mientras el resto del batch sigue en
+      // vuelo y el reload() todavía no disparó. El limpiado lo hace el
+      // efecto de abajo cuando `courses` ya trae datos frescos.
     }).then(reload);
     // `reload` fuera a propósito: cambia de identidad en cada render y la
     // guardia de `autoMeasured` ya asegura que esto corre una sola vez.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bothSettled, courses]);
+
+  /**
+   * Limpia `measuringCodes` entrada por entrada en cuanto `courses` llega
+   * con datos frescos tras el reload().
+   *
+   * No se limpia en el `finally` del bucle de medición porque en ese momento
+   * `courses` todavía tiene el valor viejo: la celda pasaría de spinner a `?`
+   * en vez de pasar de spinner al dato real. Con este efecto el paso es
+   * directo: el spinner desaparece solo cuando la información ya está en
+   * pantalla.
+   */
+  useEffect(() => {
+    if (measuringCodes.size === 0) return;
+    const arrived = courses
+      .filter(
+        (c) =>
+          measuringCodes.has(c.code) &&
+          c.seats !== undefined &&
+          (Date.now() - Date.parse(c.seats!.measured_at)) / 1000 <= STALE_SEATS_SECONDS,
+      )
+      .map((c) => c.code);
+    if (arrived.length === 0) return;
+    setMeasuringCodes((prev) => {
+      const s = new Set(prev);
+      for (const code of arrived) s.delete(code);
+      return s;
+    });
+  // `measuringCodes` fuera de los deps: este efecto solo necesita correr
+  // cuando cambian los datos del catálogo (tras el reload), no cuando cambia
+  // el set de códigos en vuelo. Si estuviera, el efecto se dispararía en
+  // cada add/delete del pool, que es noise puro.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courses]);
 
   /**
    * Los filtros.

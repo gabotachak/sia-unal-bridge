@@ -281,10 +281,17 @@ func (r *refresher) record(unit string, courses int, skipped bool, err error) {
 	visited := r.rep.ProgramsOK + r.rep.ProgramsFailed + r.rep.ProgramsSkipped
 	if now := time.Now(); now.Sub(r.lastProg) >= progressLogInterval {
 		r.lastProg = now
+		elapsed := now.Sub(r.rep.StartedAt)
+		eta := "?"
+		if visited > 0 {
+			remaining := r.rep.ProgramsTotal - visited
+			perProgram := elapsed / time.Duration(visited)
+			eta = (perProgram * time.Duration(remaining)).Round(time.Second).String()
+		}
 		r.log.Info("refresher: progress",
 			"programs", fmt.Sprintf("%d/%d", visited, r.rep.ProgramsTotal),
 			"courses_ok", r.rep.CoursesOK, "failed", r.rep.ProgramsFailed,
-			"elapsed", now.Sub(r.rep.StartedAt).Round(time.Second))
+			"elapsed", elapsed.Round(time.Second), "eta", eta)
 	}
 	tooManyInARow := r.fails >= maxConsecutiveFailures
 	tooManyOverall := visited >= breakerMinSample &&

@@ -10,7 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { routes, STALE_SEATS_SECONDS } from '../api/client';
-import type { CoursesResponse, CourseSummary } from '../api/types';
+import type { CoursesResponse } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { useCatalogFilters } from '../hooks/useCatalogFilters';
 import { useCourseDetails } from '../hooks/useCourseDetails';
@@ -27,23 +27,34 @@ import { SearchInput } from '../components/SearchInput';
 import { SeatsFigure } from '../components/Seats';
 import { TableHead } from '../components/TableHead';
 import { Tooltip } from '../components/Tooltip';
+import { CopyCode } from '../components/CopyCode';
+import { PlanAttributionRow, type PlanAttribution } from '../components/PlanAttributionRow';
 import type { TableCol } from '../lib/table';
 import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
 import { useTableSort } from '../hooks/useTableSort';
-import { fold, formatAge, sentence } from '../lib/format';
+import { abbreviateEngineering, fold, formatAge, sentence } from '../lib/format';
 import { classifyConflict, type SectionLike } from '../lib/conflicts';
 import { useDetailCache } from '../lib/detailCache';
+import { mergeCatalogs, type MergedCourse } from '../lib/catalog';
+import { typologyLetter, typologySlug } from '../lib/typology';
 import {
   DEFAULT_AVAILABILITY,
   courseFitsAvailability,
   isAvailabilityActive,
 } from '../lib/availability';
-import { itemId, selectionId } from '../lib/storage';
+import { itemId, planCodes, planNames, type Selection } from '../lib/storage';
 import type { Screen } from '../state/nav';
 import './Program.css';
 
+function scopeOf(s: Selection) {
+  return { level: s.level, campus: s.campus, faculty: s.faculty };
+}
+
 /**
- * El catálogo de un plan. Hasta ~700 asignaturas (Medellín: 694).
+ * El catálogo de un plan — o de dos, con doble titulación
+ * (PLAN-DOUBLE-TITULATION.md). Hasta ~700 asignaturas por plan (Medellín:
+ * 694); la unión de dos NO es la suma (D6): comparten cientos de códigos de
+ * libre elección.
  *
  * Los filtros son en memoria a propósito: el catálogo completo ya vino en la
  * misma respuesta, así que filtrar en el servidor costaría otra consulta al
@@ -55,7 +66,17 @@ export function Program({
   screen: Extract<Screen, { name: 'program' }>;
 }) {
   const sel = screen.selection;
-  const { level, campus, faculty, program } = sel;
+  const { level, program } = sel;
+
+  const plan = usePlan();
+
+  /**
+   * Qué planes catalogar. Si `sel` es uno de los míos, es MI catálogo —la
+   * unión de todos mis planes (D5)—; si es de otro plan, se pinta él solo
+   * (Interfaz §5, "Catálogo ajeno"). Nunca los dos criterios a la vez: no
+   * hay forma de mezclar un plan ajeno con los propios.
+   */
+  const mine = plan.owns(sel) ? plan.plans : [sel];
 
   /**
    * Los horarios de los grupos se piden en la MISMA respuesta del catálogo
@@ -73,14 +94,47 @@ export function Program({
    */
   const { selection: scheduleSelection } = useScheduleSelection();
   const hasSchedule = Object.keys(scheduleSelection).length > 0;
+  const include = hasSchedule ? 'schedules' : undefined;
 
-  const path = routes.courses(
-    { level, campus, faculty },
-    program,
-    hasSchedule ? 'schedules' : undefined,
+  // Hooks FIJOS, sin condicional: `useApi` acepta `null` y no pide nada —lo
+  // mismo que ya hace este archivo para no pedir el directorio sin sede. Con
+  // un solo plan, `b` es un hook que nunca dispara nada.
+  const a = useApi<CoursesResponse>(routes.courses(scopeOf(mine[0]), mine[0].program, include));
+  const b = useApi<CoursesResponse>(
+    mine[1] ? routes.courses(scopeOf(mine[1]), mine[1].program, include) : null,
   );
-  const { data, error, loading, elapsed, attempt, reload } =
-    useApi<CoursesResponse>(path);
+
+  // "Settled" = ya se sabe qué pasó con esta parte, para bien o para mal.
+  // Mientras falte alguna, se muestra el Loading de siempre; en cuanto las
+  // que hacían falta contestaron —aunque una haya sido con error— se pinta
+  // lo que haya: media lista sirve, ninguna no.
+  const settledA = a.data !== null || a.error !== null;
+  const settledB = !mine[1] || b.data !== null || b.error !== null;
+  const bothSettled = settledA && settledB;
+  // `useApi` no borra `data` cuando su `path` pasa a `null` (useApi.ts:73):
+  // si `mine[1]` desaparece de un render a otro —de doble a un plan ajeno,
+  // sin desmontar esta pantalla— `b.data` se queda con el catálogo VIEJO.
+  // `mine[1] &&` es lo que evita que ese resto cuente como si fuera de hoy.
+  const anyData = !!a.data || (!!mine[1] && !!b.data);
+  const combinedError = a.error ?? (mine[1] ? b.error : null);
+  const reload = () => {
+    a.reload();
+    b.reload();
+  };
+
+  const courses = useMemo(
+    () =>
+      mergeCatalogs(
+        mine[1]
+          ? [
+              { plan: mine[0], courses: a.data?.courses ?? [] },
+              { plan: mine[1], courses: b.data?.courses ?? [] },
+            ]
+          : [{ plan: mine[0], courses: a.data?.courses ?? [] }],
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [a.data, b.data, mine[0], mine[1]],
+  );
 
   /**
    * Los filtros.
@@ -102,6 +156,8 @@ export function Program({
     setTypols,
     creds,
     setCreds,
+    progs,
+    setProgs,
     onlyOpen,
     setOnlyOpen,
     hideConflicts,
@@ -114,19 +170,15 @@ export function Program({
     setScrollY,
   } = useCatalogFilters();
 
-  /**
-   * El plan elegido, para saber qué materias tienen grupo elegido en Mi
-   * horario (issue #28).
-   *
-   * Se trae acá arriba —y no más abajo, donde ya se usaba para "estás
-   * mirando otro plan"— porque hace falta antes: da los `plan.items` con los
-   * que se mide el choque de horario.
-   */
-  const plan = usePlan();
-
+  // `code` alcanza para identificar DENTRO de la unión —D3 obliga a los dos
+  // planes a compartir sede, y ahí `code` no colisiona (CLAUDE.md)— pero el
+  // `itemId` de cada fila tiene que llevar el plan REAL que la gana (D6), no
+  // el de la pantalla desde la que se llegó: es de ahí que sale el
+  // `PlanItem` que recibe `AddButton`.
   const courseId = useCallback(
-    (c: CourseSummary) => itemId({ level, campus, program, code: c.code }),
-    [level, campus, program],
+    (c: MergedCourse) =>
+      itemId({ level: c.plan.level, campus: c.plan.campus, program: c.plan.program, code: c.code }),
+    [],
   );
 
   /**
@@ -157,7 +209,7 @@ export function Program({
     const map: Record<string, SectionLike[]> = {};
     // 1. Lo que vino en la respuesta del catálogo: todas las asignaturas
     //    cuyo detalle alguien pidió alguna vez, con `?include=schedules`.
-    for (const c of data?.courses ?? []) {
+    for (const c of courses) {
       if (c.section_schedules) map[courseId(c)] = c.section_schedules;
     }
     // 2. Y encima, lo que esta sesión trajo con más detalle —cupos por
@@ -168,7 +220,7 @@ export function Program({
       if (row.detail) map[itemId(row.item)] = row.detail.sections;
     }
     return map;
-  }, [data, courseId, detailCache, planRows]);
+  }, [courses, courseId, detailCache, planRows]);
 
   /**
    * Rojo, amarillo o nada para cada materia — una sola pasada, un solo
@@ -184,7 +236,7 @@ export function Program({
     const potential = new Set<string>();
     if (chosenBlocks.length === 0) return { active, potential };
 
-    for (const c of data?.courses ?? []) {
+    for (const c of courses) {
       const id = courseId(c);
       const mark = classifyConflict({
         itemId: id,
@@ -197,7 +249,7 @@ export function Program({
       else if (mark === 'potential') potential.add(id);
     }
     return { active, potential };
-  }, [data, courseId, sectionsById, scheduleSelection, chosenBlocks, onlyOpen]);
+  }, [courses, courseId, sectionsById, scheduleSelection, chosenBlocks, onlyOpen]);
 
   /**
    * Restaura el scroll UNA vez, apenas hay filas que pintar — antes de eso
@@ -206,10 +258,10 @@ export function Program({
    */
   const restored = useRef(false);
   useEffect(() => {
-    if (restored.current || !data || data.courses.length === 0) return;
+    if (restored.current || courses.length === 0) return;
     restored.current = true;
     if (scrollY > 0) window.scrollTo(0, scrollY);
-  }, [data, scrollY]);
+  }, [courses, scrollY]);
 
   /**
    * Guarda el scroll EN CADA scroll, no al desmontar.
@@ -243,10 +295,17 @@ export function Program({
   const facets = useMemo(() => {
     const byTypology = new Map<string, number>();
     const byCredits = new Map<number, number>();
-    for (const c of data?.courses ?? []) {
+    const byProgram = new Map<string, number>();
+    for (const c of courses) {
       if (c.typology)
         byTypology.set(c.typology, (byTypology.get(c.typology) ?? 0) + 1);
       byCredits.set(c.credits, (byCredits.get(c.credits) ?? 0) + 1);
+      byProgram.set(c.plan.program, (byProgram.get(c.plan.program) ?? 0) + 1);
+      if (c.alsoIn)
+        byProgram.set(
+          c.alsoIn.plan.program,
+          (byProgram.get(c.alsoIn.plan.program) ?? 0) + 1,
+        );
     }
     return {
       typologies: [...byTypology.keys()].sort((a, b) =>
@@ -255,15 +314,16 @@ export function Program({
       credits: [...byCredits.keys()].sort((a, b) => a - b),
       byTypology,
       byCredits,
+      byProgram,
     };
-  }, [data]);
+  }, [courses]);
 
   /** Se recuerda entre visitas. `null` = como lo mandó el SIA, ya alfabético. */
   const { sort, onSort } = useTableSort('catalog');
 
   const shown = useMemo(() => {
     const needle = fold(q);
-    const kept = (data?.courses ?? []).filter((c) => {
+    const kept = courses.filter((c) => {
       if (
         needle &&
         !fold(c.name).includes(needle) &&
@@ -272,6 +332,12 @@ export function Program({
         return false;
       if (typols.size && !typols.has(c.typology)) return false;
       if (creds.size && !creds.has(c.credits)) return false;
+      if (
+        progs.size &&
+        !progs.has(c.plan.program) &&
+        !(c.alsoIn && progs.has(c.alsoIn.plan.program))
+      )
+        return false;
       if (onlyOpen && !hasRoom(c)) return false;
       if (hideConflicts) {
         const id = courseId(c);
@@ -294,10 +360,11 @@ export function Program({
     });
     return sort ? sortBy(kept, (c) => sortKeyOf(c, sort.col), sort.dir) : kept;
   }, [
-    data,
+    courses,
     q,
     typols,
     creds,
+    progs,
     onlyOpen,
     hideConflicts,
     conflictCourseIds,
@@ -307,9 +374,9 @@ export function Program({
     sort,
   ]);
 
-  const total = data?.courses.length ?? 0;
+  const total = courses.length;
   const facetCount =
-    typols.size + creds.size + (isAvailabilityActive(availability) ? 1 : 0);
+    typols.size + creds.size + progs.size + (isAvailabilityActive(availability) ? 1 : 0);
   const filtering = !!q || facetCount > 0 || onlyOpen || hideConflicts;
 
   /**
@@ -361,29 +428,71 @@ export function Program({
     });
   }
 
+  /**
+   * Mismo truco que `pickTypology`: con doble titulación solo hay dos
+   * carreras posibles, y marcar las dos filtra igual que no marcar
+   * ninguna —así que elegir la segunda vacía el filtro en vez de sumarla.
+   */
+  function pickProgram(
+    next:
+      | ReadonlySet<string>
+      | ((prev: ReadonlySet<string>) => ReadonlySet<string>),
+  ) {
+    setProgs((prev) => {
+      const resolved = typeof next === 'function' ? next(prev) : next;
+      return resolved.size === mine.length && mine.length > 1 ? new Set() : resolved;
+    });
+  }
+
   function clearAll() {
     setQ('');
     setTypols(new Set());
     setCreds(new Set());
+    setProgs(new Set());
     setOnlyOpen(false);
     setHideConflicts(false);
     setAvailability(DEFAULT_AVAILABILITY);
   }
 
+  // El código y la tipología de un plan que se le enseñan al usuario, no la
+  // que decide `mergeCatalogs` (D6): esa manda para saber qué grupos se ven
+  // y qué tipología cuenta créditos — no puede cambiar con un filtro. Pero
+  // mostrar SIEMPRE al mismo plan "ganador" mientras alguien filtra por el
+  // OTRO se leía como que el catálogo se contradice con su propio filtro.
+  // Acá se decide solo lo que se PINTA:
+  //   - libre elección compartida entre los dos: ninguno "gana" de verdad
+  //     (misma tipología en los dos), así que se enseñan los dos.
+  //   - si no, y hay un solo plan filtrado, ESE se enseña primero.
+  const filterProgram = progs.size === 1 ? [...progs][0] : null;
+
+  function attributionOf(c: MergedCourse) {
+    let primary: PlanAttribution = { plan: c.plan, typology: c.typology };
+    if (!c.alsoIn) return { primary, secondary: undefined };
+    let secondary: PlanAttribution = { plan: c.alsoIn.plan, typology: c.alsoIn.typology };
+    // El filtro manda sobre la prioridad de D6: quien filtra por un plan
+    // quiere VERLO primero, así rompa el desempate por rango.
+    if (filterProgram && secondary.plan.program === filterProgram && primary.plan.program !== filterProgram) {
+      [primary, secondary] = [secondary, primary];
+    }
+    return { primary, secondary };
+  }
+
   /**
-   * El plan de esta pantalla contra el plan elegido.
+   * El plan de esta pantalla contra MIS planes.
    *
-   * Casi siempre son el mismo. La excepción es llegar acá desde un candidato
-   * de un 300 ambiguo (ver Fault en States.tsx) sin haber confirmado el
-   * cambio: ahí `sel` es el plan que se está MIRANDO, y `plan.selection` sigue
-   * siendo el de siempre. No se toca nada por las malas — se avisa y se deja
-   * decidir, porque cambiar de verdad borra el semestre.
+   * Casi siempre `sel` es uno de los míos. La excepción es llegar acá desde
+   * un candidato de un 300 ambiguo (ver Fault en States.tsx) sin haber
+   * confirmado el cambio, o mirar el plan de otra persona: ahí `sel` es el
+   * plan que se está MIRANDO y no está entre `plan.plans`. No se toca nada
+   * por las malas — se avisa y se deja decidir, porque cambiar de verdad
+   * borra el semestre.
    *
-   * `plan` en sí ya se trajo arriba, para el choque de horario.
+   * `plan` en sí ya se trajo arriba, para el choque de horario y para saber
+   * qué catalogar (`mine`).
    */
   const [ask, confirmDialog] = useConfirm();
-  const { selection, select } = plan;
-  const foreign = selection && selectionId(selection) !== selectionId(sel);
+  const foreign = plan.selection !== null && !plan.owns(sel);
+  const double = plan.plans.length > 1;
 
   async function adoptThis() {
     const n = plan.items.length;
@@ -395,35 +504,61 @@ export function Program({
         body: (
           <>
             <p>
-              Se va a borrar{' '}
-              {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`}{' '}
-              en Mi semestre, porque {n === 1 ? 'es' : 'son'} del plan{' '}
-              <b>{selection?.programName}</b>.
+              Se va a borrar {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi
+              semestre, porque {n === 1 ? 'es' : 'son'}{' '}
+              {double ? (
+                <>
+                  de los planes <b>{planNames(plan.plans)}</b>
+                </>
+              ) : (
+                <>
+                  del plan <b>{planNames(plan.plans)}</b>
+                </>
+              )}
+              .
             </p>
-            <p>Sus grupos y su tipología son de ese plan, no de este.</p>
+            <p>Sus grupos y su tipología son de {double ? 'esos planes' : 'ese plan'}, no de este.</p>
           </>
         ),
       });
       if (!ok) return;
     }
-    select(sel);
+    // `[sel]` siempre pasa la validación de `planSelection` —es un solo
+    // plan—, pero se revisa igual: es el único sitio de la app que llama a
+    // `select()` sin que el picker ya haya impedido de antemano un
+    // resultado inválido.
+    const ok = plan.select([sel]);
+    if (!ok) return;
   }
+
+  const planEyebrow = planCodes(mine);
 
   return (
     <Layout>
       {confirmDialog}
-      {foreign && selection && (
+      {foreign && (
         <div className="stray" role="status">
           <p className="stray__text">
-            Estás mirando el plan <b>{program}</b>, y el tuyo es{' '}
-            <b>{selection.programName}</b>. Puedes mirar todo lo que quieras,
-            pero para agregar materias al semestre tienes que estar en tu plan.
+            Estás mirando el plan <b>{program}</b>, y{' '}
+            {double ? (
+              <>
+                los tuyos son <b>{planNames(plan.plans)}</b>
+              </>
+            ) : (
+              <>
+                el tuyo es <b>{abbreviateEngineering(plan.selection?.programName ?? '')}</b>
+              </>
+            )}
+            . Puedes mirar todo lo que quieras, pero para agregar materias al semestre tienes que
+            estar en {double ? 'uno de tus planes' : 'tu plan'}.
           </p>
           <div className="stray__actions">
-            <AppLink className="btn" to={{ name: 'program', selection }}>
-              <CornerUpLeft size={15} strokeWidth={1.75} aria-hidden="true" />
-              volver al mío
-            </AppLink>
+            {plan.selection && (
+              <AppLink className="btn" to={{ name: 'program', selection: plan.selection }}>
+                <CornerUpLeft size={15} strokeWidth={1.75} aria-hidden="true" />
+                volver al mío
+              </AppLink>
+            )}
             <button className="btn btn--ghost" onClick={adoptThis}>
               <ArrowLeftRight size={15} strokeWidth={1.75} aria-hidden="true" />
               cambiarme a este
@@ -434,7 +569,7 @@ export function Program({
 
       <header className="head">
         <div>
-          <p className="eyebrow">plan {program}</p>
+          <p className="eyebrow">plan {planEyebrow}</p>
           <h1 className="head__title">Catálogo</h1>
         </div>
         {total > 0 && (
@@ -446,16 +581,15 @@ export function Program({
         )}
       </header>
 
-      {loading && !data && (
+      {!bothSettled && !anyData && (
         <Loading
-          elapsed={elapsed}
-          attempt={attempt}
+          elapsed={Math.max(a.elapsed, b.elapsed)}
+          attempt={Math.max(a.attempt, b.attempt)}
           what="Trayendo el catálogo"
         />
       )}
-      {error && <Fault error={error} level={level} onRetry={() => reload()} />}
 
-      {data && (
+      {anyData && (
         <>
           <div className="toolbar">
             <SearchInput
@@ -559,6 +693,31 @@ export function Program({
             className={`filters ${showFacets ? 'is-open' : ''}`}
             id="facetas"
           >
+            {/* Solo con doble titulación (D6): elegir una carrera deja solo
+                lo que cuenta para ella —lo compartido entre las dos sigue
+                saliendo—, y marcar las dos es lo mismo que no marcar
+                ninguna, igual que "todas menos libre elección". */}
+            {mine.length > 1 && (
+              <div className="filters__row">
+                <span className="filters__label">carrera</span>
+                <div className="chips">
+                  {mine.map((m) => (
+                    <button
+                      key={m.program}
+                      className={`chip chip--sm ${progs.has(m.program) ? 'is-on' : ''}`}
+                      onClick={() => pickProgram((s) => toggle(s, m.program))}
+                      aria-pressed={progs.has(m.program)}
+                    >
+                      {abbreviateEngineering(sentence(m.programName))}
+                      <span className="chip__code tnum">
+                        {facets.byProgram.get(m.program) ?? 0}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="filters__row">
               <span className="filters__label">tipología</span>
               <div className="chips">
@@ -697,15 +856,14 @@ export function Program({
                   const isPotentialConflict =
                     conflictCourseIds.potential.has(id);
                   const inConflict = isActiveConflict || isPotentialConflict;
+                  const attr = mine.length > 1 ? attributionOf(c) : null;
                   return (
                     <li key={c.code}>
                       <AppLink
                         className={`row table__row ${isActiveConflict ? 'is-conflict' : ''} ${isPotentialConflict ? 'is-conflict-potential' : ''}`}
-                        to={{ name: 'course', selection: sel, code: c.code }}
+                        to={{ name: 'course', selection: c.plan, code: c.code, alsoIn: c.alsoIn }}
                       >
-                        <span className="row__code tnum col-code">
-                          {c.code}
-                        </span>
+                        <CopyCode code={c.code} className="row__code tnum col-code" />
                         <span className="row__name">
                           {inConflict && (
                             <Tooltip
@@ -747,16 +905,24 @@ export function Program({
                         </span>
                         <Tooltip
                           content={
-                            <>
-                              <p className="tt-eyebrow">Tipología</p>
-                              <p className="tt-title">{c.typology}</p>
-                            </>
+                            attr ? (
+                              <PlanTypologyInfo
+                                primary={attr.primary}
+                                secondary={attr.secondary}
+                                plans={mine}
+                              />
+                            ) : (
+                              <>
+                                <p className="tt-eyebrow">Tipología</p>
+                                <p className="tt-title">{c.typology}</p>
+                              </>
+                            )
                           }
                         >
                           <span
-                            className={`tag tag--${slugTypology(c.typology)} col-typ`}
+                            className={`tag tag--${typologySlug(attr?.primary.typology ?? c.typology)} col-typ`}
                           >
-                            {shortTypology(c.typology)}
+                            {typologyLetter(attr?.primary.typology ?? c.typology)}
                           </span>
                         </Tooltip>
                         <span className="row__credits tnum col-cr">
@@ -768,10 +934,10 @@ export function Program({
                         />
                         <AddButton
                           item={{
-                            level,
-                            campus,
-                            program,
-                            faculty,
+                            level: c.plan.level,
+                            campus: c.plan.campus,
+                            program: c.plan.program,
+                            faculty: c.plan.faculty,
                             code: c.code,
                             name: c.name,
                             credits: c.credits,
@@ -787,9 +953,50 @@ export function Program({
           )}
         </>
       )}
+
+      {/* Después de la tabla, no antes: con doble titulación, si un plan
+          respondió y el otro no, esto se pinta DEBAJO de lo que sí hay —
+          "media lista sirve, ninguna no" (interfaz §2). Con los dos
+          fallidos es lo único que queda por mostrar. */}
+      {combinedError && <Fault error={combinedError} level={level} onRetry={reload} />}
     </Layout>
   );
 }
+
+/**
+ * Cómo cuenta esta materia en cada uno de mis planes — el contenido del
+ * hover de la letra de tipología (col-typ). Antes había además un chip por
+ * plan pegado al nombre (PlanTag); se quitó por pedido explícito —comía
+ * espacio de lectura sin decir nada que este hover no dijera ya— así que
+ * esto quedó como el único lugar donde se ve la atribución.
+ *
+ * `primary`/`secondary` ya vienen decididos por `attributionOf`: acá no se
+ * elige nada, solo se pinta con `PlanAttributionRow` (components/), la
+ * misma que usan Course.tsx y CourseCard.tsx (PLAN-DOUBLE-TITULATION.md D6
+ * interfaz §7).
+ */
+function PlanTypologyInfo({
+  primary,
+  secondary,
+  plans,
+}: {
+  primary: PlanAttribution;
+  secondary?: PlanAttribution;
+  plans: readonly Selection[];
+}) {
+  return (
+    <>
+      <PlanAttributionRow attr={primary} plans={plans} mine />
+      {/* Si la materia está en el otro plan, se dice siempre — coincida o no
+          la tipología. Antes se callaba cuando coincidía ("ruido puro"),
+          pero eso era tratar la coincidencia como si no hubiera "ganador"
+          que anunciar; el punto es al revés: coincidan o no, es información
+          real sobre AMBOS planes, y callarla es lo que se leía raro. */}
+      {secondary && <PlanAttributionRow attr={secondary} plans={plans} />}
+    </>
+  );
+}
+
 
 /**
  * Los cupos de la asignatura, sumados sobre los grupos que este plan ve.
@@ -815,7 +1022,7 @@ function SeatsCell({
   seats,
   askedAt,
 }: {
-  seats?: CourseSummary['seats'];
+  seats?: MergedCourse['seats'];
   askedAt?: string | null;
 }) {
   if (!seats) {
@@ -948,7 +1155,7 @@ function SeatsCell({
  * Por qué se ordena cada columna. Cupos es la única con matiz: los cuatro
  * estados de la celda caen en una sola recta según SEATS_RANK.
  */
-function sortKeyOf(c: CourseSummary, col: TableCol): SortKey {
+function sortKeyOf(c: MergedCourse, col: TableCol): SortKey {
   switch (col) {
     case 'code':
       return c.code;
@@ -1000,7 +1207,7 @@ function toggle<T>(set: ReadonlySet<T>, v: T): ReadonlySet<T> {
  * Las que sí se consultaron y no tienen grupos, o los tienen llenos, se van:
  * de esas la respuesta ya se sabe.
  */
-function hasRoom(c: CourseSummary): boolean {
+function hasRoom(c: MergedCourse): boolean {
   if (c.seats) {
     // Si el dato está desactualizado, no sabemos el estado real → incógnita.
     if (
@@ -1015,16 +1222,4 @@ function hasRoom(c: CourseSummary): boolean {
     !c.detail_fetched_at ||
     (Date.now() - Date.parse(c.detail_fetched_at)) / 1000 > STALE_SEATS_SECONDS
   );
-}
-
-/** 'FUND. OBLIGATORIA (B)' → 'B'. La letra entre paréntesis es lo que informa. */
-function shortTypology(t: string): string {
-  return t.match(/\(([^)]+)\)/)?.[1] ?? t.slice(0, 3);
-}
-
-function slugTypology(t: string): string {
-  if (t.startsWith('LIBRE')) return 'libre';
-  if (t.includes('OBLIGATORIA')) return 'obligatoria';
-  if (t.includes('OPTATIVA')) return 'optativa';
-  return 'otra';
 }

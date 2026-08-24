@@ -12,7 +12,7 @@ import type { Selection } from '../lib/storage';
  * y no solo los códigos — por dos razones distintas:
  *
  *  - 'program' puede "adoptar" el plan que muestra (el aviso de plan ajeno en
- *    Program.tsx), y adoptar es `plan.select(selection)`, que necesita los
+ *    Program.tsx), y adoptar es `plan.select([selection])`, que necesita los
  *    nombres para no dejar el chip de la barra diciendo el código a secas.
  *  - 'course' los lleva para poder volver al catálogo de ESE plan con sus
  *    nombres ya puestos, sin ir a buscarlos nunca.
@@ -26,7 +26,21 @@ import type { Selection } from '../lib/storage';
 export type Screen =
   | { name: 'plan-picker' }
   | { name: 'program'; selection: Selection }
-  | { name: 'course'; selection: Selection; code: string; from?: 'semester' | 'schedule' }
+  | {
+      name: 'course';
+      selection: Selection;
+      code: string;
+      from?: 'semester' | 'schedule';
+      /**
+       * Cómo figura esta asignatura en el OTRO plan, con doble titulación
+       * (D6, PLAN-DOUBLE-TITULATION.md). Solo se sabe si se llegó desde el
+       * catálogo unido (`MergedCourse.alsoIn`, Program.tsx): desde Mi
+       * semestre u Horario no hay de dónde sacarlo —`PlanItem` no lo
+       * guarda— y pedir el otro catálogo solo para esto sería una petición
+       * de ~350 KB por una frase.
+       */
+      alsoIn?: { plan: Selection; typology: string };
+    }
   | { name: 'semester' }
   | { name: 'schedule' }
   | { name: 'donate' };

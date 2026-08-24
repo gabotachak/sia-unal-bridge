@@ -4,14 +4,31 @@
 // la pestaña. Es lo único que necesita esta app: no hay login ni servidor de
 // preferencias, y la lista del semestre es de quien tiene el navegador abierto.
 
+import { abbreviateEngineering } from './format';
+
 /** Todo bajo una clave con versión: si mañana cambia la forma, se sube a v2
  *  y los datos viejos se ignoran solos en vez de romper la página. */
 const KEY = 'tablero.semestre.v2';
 
-/** El plan elegido. Clave aparte de la lista: son dos cosas con vidas
- *  distintas —el plan se elige una vez, la lista cambia todo el tiempo— y
- *  guardarlas juntas obligaría a reescribir el plan en cada agregado. */
+/** El plan elegido, formato viejo: un solo objeto. Clave aparte de la lista:
+ *  son dos cosas con vidas distintas —el plan se elige una vez, la lista
+ *  cambia todo el tiempo— y guardarlas juntas obligaría a reescribir el plan
+ *  en cada agregado. Se sigue LEYENDO —es el seguro de rollback de la
+ *  doble titulación, ver PLAN-DOUBLE-TITULATION.md— pero ya no se escribe. */
 const PICK_KEY = 'tablero.plan.v1';
+
+/** v2: varios planes, en orden de elección (doble titulación). Mientras
+ *  `PICK_KEY` guardaba un objeto, esto guarda un array — de uno o dos. */
+const PLANS_KEY = 'tablero.planes.v2';
+
+/** Doble titulación: dos planes, nunca más. La casilla del picker lo dice
+ *  literalmente. Sube a N cambiando esto si algún día aparece el caso. */
+export const MAX_PLANS = 2;
+
+/** Tope de materias en el semestre. Es un presupuesto de mediciones contra
+ *  el SIA —una petición de detalle por materia, pool de 4—, no una cuota
+ *  académica: no depende de cuántos planes haya. */
+export const MAX_ITEMS = 20;
 
 /** El orden de cada tabla. Ver loadSort. */
 const SORT_KEY = 'tablero.orden.v1';
@@ -43,7 +60,7 @@ export function loadPlan(): PlanItem[] {
     // Nunca confiar en lo que hay guardado: puede venir de una versión vieja,
     // de otra pestaña, o de alguien jugando con las devtools.
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
+    const valid = parsed.filter(
       (x): x is PlanItem =>
         x &&
         typeof x.code === 'string' &&
@@ -51,6 +68,18 @@ export function loadPlan(): PlanItem[] {
         typeof x.campus === 'string' &&
         typeof x.program === 'string',
     );
+    // Cinturón de la invariante (PLAN-DOUBLE-TITULATION.md): una materia, una
+    // sola fila, aunque hayan quedado dos `code` iguales guardados a mano o
+    // por una versión futura. No debería disparar nunca — `add()` ya lo
+    // impide en origen.
+    const seen = new Set<string>();
+    const deduped: PlanItem[] = [];
+    for (const item of valid) {
+      if (seen.has(item.code)) continue;
+      seen.add(item.code);
+      deduped.push(item);
+    }
+    return deduped;
   } catch {
     return [];
   }
@@ -65,6 +94,26 @@ export function savePlan(items: PlanItem[]): void {
   } catch {
     // Cuota llena o modo privado: no vale la pena romper la app por esto.
   }
+}
+
+/**
+ * Agregar una materia al semestre, con las dos reglas que no dependen de
+ * React: el tope de materias, y la invariante de la doble titulación — una
+ * asignatura, un plan (D7, PLAN-DOUBLE-TITULATION.md). Rechaza por `code`,
+ * NO por `itemId`: comparar por `itemId` dejaría entrar la misma asignatura
+ * una vez por cada plan, que es justo lo que hay que impedir.
+ *
+ * `null` = no se agregó (lleno, o el código ya está desde cualquier plan).
+ * Pura y testeable: `now` entra por parámetro en vez de leer `Date.now()`.
+ */
+export function addToPlan(
+  items: readonly PlanItem[],
+  item: Omit<PlanItem, 'addedAt'>,
+  now: number,
+): PlanItem[] | null {
+  if (items.length >= MAX_ITEMS) return null;
+  if (items.some((i) => i.code === item.code)) return null;
+  return [...items, { ...item, addedAt: now }];
 }
 
 /** La identidad de una materia en la lista.
@@ -107,41 +156,164 @@ export function selectionId(s: Pick<Selection, 'level' | 'campus' | 'program'>):
   return `${s.level}/${s.campus}/${s.program}`;
 }
 
+/** Los nombres de uno o dos planes en una frase: "Ingeniería" o "Ingeniería
+ *  y Matemáticas". Un solo formateador para toda la app —Topbar, PlanPicker,
+ *  Program— en vez de reescribir el `.join(' y ')` en cada sitio. */
+export function planNames(plans: readonly Pick<Selection, 'programName'>[]): string {
+  return plans.map((p) => abbreviateEngineering(p.programName)).join(' y ');
+}
+
+/** Los códigos de uno o dos planes, para el chip y el eyebrow: "2A74" o
+ *  "2A74 · 2B10". */
+export function planCodes(plans: readonly Pick<Selection, 'program'>[]): string {
+  return plans.map((p) => p.program).join(' · ');
+}
+
+/** Valida un valor cualquiera como Selection — campo por campo, nunca
+ *  confiando en lo guardado. Compartida por `loadSelection` (v1, un objeto)
+ *  y `loadPlans` (v2, un array de esto mismo). Los nombres son decoración:
+ *  si faltan se cae al código, que siempre está. */
+function parseSelection(x: unknown): Selection | null {
+  if (!x || typeof x !== 'object') return null;
+  const s = x as Record<string, unknown>;
+  if (
+    typeof s.level !== 'string' ||
+    typeof s.campus !== 'string' ||
+    typeof s.program !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    level: s.level,
+    campus: s.campus,
+    campusName: typeof s.campusName === 'string' ? s.campusName : s.campus,
+    faculty: typeof s.faculty === 'string' ? s.faculty : '',
+    facultyName: typeof s.facultyName === 'string' ? s.facultyName : '',
+    program: s.program,
+    programName: typeof s.programName === 'string' ? s.programName : s.program,
+  };
+}
+
 export function loadSelection(): Selection | null {
   try {
     const raw = localStorage.getItem(PICK_KEY);
-    if (!raw) return null;
-    const x = JSON.parse(raw);
-    if (
-      !x ||
-      typeof x.level !== 'string' ||
-      typeof x.campus !== 'string' ||
-      typeof x.program !== 'string'
-    ) {
-      return null;
-    }
-    // Los nombres son decoración: si faltan se cae al código, que siempre está.
-    return {
-      level: x.level,
-      campus: x.campus,
-      campusName: typeof x.campusName === 'string' ? x.campusName : x.campus,
-      faculty: typeof x.faculty === 'string' ? x.faculty : '',
-      facultyName: typeof x.facultyName === 'string' ? x.facultyName : '',
-      program: x.program,
-      programName: typeof x.programName === 'string' ? x.programName : x.program,
-    };
+    return raw ? parseSelection(JSON.parse(raw)) : null;
   } catch {
     return null;
   }
 }
 
-export function saveSelection(s: Selection | null): void {
+/**
+ * Los planes elegidos, en orden de elección (doble titulación:
+ * PLAN-DOUBLE-TITULATION.md). Reglas, en este orden:
+ *
+ *  1. Si la clave v2 EXISTE, manda ella sola — sin mirar la v1, aunque
+ *     termine vacía tras validar. Cada plan se valida campo por campo.
+ *  2. Se deduplica por `selectionId` y se recorta a MAX_PLANS.
+ *  3. Si no hay v2 pero sí v1: se migra a `[loadSelection()]` y se ESCRIBE
+ *     la v2 — pero la v1 se deja donde está, intacta: es el seguro de
+ *     rollback (ver "Compatibilidad" en el plan). Ya no se vuelve a escribir
+ *     nunca desde acá.
+ *  4. Sin nada: `[]`.
+ */
+export function loadPlans(): Selection[] {
+  let raw: string | null;
   try {
-    if (s) localStorage.setItem(PICK_KEY, JSON.stringify(s));
-    else localStorage.removeItem(PICK_KEY);
+    raw = localStorage.getItem(PLANS_KEY);
+  } catch {
+    raw = null;
+  }
+
+  if (raw !== null) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = null;
+    }
+    const list = Array.isArray(parsed) ? parsed : [];
+    const valid = list.map(parseSelection).filter((s): s is Selection => s !== null);
+    const deduped: Selection[] = [];
+    for (const s of valid) {
+      if (!deduped.some((d) => selectionId(d) === selectionId(s))) deduped.push(s);
+    }
+    return deduped.slice(0, MAX_PLANS);
+  }
+
+  const v1 = loadSelection();
+  if (v1) {
+    savePlans([v1]);
+    return [v1];
+  }
+  return [];
+}
+
+export function savePlans(plans: Selection[]): void {
+  try {
+    if (plans.length === 0) localStorage.removeItem(PLANS_KEY);
+    else localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
   } catch {
     // Cuota llena o modo privado: no vale la pena romper la app por esto.
   }
+}
+
+/** D3: los dos planes de una doble titulación son de la misma sede y del
+ *  mismo nivel — no es una suposición, así que se hace cumplir acá en vez
+ *  de confiar en que la interfaz nunca deje elegir otra cosa. */
+function sameCampusAndLevel(a: Selection, b: Selection): boolean {
+  return a.level === b.level && a.campus === b.campus;
+}
+
+/** Qué le pasa al semestre al fijar un conjunto de planes (D4):
+ *
+ *   'keep'   → el MISMO conjunto que ya estaba: no se toca nada. Pasa cada
+ *              vez que se vuelve al tablero sin cambiar de plan.
+ *   'filter' → no había NINGÚN plan elegido todavía: no es un cambio, así
+ *              que no se borra todo — se descartan solo las materias que no
+ *              son de ninguno de los planes nuevos (pueden haber quedado de
+ *              antes, o de un `localStorage` viejo).
+ *   'wipe'   → conjunto distinto de verdad: el semestre se reinicia entero.
+ */
+export type SelectOutcome = 'keep' | 'filter' | 'wipe';
+
+/**
+ * `null` = el conjunto no es válido —vacío, más de MAX_PLANS, o dos planes
+ * que no comparten sede y nivel (D3)— y entonces no se toca nada.
+ */
+export function planSelection(
+  current: readonly Selection[],
+  next: readonly Selection[],
+): SelectOutcome | null {
+  if (next.length === 0 || next.length > MAX_PLANS) return null;
+  if (next.length === 2 && !sameCampusAndLevel(next[0], next[1])) return null;
+  const nextIds = new Set(next.map(selectionId));
+  const sameSet =
+    nextIds.size === current.length && current.every((p) => nextIds.has(selectionId(p)));
+  if (sameSet) return 'keep';
+  return current.length === 0 ? 'filter' : 'wipe';
+}
+
+/**
+ * `planSelection` más lo que le pasa a `items`: el estado completo después
+ * de fijar un conjunto de planes. Es lo que llama `PlanProvider.select()`,
+ * separado de React para poder testearlo sin montar nada.
+ *
+ * `null` = el conjunto no era válido (mismo motivo que `planSelection`) y no
+ * se toca nada.
+ */
+export function applySelect(
+  currentPlans: readonly Selection[],
+  currentItems: readonly PlanItem[],
+  nextPlans: Selection[],
+): { plans: Selection[]; items: PlanItem[] } | null {
+  const outcome = planSelection(currentPlans, nextPlans);
+  if (!outcome) return null;
+  if (outcome === 'wipe') return { plans: nextPlans, items: [] };
+  if (outcome === 'filter') {
+    const ids = new Set(nextPlans.map(selectionId));
+    return { plans: nextPlans, items: currentItems.filter((i) => ids.has(selectionId(i))) };
+  }
+  return { plans: nextPlans, items: [...currentItems] };
 }
 
 /**
@@ -159,6 +331,7 @@ export function clearStored(): void {
   try {
     localStorage.removeItem(KEY);
     localStorage.removeItem(PICK_KEY);
+    localStorage.removeItem(PLANS_KEY);
     localStorage.removeItem(SORT_KEY);
     localStorage.removeItem(SCHEDULE_KEY);
     localStorage.removeItem(SCHEDULE_WIDTH_KEY);

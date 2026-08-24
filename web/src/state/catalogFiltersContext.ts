@@ -8,6 +8,9 @@ export type CatalogFiltersApi = {
   setTypols: Dispatch<SetStateAction<ReadonlySet<string>>>;
   creds: ReadonlySet<number>;
   setCreds: Dispatch<SetStateAction<ReadonlySet<number>>>;
+  /** Códigos de plan elegidos, solo con doble titulación (D6). */
+  progs: ReadonlySet<string>;
+  setProgs: Dispatch<SetStateAction<ReadonlySet<string>>>;
   onlyOpen: boolean;
   setOnlyOpen: Dispatch<SetStateAction<boolean>>;
   /** Oculta las materias que chocan en horario con un grupo ya elegido en

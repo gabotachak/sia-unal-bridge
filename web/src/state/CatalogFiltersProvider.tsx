@@ -17,6 +17,7 @@ export function CatalogFiltersProvider({ children }: { children: React.ReactNode
   const [q, setQ] = useState('');
   const [typols, setTypols] = useState<ReadonlySet<string>>(new Set());
   const [creds, setCreds] = useState<ReadonlySet<number>>(new Set());
+  const [progs, setProgs] = useState<ReadonlySet<string>>(new Set());
   const [onlyOpen, setOnlyOpen] = useState(false);
   const [hideConflicts, setHideConflicts] = useState(false);
   const [availability, setAvailability] = useState<AvailabilityFilter>(DEFAULT_AVAILABILITY);
@@ -36,6 +37,8 @@ export function CatalogFiltersProvider({ children }: { children: React.ReactNode
       setTypols,
       creds,
       setCreds,
+      progs,
+      setProgs,
       onlyOpen,
       setOnlyOpen,
       hideConflicts,
@@ -51,7 +54,7 @@ export function CatalogFiltersProvider({ children }: { children: React.ReactNode
         scrollYRef.current = y;
       },
     }),
-    [q, typols, creds, onlyOpen, hideConflicts, availability, showFacets],
+    [q, typols, creds, progs, onlyOpen, hideConflicts, availability, showFacets],
   );
 
   return <CatalogFiltersContext value={api}>{children}</CatalogFiltersContext>;

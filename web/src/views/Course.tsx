@@ -11,6 +11,8 @@ import { useScheduleSelection } from '../hooks/useScheduleSelection';
 import { Layout } from '../components/Layout';
 import { AppLink } from '../components/AppLink';
 import { AddButton } from '../components/AddButton';
+import { CopyCode } from '../components/CopyCode';
+import { PlanAttributionRow } from '../components/PlanAttributionRow';
 import { Empty, Fault, Loading } from '../components/States';
 import { Seats } from '../components/Seats';
 import { Tooltip } from '../components/Tooltip';
@@ -21,7 +23,7 @@ import type { Screen } from '../state/nav';
 import './Course.css';
 
 export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }> }) {
-  const { selection: sel, code, from } = screen;
+  const { selection: sel, code, from, alsoIn } = screen;
   const { level, campus, faculty, program } = sel;
 
   const scope = { level, campus, faculty };
@@ -191,7 +193,7 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
           <header className="head head--stack">
             <div>
               <p className="eyebrow tnum">
-                {data.code}
+                <CopyCode code={data.code} className="" />
                 <span className="head__dot">·</span>
                 {data.credits} créditos
                 <span className="head__dot">·</span>
@@ -214,6 +216,29 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
               }}
             />
           </header>
+
+          {/* A qué plan se atribuye esta materia — solo con doble
+              titulación, y solo cuando ESTE plan es uno de los míos (D6,
+              interfaz §7). `alsoIn` solo se sabe si se llegó desde el
+              catálogo unido: desde Mi semestre u Horario la fila de abajo no
+              aparece — no se pide el otro catálogo por una línea.
+              `PlanAttributionRow` (components/): el mismo diseño que el
+              catálogo y Mi semestre/Mi horario, no un tercero. */}
+          {plan.plans.length > 1 && plan.owns(sel) && (
+            <div className="course__plan-note">
+              <PlanAttributionRow
+                attr={{ plan: sel, typology: data.typology }}
+                plans={plan.plans}
+                mine
+              />
+              {alsoIn && (
+                <PlanAttributionRow
+                  attr={{ plan: alsoIn.plan, typology: alsoIn.typology }}
+                  plans={plan.plans}
+                />
+              )}
+            </div>
+          )}
 
           {data.description && <CourseDescription text={data.description} />}
 

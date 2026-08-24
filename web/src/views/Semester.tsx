@@ -10,6 +10,7 @@ import { useCourseDetails, type Row } from '../hooks/useCourseDetails';
 import { usePlan } from '../hooks/usePlan';
 import { useScheduleConflicts } from '../hooks/useScheduleConflicts';
 import { useScheduleSelection } from '../hooks/useScheduleSelection';
+import { MAX_ITEMS } from '../state/planContext';
 import './Semester.css';
 
 export function Semester() {
@@ -41,12 +42,12 @@ export function Semester() {
         </div>
 
         <div className="head__side">
-          {/* El "de 10" solo aparece cuando el plan está lleno: es el único
+          {/* El "de N" solo aparece cuando el plan está lleno: es el único
               momento en que el tope importa — mientras hay espacio, decir
-              "4 de 10" no informa nada que "4" no diga ya. */}
+              "4 de 20" no informa nada que "4" no diga ya. */}
           <p className="head__meta tnum">
             {plan.items.length}
-            {plan.full && ' de 10'} materia{plan.items.length === 1 ? '' : 's'}
+            {plan.full && ` de ${MAX_ITEMS}`} materia{plan.items.length === 1 ? '' : 's'}
             {totals.measured > 0 && (
               <>
                 <span className="head__dot">·</span>

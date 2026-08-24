@@ -56,6 +56,26 @@ export function sentence(s: string): string {
 }
 
 /**
+ * 'INGENIERÍA DE SISTEMAS' → 'ING. DE SISTEMAS'; 'Ingenieria industrial'
+ * (sentence-cased, sin tilde — el SIA no es consistente) → 'Ing. industrial';
+ * 'especialización en ingeniería' → 'especialización en ing.'.
+ *
+ * La caja de salida sigue la del propio match, no la del string entero: así
+ * sirve tanto sobre el crudo del SIA (todo en mayúscula) como sobre el
+ * resultado de `sentence()` (mayúscula solo la primera palabra). Con tilde o
+ * sin ella — ambas aparecen en producción para la misma carrera.
+ */
+const ENGINEERING_WORD = /(?<![\p{L}\p{N}])ingenier[ií]a(?![\p{L}\p{N}])/giu;
+
+export function abbreviateEngineering(s: string): string {
+  return s.replace(ENGINEERING_WORD, (m) => {
+    if (m === m.toLocaleUpperCase('es')) return 'ING.';
+    if (m[0] === m[0].toLocaleUpperCase('es')) return 'Ing.';
+    return 'ing.';
+  });
+}
+
+/**
  * Nombres de personas. Van palabra por palabra —'PÉREZ GÓMEZ JUAN' es
  * 'Pérez Gómez Juan'— y no en caja de frase, que los dejaría como 'Pérez gómez
  * juan'. Los separadores incluyen el guion y el apóstrofo por los apellidos

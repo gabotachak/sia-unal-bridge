@@ -3,10 +3,12 @@ import { AppLink } from './AppLink';
 import { useConfirm } from './Confirm';
 import { useTheme } from '../hooks/useTheme';
 import { usePlan } from '../hooks/usePlan';
-import { sentence } from '../lib/format';
-import { clearStored } from '../lib/storage';
+import { planColorVar } from '../lib/courseColors';
+import { abbreviateEngineering, sentence } from '../lib/format';
+import { clearStored, planCodes } from '../lib/storage';
 import { useNav } from '../state/nav';
 import { IconButton } from './IconButton';
+import { Tooltip } from './Tooltip';
 import './Topbar.css';
 
 /** El tamaño de todos los iconos de la barra. Uno solo, o el borde inferior
@@ -31,9 +33,14 @@ export function Topbar() {
   const [ask, confirmDialog] = useConfirm();
   const { screen } = useNav();
   const sel = plan.selection;
+  const double = plan.plans.length > 1;
 
-  /** Empezar de nuevo. Borra el plan y el semestre —todo lo guardado menos el
-   *  tema— y deja el onboarding tal como se ve la primera vez.
+  /** Empezar de nuevo. Borra los planes y el semestre —todo lo guardado menos
+   *  el tema— y deja el onboarding tal como se ve la primera vez.
+   *
+   *  Es la ÚNICA forma de declararse doble titulación tarde o de cambiar de
+   *  plan (D4, PLAN-DOUBLE-TITULATION.md): no hay "agregar un segundo plan"
+   *  en caliente, así que este mismo botón sirve para las dos cosas.
    *
    *  Confirma siempre: es la única acción de la app que destruye datos y no
    *  tiene deshacer. */
@@ -46,14 +53,36 @@ export function Topbar() {
       body:
         n > 0 ? (
           <>
+            {double ? (
+              <>
+                <p>Se borran los planes:</p>
+                {plan.plans.map((p) => (
+                  <p className="plan-attr-row" key={p.program}>
+                    <span
+                      className="chip__code tnum row__plan-tag"
+                      style={{ color: planColorVar(p.program, plan.plans) }}
+                    >
+                      {p.program}
+                    </span>
+                    <b>{abbreviateEngineering(sentence(p.programName))}</b>
+                  </p>
+                ))}
+              </>
+            ) : (
+              <p>
+                Se borra el plan <b>{abbreviateEngineering(sentence(plan.plans[0].programName))}</b>.
+              </p>
+            )}
             <p>
-              Se borran el plan <b>{sel?.programName}</b> y{' '}
-              {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi semestre.
+              Y {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi semestre.
             </p>
             <p>No se puede deshacer.</p>
           </>
         ) : (
-          <p>Se borra el plan elegido y todo vuelve al comienzo.</p>
+          <p>
+            Se {double ? 'borran los planes elegidos' : 'borra el plan elegido'} y todo vuelve al
+            comienzo.
+          </p>
         ),
     });
     if (!ok) return;
@@ -74,6 +103,22 @@ export function Topbar() {
 
   const themeLabel =
     theme === 'system' ? 'Tema: el del sistema' : theme === 'light' ? 'Tema: claro' : 'Tema: oscuro';
+
+  // El botón en sí, sin el hover: con un plan el nombre ya está escrito en
+  // `.planchip__name` y repetirlo en un tooltip sería ruido en cada paso del
+  // mouse. Con dos, el nombre se cayó de la barra (arriba) y el tooltip es lo
+  // único que lo dice completo.
+  const planChip = sel && (
+    <button type="button" className="planchip" onClick={startOver}>
+      <span className="planchip__code tnum">{double ? planCodes(plan.plans) : sel.program}</span>
+      {!double && (
+        <span className="planchip__name">{abbreviateEngineering(sentence(sel.programName))}</span>
+      )}
+      <span className="planchip__campus">{sel.campusName.replace(/^SEDE\s+/i, '')}</span>
+      <Trash2 className="planchip__caret" size={14} strokeWidth={STROKE} aria-hidden="true" />
+      <span className="sr-only">Empezar de nuevo</span>
+    </button>
+  );
 
   return (
     <header className="bar">
@@ -100,15 +145,40 @@ export function Topbar() {
             que hay debajo, y al tocarlo se empieza de cero. No es un selector
             —cambiar de plan sin más dejaba un semestre a medio borrar— así que
             no lleva el chevron de "elegí entre varios" sino una caneca, que es
-            lo que de verdad pasa al tocarlo. */}
-        {sel && (
-          <button type="button" className="planchip" onClick={startOver}>
-            <span className="planchip__code tnum">{sel.program}</span>
-            <span className="planchip__name">{sentence(sel.programName)}</span>
-            <span className="planchip__campus">{sel.campusName.replace(/^SEDE\s+/i, '')}</span>
-            <Trash2 className="planchip__caret" size={14} strokeWidth={STROKE} aria-hidden="true" />
-            <span className="sr-only">Empezar de nuevo</span>
-          </button>
+            lo que de verdad pasa al tocarlo.
+
+            Con un plan es BYTE POR BYTE el de `main` (D2, D4). Con dos, los
+            códigos van juntos y el nombre se cae: no caben dos, y el nombre
+            completo queda en el mismo hover que usa el resto de la app
+            (Tooltip), no en un `title` nativo aparte. */}
+        {double ? (
+          <Tooltip
+            content={
+              <>
+                {/* `.tt-row` es para pares label/valor con `space-between` —
+                    con nombres de largo distinto entre los dos planes,
+                    empujaba cada nombre a un punto distinto y desalineaba el
+                    código. `.plan-attr-row` (components/PlanAttributionRow.css)
+                    en vez de `PlanAttributionRow` en sí: acá no hay tipología
+                    que atribuir, solo el código pegado al nombre. */}
+                {plan.plans.map((p) => (
+                  <p className="plan-attr-row" key={p.program}>
+                    <span
+                      className="chip__code tnum row__plan-tag"
+                      style={{ color: planColorVar(p.program, plan.plans) }}
+                    >
+                      {p.program}
+                    </span>
+                    {abbreviateEngineering(sentence(p.programName))}
+                  </p>
+                ))}
+              </>
+            }
+          >
+            {planChip}
+          </Tooltip>
+        ) : (
+          planChip
         )}
 
         {/* Los tres destinos llevan `iconbtn--dest`: es lo que los esconde

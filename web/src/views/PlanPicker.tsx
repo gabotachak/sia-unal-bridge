@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Building2, Check, GraduationCap, Layers, TriangleAlert } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ArrowLeft,
+  Building2,
+  Check,
+  Combine,
+  GraduationCap,
+  Layers,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
 import { routes } from '../api/client';
 import type {
   CampusesResponse,
@@ -13,8 +22,8 @@ import { Layout } from '../components/Layout';
 import { SearchInput } from '../components/SearchInput';
 import { useConfirm } from '../components/Confirm';
 import { Empty, Fault, Loading } from '../components/States';
-import { fold, sentence } from '../lib/format';
-import { selectionId } from '../lib/storage';
+import { abbreviateEngineering, fold, sentence } from '../lib/format';
+import { planCodes, planNames, planSelection, selectionId, type Selection } from '../lib/storage';
 import { useNav } from '../state/nav';
 import './PlanPicker.css';
 
@@ -32,6 +41,12 @@ import './PlanPicker.css';
  * el nivel son tres opciones, la sede son nueve. Partirlos en pantallas sería
  * cobrar dos clics de peaje para llegar a la única lista que de verdad hay que
  * mirar.
+ *
+ * Doble titulación (PLAN-DOUBLE-TITULATION.md): una casilla, sin marcar por
+ * defecto, deja elegir DOS planes en vez de uno. Toda la elección vive en un
+ * borrador local de esta pantalla (`draft`) y `plan.select()` se llama una
+ * sola vez, con la lista completa — así nunca queda un estado a medias
+ * guardado en el navegador.
  */
 export function PlanPicker() {
   const plan = usePlan();
@@ -45,6 +60,22 @@ export function PlanPicker() {
   const [level, setLevel] = useState(current?.level ?? 'pregrado');
   const [campus, setCampus] = useState(current?.campus ?? '');
   const [q, setQ] = useState('');
+
+  // La casilla nace de lo que ya hay, así que volver a esta pantalla con dos
+  // planes la encuentra marcada sola. El borrador es SOLO de esta pantalla:
+  // mientras no haya dos planes elegidos, nada de esto tocó el navegador.
+  const [double, setDouble] = useState(() => plan.plans.length > 1);
+  const [draft, setDraft] = useState<Selection[]>([]);
+  // Con el primer plan del borrador puesto, sede y nivel quedan fijos (D3):
+  // la doble titulación no cruza sedes ni mezcla niveles.
+  const locked = draft.length > 0;
+
+  // Elegir sede revela doble titulación + plan más abajo; el scroll los sigue
+  // solo, en vez de dejar que el clic entierre lo nuevo fuera de vista.
+  const revealRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (campus) revealRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [campus]);
 
   const levels = useApi<LevelsResponse>(routes.levels());
   const campuses = useApi<CampusesResponse>(routes.campuses(level));
@@ -88,15 +119,69 @@ export function PlanPicker() {
     campuses.data?.campuses.find((c) => c.code === campus)?.name.replace(/^SEDE\s+/i, '') ?? campus;
 
   /**
-   * Elegir. Es la única acción de la app que destruye trabajo del usuario, así
-   * que el precio se dice antes de cobrarlo.
+   * Fija el conjunto de planes de una vez. Es la única función que llama a
+   * `plan.select()`, y lo hace una sola vez por elección — el borrador de
+   * doble titulación nunca toca el navegador antes de llegar acá.
    *
-   * El semestre guardado pertenece al plan desde el que se armó —la tipología
-   * y los grupos visibles dependen del plan, no de la asignatura— así que
-   * arrastrarlo a otro plan mostraría datos que ahí no existen.
+   * El precio se dice antes de cobrarlo: es la única acción de la app que
+   * destruye trabajo del usuario, y solo cuando de verdad destruye algo.
+   * `planSelection` (misma regla que usa `PlanApi.select` por dentro) dice
+   * si este conjunto es 'wipe' (hay que confirmar — ya había un plan
+   * elegido, y es OTRO), 'filter' (elegir el primer plan de todos: no hay
+   * nada que confirmar, aunque haya materias guardadas de antes — ver
+   * `applySelect`) o 'keep' (volver al tablero de siempre).
    */
+  async function commit(nextPlans: Selection[]) {
+    const outcome = planSelection(plan.plans, nextPlans);
+    if (!outcome) return; // el picker ya impide que esto pase (D3, MAX_PLANS)
+
+    if (outcome === 'wipe' && plan.items.length > 0) {
+      const n = plan.items.length;
+      const double = nextPlans.length > 1;
+      const ok = await ask({
+        title: double ? 'Elegir dos planes' : 'Cambiar de plan',
+        danger: true,
+        confirmLabel: double ? 'Elegir estos dos planes' : `Cambiar a ${nextPlans[0].program}`,
+        body: (
+          <>
+            <p>
+              {double ? (
+                <>
+                  Elegir <b>{planNames(nextPlans)}</b> reinicia el tablero.
+                </>
+              ) : (
+                <>
+                  Pasar a <b>{abbreviateEngineering(nextPlans[0].programName)}</b> reinicia el tablero.
+                </>
+              )}
+            </p>
+            <p>
+              Se va a borrar {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi
+              semestre, porque {n === 1 ? 'es' : 'son'}{' '}
+              {plan.plans.length > 1 ? (
+                <>
+                  de los planes <b>{planNames(plan.plans)}</b>
+                </>
+              ) : (
+                <>
+                  del plan <b>{planNames(plan.plans)}</b>
+                </>
+              )}{' '}
+              y sus grupos no son los mismos aquí.
+            </p>
+          </>
+        ),
+      });
+      if (!ok) return;
+    }
+
+    const ok = plan.select(nextPlans);
+    if (!ok) return;
+    navigate({ name: 'program', selection: nextPlans[0] }, { replace: true });
+  }
+
   async function choose(p: ProgramRef) {
-    const next = {
+    const next: Selection = {
       level,
       campus,
       campusName: p.campus_name,
@@ -106,31 +191,14 @@ export function PlanPicker() {
       programName: p.name,
     };
 
-    const isSwitch = current && selectionId(current) !== selectionId(next);
-    if (isSwitch && plan.items.length > 0) {
-      const n = plan.items.length;
-      const ok = await ask({
-        title: 'Cambiar de plan',
-        danger: true,
-        confirmLabel: `Cambiar a ${p.code}`,
-        body: (
-          <>
-            <p>
-              Pasar a <b>{p.name}</b> reinicia el tablero.
-            </p>
-            <p>
-              Se va a borrar {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi
-              semestre, porque {n === 1 ? 'es' : 'son'} del plan <b>{current.programName}</b> y sus
-              grupos no son los mismos aquí.
-            </p>
-          </>
-        ),
-      });
-      if (!ok) return;
+    // Con la casilla marcada, el primer clic no navega: lo deja en el
+    // borrador y espera al segundo.
+    if (double && draft.length === 0) {
+      setDraft([next]);
+      return;
     }
 
-    plan.select(next);
-    navigate({ name: 'program', selection: next }, { replace: true });
+    await commit(double ? [draft[0], next] : [next]);
   }
 
   const first = !current; // primera vez: no hay nada que perder ni a dónde volver
@@ -163,9 +231,14 @@ export function PlanPicker() {
               Todo lo demás cuelga de aquí. El mismo código de plan existe en varias sedes,
               así que preguntar sin decir dónde no significa nada.
             </>
+          ) : plan.plans.length > 1 ? (
+            <>
+              Tus planes son <b>{planNames(plan.plans)}</b> en {current.campusName.replace(/^SEDE\s+/i, '')}.
+            </>
           ) : (
             <>
-              Tu plan es <b>{current.programName}</b> en {current.campusName.replace(/^SEDE\s+/i, '')}.
+              Tu plan es <b>{abbreviateEngineering(current.programName)}</b> en{' '}
+              {current.campusName.replace(/^SEDE\s+/i, '')}.
             </>
           )}
         </p>
@@ -175,7 +248,7 @@ export function PlanPicker() {
             <TriangleAlert size={15} strokeWidth={2} aria-hidden="true" />
             Elegir otro plan borra{' '}
             {plan.items.length === 1 ? 'la materia' : `las ${plan.items.length} materias`} de Mi
-            semestre: sus grupos y su tipología son de este plan.
+            semestre: sus grupos y su tipología son de {plan.plans.length > 1 ? 'estos planes' : 'este plan'}.
           </p>
         )}
 
@@ -185,36 +258,48 @@ export function PlanPicker() {
             onClick={() => navigate({ name: 'program', selection: current })}
           >
             <ArrowLeft size={15} strokeWidth={1.75} aria-hidden="true" />
-            seguir con {current.program}
+            seguir con {planCodes(plan.plans)}
           </button>
         )}
       </header>
 
+      {/* Nada de la cascada se muestra hasta tener los niveles: son la base
+          de todo lo demás (sede depende de nivel), y mostrar Sede/Doble
+          titulación/Plan vacíos mientras tanto es mostrar una elección que
+          todavía no existe. */}
+      {levels.error ? (
+        <Fault error={levels.error} onRetry={() => levels.reload()} />
+      ) : !levels.data ? (
+        <Loading elapsed={levels.elapsed} attempt={levels.attempt} what="Trayendo los niveles" />
+      ) : (
+        <>
       {/* ── 1. Nivel ─────────────────────────────────────────────────
           No está hardcodeado a los tres de siempre: sale de /v1/levels,
           igual que en el back. Si la UNAL agrega uno, aparece acá solo. */}
-      <section className="step rise" style={{ animationDelay: '180ms' }}>
+      <section className="step rise" style={{ animationDelay: '150ms' }}>
         <h2 className="step__label">
           <GraduationCap size={16} strokeWidth={1.75} aria-hidden="true" />
           Nivel
         </h2>
         <div className="chips">
-          {(levels.data?.levels ?? []).map((l) => (
+          {levels.data.levels.map((l) => (
             <button
               key={l.slug}
               className={`chip ${l.slug === level ? 'is-on' : ''}`}
               onClick={() => setLevel(l.slug)}
               aria-pressed={l.slug === level}
+              disabled={locked}
             >
               {l.slug === level && <Check size={14} strokeWidth={2.5} aria-hidden="true" />}
               {l.name}
             </button>
           ))}
         </div>
+        {locked && <p className="step__hint">La doble titulación es dentro de una sede y un nivel.</p>}
       </section>
 
       {/* ── 2. Sede ───────────────────────────────────────────────── */}
-      <section className="step rise" style={{ animationDelay: '230ms' }}>
+      <section className="step rise" style={{ animationDelay: '200ms' }}>
         <h2 className="step__label">
           <Building2 size={16} strokeWidth={1.75} aria-hidden="true" />
           Sede
@@ -234,6 +319,7 @@ export function PlanPicker() {
                 className={`chip ${c.code === campus ? 'is-on' : ''}`}
                 onClick={() => setCampus(c.code)}
                 aria-pressed={c.code === campus}
+                disabled={locked}
               >
                 {c.code === campus && <Check size={14} strokeWidth={2.5} aria-hidden="true" />}
                 {c.name.replace(/^SEDE\s+/i, '')}
@@ -242,24 +328,91 @@ export function PlanPicker() {
             ))}
           </div>
         )}
+        {locked && <p className="step__hint">La doble titulación es dentro de una sede y un nivel.</p>}
       </section>
 
-      {/* ── 3. Plan ───────────────────────────────────────────────── */}
-      <section className="step rise" style={{ animationDelay: '280ms' }}>
-        <h2 className="step__label">
-          <Layers size={16} strokeWidth={1.75} aria-hidden="true" />
-          Plan de estudios
-          {total > 0 && (
-            <span className="step__count tnum">
-              {shown === total ? total : `${shown}/${total}`}
-            </span>
-          )}
-        </h2>
+      {/* Paso a paso: sin sede no hay qué doble-titular ni qué plan listar,
+          así que ninguna de las dos secciones existe todavía — no es un
+          hint pidiendo sede, es que la pregunta no aplica aún. En cuanto
+          `campus` tiene valor, las dos entran de una con `.rise` (el mismo
+          fundido de toda la pantalla: nada nuevo que enseñar). */}
+      {campus && (
+        <div ref={revealRef}>
+          {/* La puerta de la minoría, y la única forma de que se enteren de
+              que existe. Chips sí/no en vez de checkbox: mismo componente
+              que nivel y sede, mutuamente excluyentes — nunca los dos
+              prendidos ni los dos apagados. "No" es el default, así la
+              pantalla sin tocar es la de hoy. */}
+          <section className="step rise" style={{ animationDelay: '50ms' }}>
+            <h2 className="step__label">
+              <Combine size={16} strokeWidth={1.75} aria-hidden="true" />
+              ¿Doble titulación?
+            </h2>
+            <div className="chips">
+              <button
+                className={`chip ${!double ? 'is-on' : ''}`}
+                onClick={() => {
+                  setDouble(false);
+                  setDraft([]);
+                }}
+                aria-pressed={!double}
+              >
+                {!double && <Check size={14} strokeWidth={2.5} aria-hidden="true" />}
+                No
+              </button>
+              <button
+                className={`chip ${double ? 'is-on' : ''}`}
+                onClick={() => {
+                  setDouble(true);
+                  setDraft([]);
+                }}
+                aria-pressed={double}
+              >
+                {double && <Check size={14} strokeWidth={2.5} aria-hidden="true" />}
+                Sí
+              </button>
+            </div>
+            {/* El progreso del borrador vive DENTRO de esta sección, como
+                una variante del hint de siempre — no una segunda caja
+                aparte con su propio chip de tamaño completo. Ese pill del
+                tamaño de "Sí"/"No" al lado de una frase suelta se leía como
+                un elemento roto, no como el segundo paso de la misma
+                pregunta. */}
+            {double && draft.length > 0 ? (
+              <p className="step__hint dt-draft">
+                <span className="chip chip--sm is-on">
+                  <Check size={12} strokeWidth={2.5} aria-hidden="true" />
+                  {draft[0].program}
+                  <button
+                    type="button"
+                    className="dt-draft__x"
+                    onClick={() => setDraft([])}
+                    aria-label={`Quitar ${draft[0].program} del borrador`}
+                  >
+                    <X size={11} strokeWidth={2} aria-hidden="true" />
+                  </button>
+                </span>{' '}
+                elegido — falta el segundo, más abajo.
+              </p>
+            ) : (
+              <p className="step__hint">
+                {double ? 'Elige tu primer plan más abajo.' : 'Elige tus dos planes; el horario los junta.'}
+              </p>
+            )}
+          </section>
 
-        {!campus ? (
-          <p className="step__hint">Elige una sede para ver sus planes.</p>
-        ) : (
-          <>
+          {/* ── Plan ─────────────────────────────────────────────────── */}
+          <section className="step rise" style={{ animationDelay: '100ms' }}>
+            <h2 className="step__label">
+              <Layers size={16} strokeWidth={1.75} aria-hidden="true" />
+              Plan de estudios
+              {total > 0 && (
+                <span className="step__count tnum">
+                  {shown === total ? total : `${shown}/${total}`}
+                </span>
+              )}
+            </h2>
+
             <SearchInput
               value={q}
               onChange={setQ}
@@ -288,14 +441,21 @@ export function PlanPicker() {
                     </h3>
                     <ul className="plans">
                       {g.items.map((p) => {
-                        const mine =
-                          current &&
-                          selectionId(current) === selectionId({ level, campus, program: p.code });
+                        const identity = { level, campus, program: p.code };
+                        // "Ya es mío" (committed, plan.owns) y "está en el
+                        // borrador" (draft, doble titulación a medio elegir)
+                        // se marcan igual, pero solo el segundo se deshabilita:
+                        // volver a tocar tu propio plan sigue siendo el mismo
+                        // gesto de siempre (refresca sus nombres).
+                        const already = plan.owns(identity);
+                        const inDraft = draft.some((d) => selectionId(d) === selectionId(identity));
+                        const marked = already || inDraft;
                         return (
                           <li key={`${p.faculty_code}-${p.code}`}>
                             <button
-                              className={`plan ${mine ? 'is-mine' : ''}`}
+                              className={`plan ${marked ? 'is-mine' : ''}`}
                               onClick={() => choose(p)}
+                              disabled={inDraft}
                             >
                               <span className="plan__code tnum">{p.code}</span>
                               <span className="plan__name">{sentence(p.name)}</span>
@@ -311,7 +471,7 @@ export function PlanPicker() {
                               {p.catalog_fetched_at && (
                                 <span className="sr-only"> — catálogo ya cacheado</span>
                               )}
-                              {mine && (
+                              {marked && (
                                 <Check
                                   className="plan__check"
                                   size={15}
@@ -327,9 +487,11 @@ export function PlanPicker() {
                   </section>
                 ))
               ))}
-          </>
-        )}
-      </section>
+          </section>
+        </div>
+      )}
+        </>
+      )}
     </Layout>
   );
 }

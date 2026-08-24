@@ -8,7 +8,11 @@
   position: fixed;
   z-index: 60;
   pointer-events: none;
-  max-width: 20rem;
+  /* 20rem dejaba a un nombre de carrera en mayúscula negrita —"CIENCIAS DE
+     LA COMPUTACIÓN"— sin sitio para el tag que va justo detrás: se veía
+     bien dentro del ancho pero el tag igual se caía a su propia línea. Con
+     26rem entra completo (PlanTypologyInfo, Program.tsx / Course.tsx). */
+  max-width: 26rem;
   width: max-content;
   padding: 0.65rem 0.8rem;
   border: 1px solid var(--rule-strong);

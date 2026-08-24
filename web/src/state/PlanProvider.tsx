@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  addToPlan,
+  applySelect,
   itemId,
   loadPlan,
-  loadSelection,
+  loadPlans,
   savePlan,
-  saveSelection,
+  savePlans,
   selectionId,
   type PlanItem,
   type Selection,
@@ -12,14 +14,15 @@ import {
 import { MAX_ITEMS, PlanContext, type PlanApi } from './planContext';
 
 /**
- * El estado compartido de la app: la lista del semestre.
+ * El estado compartido de la app: la lista del semestre y los planes
+ * elegidos (uno, o dos con doble titulación — PLAN-DOUBLE-TITULATION.md).
  *
  * Hasta acá cada pantalla se bastaba sola —pedía sus datos y los pintaba— así
  * que no hacía falta nada. Esta lista es distinta: se agrega desde el catálogo,
  * se agrega desde el detalle, se cuenta en el raíl y se lee en /semestre. Ese
  * es el momento en que un dato tiene que vivir por encima de las pantallas.
  *
- * Context es la respuesta de React a eso, y alcanza de sobra: son ~60 líneas
+ * Context es la respuesta de React a eso, y alcanza de sobra: son ~90 líneas
  * legibles. Redux o Zustand resolverían un problema de escala que esta app no
  * tiene.
  */
@@ -41,10 +44,10 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
     setItems((prev) => {
       // Actualizar en función del valor anterior, no del que capturó el
       // render: es la forma correcta cuando el nuevo estado depende del viejo.
-      if (prev.length >= MAX_ITEMS) return prev;
-      if (prev.some((i) => itemId(i) === itemId(item))) return prev;
+      const next = addToPlan(prev, item, Date.now());
+      if (next === null) return prev;
       ok = true;
-      return [...prev, { ...item, addedAt: Date.now() }];
+      return next;
     });
     return ok;
   }, []);
@@ -55,40 +58,35 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
 
   const clear = useCallback(() => setItems([]), []);
 
-  // El plan elegido vive acá y no en cada pantalla porque cambiarlo tiene un
-  // efecto sobre la lista: son un solo estado con dos caras.
-  const [selection, setSelection] = useState<Selection | null>(() => loadSelection());
+  // Los planes elegidos viven acá y no en cada pantalla porque cambiarlos
+  // tiene un efecto sobre la lista: son un solo estado con dos caras.
+  const [plans, setPlans] = useState<Selection[]>(() => loadPlans());
 
   useEffect(() => {
-    saveSelection(selection);
-  }, [selection]);
+    savePlans(plans);
+  }, [plans]);
+
+  const owns = useCallback(
+    (s: Pick<Selection, 'level' | 'campus' | 'program'>) =>
+      plans.some((p) => selectionId(p) === selectionId(s)),
+    [plans],
+  );
 
   const select = useCallback(
-    (next: Selection) => {
-      // Elegir el MISMO plan otra vez no borra nada: pasa cada vez que se
-      // vuelve al tablero, y perder el semestre por eso sería absurdo.
-      if (selection && selectionId(selection) === selectionId(next)) {
-        // Es el MISMO plan: no se borra nada. Igual se pisa el guardado, que
-        // es cómo un plan adoptado desde una URL pegada —donde solo se sabía
-        // el código— se queda con su nombre de verdad al pasar por la sede.
-        setSelection(next);
-        return;
-      }
-
-      if (selection) {
-        // Cambio de plan: el semestre se reinicia entero.
-        setItems([]);
-      } else {
-        // Adoptar un plan cuando no había ninguno no es un cambio, así que no
-        // se borra todo. Sí se descartan las materias que no son de este plan:
-        // pueden haber quedado de antes de que el plan fuera único, y en este
-        // plan sus grupos no son los mismos.
-        setItems((prev) => prev.filter((i) => selectionId(i) === selectionId(next)));
-      }
-
-      setSelection(next);
+    (next: Selection[]) => {
+      // 'wipe' reinicia el semestre entero (conjunto distinto de verdad);
+      // 'filter' descarta solo lo que no sea de ningún plan nuevo (no había
+      // NINGÚN plan elegido todavía, así que no es un cambio); 'keep' no
+      // toca items —el MISMO conjunto no borra nada, y perder el semestre
+      // por eso sería absurdo. Toda la regla vive en `applySelect`, testeada
+      // sin React (lib/plans.test.ts).
+      const result = applySelect(plans, items, next);
+      if (!result) return false;
+      setItems(result.items);
+      setPlans(result.plans);
+      return true;
     },
-    [selection],
+    [plans, items],
   );
 
   // useMemo evita construir un objeto nuevo en cada repintado: si cambiara la
@@ -102,10 +100,12 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       remove,
       clear,
       full: items.length >= MAX_ITEMS,
-      selection,
+      selection: plans[0] ?? null,
+      plans,
+      owns,
       select,
     }),
-    [items, has, add, remove, clear, selection, select],
+    [items, has, add, remove, clear, plans, owns, select],
   );
 
   return <PlanContext value={api}>{children}</PlanContext>;

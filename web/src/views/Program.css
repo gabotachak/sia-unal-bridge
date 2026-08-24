@@ -205,6 +205,17 @@
   color: var(--warn);
 }
 
+/* El chip de a qué plan pertenece la fila (doble titulación,
+   PLAN-DOUBLE-TITULATION.md). Vive en `.row__name` —la celda que cede
+   ancho— y no en `.row__code`, que es angosta a propósito y no tiene sitio
+   para un segundo token. */
+.row__plan-tag {
+  flex: none;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+}
+
 .row__credits {
   text-align: right;
   font-size: var(--t-small);

@@ -50,6 +50,26 @@
   margin-top: var(--gap);
 }
 
+/* El chip del primer plan elegido, en línea con el resto del hint —no un
+   pill del tamaño de "Sí"/"No" flotando aparte, que se leía como un
+   elemento roto en vez del segundo paso de la misma pregunta. */
+.dt-draft .chip {
+  vertical-align: middle;
+  margin-right: var(--gap-xs);
+}
+
+/* El × que descongela sede y nivel: mismo hueco que el resto de iconos
+   dentro de un `.chip`, pero clicable aparte del chip mismo. */
+.dt-draft__x {
+  display: inline-flex;
+  margin-left: 0.1rem;
+  color: inherit;
+  opacity: 0.7;
+}
+.dt-draft__x:hover {
+  opacity: 1;
+}
+
 /* ── Un escalón ─────────────────────────────────────────────────── */
 
 .step {
@@ -76,7 +96,7 @@
 }
 
 .step__hint {
-  margin: 0;
+  margin: var(--gap-sm) 0 0;
   color: var(--text-faint);
   font-size: var(--t-small);
 }

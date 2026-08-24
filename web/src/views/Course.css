@@ -28,6 +28,14 @@
    valores, y ese medio milímetro de diferencia entre pantallas es de lo
    que está hecha la sensación de estar en dos apps distintas. */
 
+/* A qué plan se atribuye esta materia — solo con doble titulación (D6,
+   PLAN-DOUBLE-TITULATION.md). El diseño en sí (PlanAttributionRow) vive en
+   components/, compartido con el catálogo y con Mi semestre/Mi horario —
+   acá solo el margen de página, que es de esta pantalla y de nadie más. */
+.course__plan-note {
+  margin: 0 0 var(--gap-lg);
+}
+
 .course__desc-wrap {
   max-width: 46rem;
   margin: 0 0 var(--gap-lg);

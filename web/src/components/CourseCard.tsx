@@ -2,8 +2,12 @@ import { useState } from 'react';
 import { Clock, Trash2, TriangleAlert, User } from 'lucide-react';
 import type { ClassSession } from '../api/types';
 import type { Row } from '../hooks/useCourseDetails';
+import { usePlan } from '../hooks/usePlan';
+import { CopyCode } from './CopyCode';
+import { PlanAttributionRow } from './PlanAttributionRow';
 import { formatAge, formatScheduleSummary, groupSchedule, titleCase } from '../lib/format';
 import { itemId } from '../lib/storage';
+import { typologyLetter, typologySlug } from '../lib/typology';
 import { AppLink } from './AppLink';
 import { IconButton } from './IconButton';
 import { SeatsFigure } from './Seats';
@@ -47,6 +51,15 @@ export function CourseCard({
   const totalSeats = all.reduce((n, s) => n + (s.seats?.available ?? 0), 0);
   const noGroups = status === 'done' && detail && all.length === 0;
   const groupName = itemId(item);
+
+  // D10: la sigla del plan por fila, solo con doble titulación. Con un plan
+  // esta tarjeta es byte por byte la de `main`.
+  const plans = usePlan().plans;
+  const showPlan = plans.length > 1;
+  const cardPlan = plans.find((p) => p.program === item.program) ?? {
+    program: item.program,
+    programName: item.program,
+  };
 
   /**
    * Una materia de PEAMA puede traer 20+ grupos. Sin tope, cada tarjeta de
@@ -152,18 +165,22 @@ export function CourseCard({
   return (
     <li className={`card ${status === 'loading' ? 'is-loading' : ''}`}>
       <header className="card__head table__row">
-        <span className="card__code tnum col-code">{item.code}</span>
+        <CopyCode code={item.code} className="card__code tnum col-code" />
         {nameLink}
         <Tooltip
           content={
-            <>
-              <p className="tt-eyebrow">Tipología</p>
-              <p className="tt-title">{item.typology}</p>
-            </>
+            showPlan ? (
+              <PlanAttributionRow attr={{ plan: cardPlan, typology: item.typology }} plans={plans} />
+            ) : (
+              <>
+                <p className="tt-eyebrow">Tipología</p>
+                <p className="tt-title">{item.typology}</p>
+              </>
+            )
           }
         >
-          <span className={`tag tag--${slugTypology(item.typology)} col-typ`}>
-            {shortTypology(item.typology)}
+          <span className={`tag tag--${typologySlug(item.typology)} col-typ`}>
+            {typologyLetter(item.typology)}
           </span>
         </Tooltip>
         <span className="card__credits tnum col-cr" aria-label={`${item.credits} créditos`}>
@@ -371,16 +388,4 @@ function ScheduleTooltip({ when, schedule }: { when: string; schedule: ClassSess
       ))}
     </ul>
   );
-}
-
-/** 'FUND. OBLIGATORIA (B)' → 'B'. Misma lógica que Program.tsx. */
-function shortTypology(t: string): string {
-  return t.match(/\(([^)]+)\)/)?.[1] ?? t.slice(0, 3);
-}
-
-function slugTypology(t: string): string {
-  if (t.startsWith('LIBRE')) return 'libre';
-  if (t.includes('OBLIGATORIA')) return 'obligatoria';
-  if (t.includes('OPTATIVA')) return 'optativa';
-  return 'otra';
 }

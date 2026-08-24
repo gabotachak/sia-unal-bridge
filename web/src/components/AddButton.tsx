@@ -1,6 +1,7 @@
 import { Ban, Check, Plus, Trash2 } from 'lucide-react';
 import { usePlan } from '../hooks/usePlan';
-import { itemId, selectionId, type PlanItem } from '../lib/storage';
+import { itemId, type PlanItem } from '../lib/storage';
+import { MAX_ITEMS } from '../state/planContext';
 import { Tooltip } from './Tooltip';
 import './AddButton.css';
 
@@ -16,19 +17,29 @@ export function AddButton({ item, variant = 'plus' }: Props) {
   const id = itemId(item);
   const added = plan.has(id);
 
-  // El semestre es de UN plan. Una asignatura de otro plan traería grupos y
-  // tipología que no son los que este plan ve, así que el botón se apaga en
-  // vez de dejar mezclar. Quitar sigue permitido: sacar nunca hace daño.
-  const foreign = !!plan.selection && selectionId(plan.selection) !== selectionId(item);
-  const blocked = !added && (plan.full || foreign);
+  // El semestre es de MIS planes —uno, o dos con doble titulación
+  // (PLAN-DOUBLE-TITULATION.md). Una asignatura de un plan que no es mío
+  // traería grupos y tipología que no son los que veo, así que el botón se
+  // apaga en vez de dejar mezclar. Quitar sigue permitido: sacar nunca hace
+  // daño.
+  const foreign = plan.plans.length > 0 && !plan.owns(item);
+
+  // D7: una asignatura, un plan. El guardia real vive en `PlanProvider.add()`
+  // (por `code`, no por `itemId`); acá solo se anticipa el estado para no
+  // ofrecer un botón que va a rebotar, y para decir DE QUÉ plan ya está.
+  const dupOf = !added ? plan.items.find((i) => i.code === item.code) : undefined;
+
+  const blocked = !added && (plan.full || foreign || !!dupOf);
 
   const label = added
     ? 'Quitar del semestre'
     : foreign
       ? 'Esta asignatura es de otro plan'
-      : plan.full
-        ? 'El semestre está lleno'
-        : 'Agregar al semestre';
+      : dupOf
+        ? `Ya está en tu semestre desde el plan ${dupOf.program}`
+        : plan.full
+          ? 'El semestre está lleno'
+          : 'Agregar al semestre';
 
   // El tooltip puede permitirse decir más que el nombre accesible: acá es
   // donde alguien se entera de POR QUÉ está apagado el botón, no solo de
@@ -41,10 +52,15 @@ export function AddButton({ item, variant = 'plus' }: Props) {
         los dejaría mal contados.
       </p>
     </>
+  ) : dupOf ? (
+    <>
+      <p className="tt-title">{label}</p>
+      <p className="tt-body">Se inscribe por un solo plan.</p>
+    </>
   ) : blocked ? (
     <>
       <p className="tt-title">{label}</p>
-      <p className="tt-body">Hasta 10 materias a la vez. Quita alguna para agregar esta.</p>
+      <p className="tt-body">Hasta {MAX_ITEMS} materias a la vez. Quita alguna para agregar esta.</p>
     </>
   ) : (
     <p className="tt-title">{label}</p>

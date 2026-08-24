@@ -75,3 +75,10 @@ los grupos de una misma materia vuelven siempre con la edad idéntica.
 **La sede va primero, siempre.** No es capricho de diseño: `program.code` se repite entre
 sedes (136 de 852), así que una ruta sin sede no identifica nada. La forma de las URLs
 del front imita la de la API por esa razón.
+
+**Doble titulación: dos planes son dos fuentes para el mismo horario, no dos catálogos.**
+No hay "plan activo" ni pestañas: con dos planes elegidos el catálogo es la unión,
+deduplicada por `code`, y el código compartido gana la tipología de mayor rango (D6,
+`docs/PLAN-DOUBLE-TITULATION.md`). Es lo que hace que el choque de horario cruzado salga
+gratis —`computeConflicts` ya compara por `itemId`, que lleva el plan adentro— y que la
+feature entera sea más chica que la alternativa de pestañas, no más grande.

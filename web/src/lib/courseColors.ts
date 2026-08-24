@@ -18,3 +18,20 @@ const COURSE_COLOR_VARS = [
 export function courseColorVar(index: number): string {
   return `var(${COURSE_COLOR_VARS[index % COURSE_COLOR_VARS.length]})`;
 }
+
+/**
+ * El color categórico de UN PLAN — mismo truco que `courseColorVar`, pero
+ * por posición en `plan.plans` en vez de en Mi semestre. Con doble
+ * titulación, cada plan se queda con un color y lo lleva SIEMPRE que su
+ * código aparece (`PlanAttributionRow`, el hover de tipología y el chip
+ * del plan elegido en Topbar): se reconoce cuál es cuál de un vistazo sin
+ * pisar los 4 colores de significado ni la tipología, que ya usan
+ * jade/musgo/ocre/óxido.
+ *
+ * No encontrarlo (código de un plan ajeno, D6 §5) cae al color 0: mejor un
+ * color de más que uno que no aparece.
+ */
+export function planColorVar(program: string, plans: readonly { program: string }[]): string {
+  const i = plans.findIndex((p) => p.program === program);
+  return courseColorVar(i < 0 ? 0 : i);
+}

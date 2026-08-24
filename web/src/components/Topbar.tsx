@@ -5,7 +5,7 @@ import { useTheme } from '../hooks/useTheme';
 import { usePlan } from '../hooks/usePlan';
 import { planColorVar } from '../lib/courseColors';
 import { abbreviateEngineering, sentence } from '../lib/format';
-import { clearStored, planCodes, planNames } from '../lib/storage';
+import { clearStored, planCodes } from '../lib/storage';
 import { useNav } from '../state/nav';
 import { IconButton } from './IconButton';
 import { Tooltip } from './Tooltip';
@@ -53,9 +53,28 @@ export function Topbar() {
       body:
         n > 0 ? (
           <>
+            {double ? (
+              <>
+                <p>Se borran los planes:</p>
+                {plan.plans.map((p) => (
+                  <p className="plan-attr-row" key={p.program}>
+                    <span
+                      className="chip__code tnum row__plan-tag"
+                      style={{ color: planColorVar(p.program, plan.plans) }}
+                    >
+                      {p.program}
+                    </span>
+                    <b>{abbreviateEngineering(sentence(p.programName))}</b>
+                  </p>
+                ))}
+              </>
+            ) : (
+              <p>
+                Se borra el plan <b>{abbreviateEngineering(sentence(plan.plans[0].programName))}</b>.
+              </p>
+            )}
             <p>
-              Se borran {double ? 'los planes' : 'el plan'} <b>{planNames(plan.plans)}</b> y{' '}
-              {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi semestre.
+              Y {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi semestre.
             </p>
             <p>No se puede deshacer.</p>
           </>

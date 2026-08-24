@@ -9,3 +9,7 @@ sia-api.gabotachak.dev {
 sia.gabotachak.dev {
 	reverse_proxy localhost:13000
 }
+
+sia-test.gabotachak.dev {
+	reverse_proxy localhost:23000
+}

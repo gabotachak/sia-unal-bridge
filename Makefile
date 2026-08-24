@@ -1,4 +1,4 @@
-.PHONY: run test migrate migrate-down migrate-test lint check-env deploy-web deploy-api deploy-jobs
+.PHONY: run test migrate migrate-down migrate-test lint check-env deploy-web deploy-web-test deploy-api deploy-jobs
 
 # Variables for deployment
 GIT_TAG ?= $(shell git describe --tags --always)
@@ -38,6 +38,9 @@ lint:
 
 deploy-web:
 	docker compose build web && docker compose up -d --no-deps web
+
+deploy-web-test:
+	docker compose build web-test && docker compose up -d --no-deps web-test
 
 deploy-api:
 	docker compose build api && docker compose up -d --no-deps api

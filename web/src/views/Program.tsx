@@ -80,9 +80,13 @@ export function Program({
    */
   const mine = plan.owns(sel) ? plan.plans : [sel];
 
+  const { availability } = useCatalogFilters();
+
   /**
    * Los horarios de los grupos se piden en la MISMA respuesta del catálogo
-   * —y solo si hay un horario armado contra el que chocar.
+   * —y solo si hay un horario armado contra el que chocar, o el filtro de
+   * horario del catálogo está activo (necesita el mismo detalle para saber
+   * qué materia encaja).
    *
    * Antes esto era un prefetch aparte: hasta 40 peticiones de detalle, una
    * por asignatura, elegidas por orden alfabético. Con 200 asignaturas
@@ -91,12 +95,13 @@ export function Program({
    * de goteo. En la respuesta del catálogo son ~44 KB sobre 358 KB y cero
    * peticiones de más.
    *
-   * Sin nada elegido no se pide: no hay con qué chocar, así que no habría
-   * nada que marcar y sería peso puro.
+   * Sin nada elegido ni filtro de horario no se pide: no hay con qué
+   * chocar ni qué evaluar, así que no habría nada que marcar y sería peso
+   * puro.
    */
   const { selection: scheduleSelection } = useScheduleSelection();
   const hasSchedule = Object.keys(scheduleSelection).length > 0;
-  const include = hasSchedule ? 'schedules' : undefined;
+  const include = hasSchedule || isAvailabilityActive(availability) ? 'schedules' : undefined;
 
   // Hooks FIJOS, sin condicional: `useApi` acepta `null` y no pide nada —lo
   // mismo que ya hace este archivo para no pedir el directorio sin sede. Con
@@ -211,7 +216,6 @@ export function Program({
     setOnlyOpen,
     hideConflicts,
     setHideConflicts,
-    availability,
     setAvailability,
     showFacets,
     setShowFacets,

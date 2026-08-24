@@ -151,7 +151,7 @@ export function Topbar() {
             códigos van juntos y el nombre se cae: no caben dos, y el nombre
             completo queda en el mismo hover que usa el resto de la app
             (Tooltip), no en un `title` nativo aparte. */}
-        {double ? (
+        {double && planChip ? (
           <Tooltip
             content={
               <>

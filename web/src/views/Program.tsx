@@ -39,7 +39,7 @@ import {
   courseFitsAvailability,
   isAvailabilityActive,
 } from '../lib/availability';
-import { itemId, type Selection } from '../lib/storage';
+import { itemId, planCodes, planNames, type Selection } from '../lib/storage';
 import type { Screen } from '../state/nav';
 import './Program.css';
 
@@ -108,7 +108,11 @@ export function Program({
   const settledA = a.data !== null || a.error !== null;
   const settledB = !mine[1] || b.data !== null || b.error !== null;
   const bothSettled = settledA && settledB;
-  const anyData = !!a.data || !!b.data;
+  // `useApi` no borra `data` cuando su `path` pasa a `null` (useApi.ts:73):
+  // si `mine[1]` desaparece de un render a otro —de doble a un plan ajeno,
+  // sin desmontar esta pantalla— `b.data` se queda con el catálogo VIEJO.
+  // `mine[1] &&` es lo que evita que ese resto cuente como si fuera de hoy.
+  const anyData = !!a.data || (!!mine[1] && !!b.data);
   const combinedError = a.error ?? (mine[1] ? b.error : null);
   const reload = () => {
     a.reload();
@@ -440,11 +444,18 @@ export function Program({
         body: (
           <>
             <p>
-              Se va a borrar{' '}
-              {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`}{' '}
-              en Mi semestre, porque {n === 1 ? 'es' : 'son'} de{' '}
-              {double ? 'los planes' : 'el plan'}{' '}
-              <b>{plan.plans.map((p) => p.programName).join(' y ')}</b>.
+              Se va a borrar {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi
+              semestre, porque {n === 1 ? 'es' : 'son'}{' '}
+              {double ? (
+                <>
+                  de los planes <b>{planNames(plan.plans)}</b>
+                </>
+              ) : (
+                <>
+                  del plan <b>{planNames(plan.plans)}</b>
+                </>
+              )}
+              .
             </p>
             <p>Sus grupos y su tipología son de {double ? 'esos planes' : 'ese plan'}, no de este.</p>
           </>
@@ -452,10 +463,15 @@ export function Program({
       });
       if (!ok) return;
     }
-    plan.select([sel]);
+    // `[sel]` siempre pasa la validación de `planSelection` —es un solo
+    // plan—, pero se revisa igual: es el único sitio de la app que llama a
+    // `select()` sin que el picker ya haya impedido de antemano un
+    // resultado inválido.
+    const ok = plan.select([sel]);
+    if (!ok) return;
   }
 
-  const planEyebrow = mine.map((p) => p.program).join(' · ');
+  const planEyebrow = planCodes(mine);
 
   return (
     <Layout>
@@ -466,7 +482,7 @@ export function Program({
             Estás mirando el plan <b>{program}</b>, y{' '}
             {double ? (
               <>
-                los tuyos son <b>{plan.plans.map((p) => p.programName).join(' y ')}</b>
+                los tuyos son <b>{planNames(plan.plans)}</b>
               </>
             ) : (
               <>
@@ -512,7 +528,6 @@ export function Program({
           what="Trayendo el catálogo"
         />
       )}
-      {combinedError && <Fault error={combinedError} level={level} onRetry={reload} />}
 
       {anyData && (
         <>
@@ -852,6 +867,12 @@ export function Program({
           )}
         </>
       )}
+
+      {/* Después de la tabla, no antes: con doble titulación, si un plan
+          respondió y el otro no, esto se pinta DEBAJO de lo que sí hay —
+          "media lista sirve, ninguna no" (interfaz §2). Con los dos
+          fallidos es lo único que queda por mostrar. */}
+      {combinedError && <Fault error={combinedError} level={level} onRetry={reload} />}
     </Layout>
   );
 }

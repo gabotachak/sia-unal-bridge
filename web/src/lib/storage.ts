@@ -154,6 +154,19 @@ export function selectionId(s: Pick<Selection, 'level' | 'campus' | 'program'>):
   return `${s.level}/${s.campus}/${s.program}`;
 }
 
+/** Los nombres de uno o dos planes en una frase: "Ingeniería" o "Ingeniería
+ *  y Matemáticas". Un solo formateador para toda la app —Topbar, PlanPicker,
+ *  Program— en vez de reescribir el `.join(' y ')` en cada sitio. */
+export function planNames(plans: readonly Pick<Selection, 'programName'>[]): string {
+  return plans.map((p) => p.programName).join(' y ');
+}
+
+/** Los códigos de uno o dos planes, para el chip y el eyebrow: "2A74" o
+ *  "2A74 · 2B10". */
+export function planCodes(plans: readonly Pick<Selection, 'program'>[]): string {
+  return plans.map((p) => p.program).join(' · ');
+}
+
 /** Valida un valor cualquiera como Selection — campo por campo, nunca
  *  confiando en lo guardado. Compartida por `loadSelection` (v1, un objeto)
  *  y `loadPlans` (v2, un array de esto mismo). Los nombres son decoración:
@@ -249,24 +262,56 @@ function sameCampusAndLevel(a: Selection, b: Selection): boolean {
   return a.level === b.level && a.campus === b.campus;
 }
 
-/**
- * Qué pasa con el semestre al fijar un conjunto de planes (D4): si hay que
- * borrarlo entero, o no tocarlo porque es el MISMO conjunto que ya estaba
- * —lo que pasa cada vez que se vuelve a elegir sin cambiar nada—.
+/** Qué le pasa al semestre al fijar un conjunto de planes (D4):
  *
+ *   'keep'   → el MISMO conjunto que ya estaba: no se toca nada. Pasa cada
+ *              vez que se vuelve al tablero sin cambiar de plan.
+ *   'filter' → no había NINGÚN plan elegido todavía: no es un cambio, así
+ *              que no se borra todo — se descartan solo las materias que no
+ *              son de ninguno de los planes nuevos (pueden haber quedado de
+ *              antes, o de un `localStorage` viejo).
+ *   'wipe'   → conjunto distinto de verdad: el semestre se reinicia entero.
+ */
+export type SelectOutcome = 'keep' | 'filter' | 'wipe';
+
+/**
  * `null` = el conjunto no es válido —vacío, más de MAX_PLANS, o dos planes
  * que no comparten sede y nivel (D3)— y entonces no se toca nada.
  */
 export function planSelection(
   current: readonly Selection[],
   next: readonly Selection[],
-): { clear: boolean } | null {
+): SelectOutcome | null {
   if (next.length === 0 || next.length > MAX_PLANS) return null;
   if (next.length === 2 && !sameCampusAndLevel(next[0], next[1])) return null;
   const nextIds = new Set(next.map(selectionId));
   const sameSet =
     nextIds.size === current.length && current.every((p) => nextIds.has(selectionId(p)));
-  return { clear: !sameSet };
+  if (sameSet) return 'keep';
+  return current.length === 0 ? 'filter' : 'wipe';
+}
+
+/**
+ * `planSelection` más lo que le pasa a `items`: el estado completo después
+ * de fijar un conjunto de planes. Es lo que llama `PlanProvider.select()`,
+ * separado de React para poder testearlo sin montar nada.
+ *
+ * `null` = el conjunto no era válido (mismo motivo que `planSelection`) y no
+ * se toca nada.
+ */
+export function applySelect(
+  currentPlans: readonly Selection[],
+  currentItems: readonly PlanItem[],
+  nextPlans: Selection[],
+): { plans: Selection[]; items: PlanItem[] } | null {
+  const outcome = planSelection(currentPlans, nextPlans);
+  if (!outcome) return null;
+  if (outcome === 'wipe') return { plans: nextPlans, items: [] };
+  if (outcome === 'filter') {
+    const ids = new Set(nextPlans.map(selectionId));
+    return { plans: nextPlans, items: currentItems.filter((i) => ids.has(selectionId(i))) };
+  }
+  return { plans: nextPlans, items: [...currentItems] };
 }
 
 /**

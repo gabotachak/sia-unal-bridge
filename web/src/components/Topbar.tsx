@@ -4,7 +4,7 @@ import { useConfirm } from './Confirm';
 import { useTheme } from '../hooks/useTheme';
 import { usePlan } from '../hooks/usePlan';
 import { sentence } from '../lib/format';
-import { clearStored } from '../lib/storage';
+import { clearStored, planCodes, planNames } from '../lib/storage';
 import { useNav } from '../state/nav';
 import { IconButton } from './IconButton';
 import './Topbar.css';
@@ -44,8 +44,6 @@ export function Topbar() {
    *  tiene deshacer. */
   async function startOver() {
     const n = plan.items.length;
-    const planWord = double ? 'los planes' : 'el plan';
-    const planNames = plan.plans.map((p) => p.programName).join(' y ');
     const ok = await ask({
       title: 'Empezar de nuevo',
       danger: true,
@@ -54,13 +52,16 @@ export function Topbar() {
         n > 0 ? (
           <>
             <p>
-              Se borran {planWord} <b>{planNames}</b> y{' '}
+              Se borran {double ? 'los planes' : 'el plan'} <b>{planNames(plan.plans)}</b> y{' '}
               {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi semestre.
             </p>
             <p>No se puede deshacer.</p>
           </>
         ) : (
-          <p>Se borran {planWord} elegidos y todo vuelve al comienzo.</p>
+          <p>
+            Se {double ? 'borran los planes elegidos' : 'borra el plan elegido'} y todo vuelve al
+            comienzo.
+          </p>
         ),
     });
     if (!ok) return;
@@ -121,7 +122,7 @@ export function Topbar() {
             title={double ? planLabelTitle(plan.plans) : undefined}
           >
             <span className="planchip__code tnum">
-              {double ? plan.plans.map((p) => p.program).join(' · ') : sel.program}
+              {double ? planCodes(plan.plans) : sel.program}
             </span>
             {!double && <span className="planchip__name">{sentence(sel.programName)}</span>}
             <span className="planchip__campus">{sel.campusName.replace(/^SEDE\s+/i, '')}</span>

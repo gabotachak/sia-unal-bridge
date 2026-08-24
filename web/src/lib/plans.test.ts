@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   addToPlan,
+  applySelect,
   loadPlan,
   loadPlans,
   planSelection,
@@ -116,15 +117,19 @@ describe('planSelection — D3 y D4', () => {
   const b = sel('pregrado', '1101', '2B10');
 
   it('el MISMO conjunto no borra nada', () => {
-    expect(planSelection([a, b], [a, b])).toEqual({ clear: false });
+    expect(planSelection([a, b], [a, b])).toBe('keep');
     // Ni el orden importa para "es el mismo conjunto".
-    expect(planSelection([a, b], [b, a])).toEqual({ clear: false });
+    expect(planSelection([a, b], [b, a])).toBe('keep');
   });
 
-  it('un conjunto DISTINTO borra el semestre', () => {
-    expect(planSelection([a], [b])).toEqual({ clear: true });
-    expect(planSelection([], [a])).toEqual({ clear: true });
-    expect(planSelection([a], [a, b])).toEqual({ clear: true });
+  it('un conjunto DISTINTO, habiendo ya un plan, borra el semestre entero', () => {
+    expect(planSelection([a], [b])).toBe('wipe');
+    expect(planSelection([a], [a, b])).toBe('wipe');
+  });
+
+  it('elegir el PRIMER plan (no había ninguno) filtra en vez de borrar todo', () => {
+    expect(planSelection([], [a])).toBe('filter');
+    expect(planSelection([], [a, b])).toBe('filter');
   });
 
   it('dos planes de sedes distintas: null, nada cambia (D3)', () => {
@@ -144,6 +149,47 @@ describe('planSelection — D3 y D4', () => {
 
   it('conjunto vacío: null', () => {
     expect(planSelection([a], [])).toBeNull();
+  });
+});
+
+describe('applySelect — la regla completa, con items', () => {
+  const a = sel('pregrado', '1101', '2A74');
+  const b = sel('pregrado', '1101', '2B10');
+
+  it('primer plan elegido (currentPlans vacío) con materias guardadas de ANTES: las conserva si son de ese plan', () => {
+    // El caso que `select()` en `main` preservaba: localStorage viejo o de
+    // rollback con materias guardadas pero sin plan.v1 — PLAN-DOUBLE-TITULATION.md,
+    // "Compatibilidad", caso 3.
+    const items = [item('X', { program: '2A74' }), item('Y', { program: 'OTRO' })];
+    const result = applySelect([], items, [a]);
+    expect(result).not.toBeNull();
+    expect(result!.plans).toEqual([a]);
+    // Se queda con 'X' (es de 2A74) y descarta 'Y' (es de otro plan).
+    expect(result!.items.map((i) => i.code)).toEqual(['X']);
+  });
+
+  it('primer plan elegido, doble titulación de una: conserva lo que sea de CUALQUIERA de los dos', () => {
+    const items = [item('X', { program: '2A74' }), item('Y', { program: '2B10' }), item('Z', { program: 'OTRO' })];
+    const result = applySelect([], items, [a, b]);
+    expect(result!.items.map((i) => i.code).sort()).toEqual(['X', 'Y']);
+  });
+
+  it('cambio de verdad (ya había plan): borra todo, sin mirar si algo coincidía', () => {
+    const items = [item('X', { program: '2A74' })];
+    const result = applySelect([a], items, [b]);
+    expect(result!.plans).toEqual([b]);
+    expect(result!.items).toEqual([]);
+  });
+
+  it('mismo conjunto: los items no se tocan (misma referencia)', () => {
+    const items = [item('X', { program: '2A74' })];
+    const result = applySelect([a], items, [a]);
+    expect(result!.items).toEqual(items);
+  });
+
+  it('conjunto inválido (D3): null, no toca nada', () => {
+    const otraSede = sel('pregrado', '5001', '2B10');
+    expect(applySelect([], [item('X')], [a, otraSede])).toBeNull();
   });
 });
 

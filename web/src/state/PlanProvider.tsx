@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   addToPlan,
+  applySelect,
   itemId,
   loadPlan,
   loadPlans,
-  planSelection,
   savePlan,
   savePlans,
   selectionId,
@@ -74,16 +74,19 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
 
   const select = useCallback(
     (next: Selection[]) => {
-      const result = planSelection(plans, next);
+      // 'wipe' reinicia el semestre entero (conjunto distinto de verdad);
+      // 'filter' descarta solo lo que no sea de ningún plan nuevo (no había
+      // NINGÚN plan elegido todavía, así que no es un cambio); 'keep' no
+      // toca items —el MISMO conjunto no borra nada, y perder el semestre
+      // por eso sería absurdo. Toda la regla vive en `applySelect`, testeada
+      // sin React (lib/plans.test.ts).
+      const result = applySelect(plans, items, next);
       if (!result) return false;
-      // Cambio de verdad de conjunto: el semestre se reinicia entero. El
-      // MISMO conjunto no borra nada — pasa cada vez que se vuelve al
-      // tablero, y perder el semestre por eso sería absurdo.
-      if (result.clear) setItems([]);
-      setPlans(next);
+      setItems(result.items);
+      setPlans(result.plans);
       return true;
     },
-    [plans],
+    [plans, items],
   );
 
   // useMemo evita construir un objeto nuevo en cada repintado: si cambiara la

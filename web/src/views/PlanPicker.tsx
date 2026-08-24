@@ -22,14 +22,9 @@ import { SearchInput } from '../components/SearchInput';
 import { useConfirm } from '../components/Confirm';
 import { Empty, Fault, Loading } from '../components/States';
 import { fold, sentence } from '../lib/format';
-import { planSelection, selectionId, type Selection } from '../lib/storage';
+import { planCodes, planNames, planSelection, selectionId, type Selection } from '../lib/storage';
 import { useNav } from '../state/nav';
 import './PlanPicker.css';
-
-/** "X y Z" — cómo se nombran uno o dos planes en una frase. */
-function planLabel(plans: Selection[]): string {
-  return plans.map((p) => p.programName).join(' y ');
-}
 
 /**
  * Elegir plan. Una sola pantalla para los tres escalones de la cascada del
@@ -121,15 +116,18 @@ export function PlanPicker() {
    * doble titulación nunca toca el navegador antes de llegar acá.
    *
    * El precio se dice antes de cobrarlo: es la única acción de la app que
-   * destruye trabajo del usuario. `planSelection` (misma regla que usa
-   * `PlanApi.select` por dentro) dice si este conjunto es de verdad un
-   * cambio o es volver al tablero de siempre.
+   * destruye trabajo del usuario, y solo cuando de verdad destruye algo.
+   * `planSelection` (misma regla que usa `PlanApi.select` por dentro) dice
+   * si este conjunto es 'wipe' (hay que confirmar — ya había un plan
+   * elegido, y es OTRO), 'filter' (elegir el primer plan de todos: no hay
+   * nada que confirmar, aunque haya materias guardadas de antes — ver
+   * `applySelect`) o 'keep' (volver al tablero de siempre).
    */
   async function commit(nextPlans: Selection[]) {
-    const result = planSelection(plan.plans, nextPlans);
-    if (!result) return; // el picker ya impide que esto pase (D3, MAX_PLANS)
+    const outcome = planSelection(plan.plans, nextPlans);
+    if (!outcome) return; // el picker ya impide que esto pase (D3, MAX_PLANS)
 
-    if (result.clear && plan.items.length > 0) {
+    if (outcome === 'wipe' && plan.items.length > 0) {
       const n = plan.items.length;
       const double = nextPlans.length > 1;
       const ok = await ask({
@@ -141,7 +139,7 @@ export function PlanPicker() {
             <p>
               {double ? (
                 <>
-                  Elegir <b>{planLabel(nextPlans)}</b> reinicia el tablero.
+                  Elegir <b>{planNames(nextPlans)}</b> reinicia el tablero.
                 </>
               ) : (
                 <>
@@ -151,9 +149,17 @@ export function PlanPicker() {
             </p>
             <p>
               Se va a borrar {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi
-              semestre, porque {n === 1 ? 'es' : 'son'} de{' '}
-              {plan.plans.length === 1 ? 'el plan' : 'los planes'} <b>{planLabel(plan.plans)}</b> y
-              sus grupos no son los mismos aquí.
+              semestre, porque {n === 1 ? 'es' : 'son'}{' '}
+              {plan.plans.length > 1 ? (
+                <>
+                  de los planes <b>{planNames(plan.plans)}</b>
+                </>
+              ) : (
+                <>
+                  del plan <b>{planNames(plan.plans)}</b>
+                </>
+              )}{' '}
+              y sus grupos no son los mismos aquí.
             </p>
           </>
         ),
@@ -217,6 +223,10 @@ export function PlanPicker() {
               Todo lo demás cuelga de aquí. El mismo código de plan existe en varias sedes,
               así que preguntar sin decir dónde no significa nada.
             </>
+          ) : plan.plans.length > 1 ? (
+            <>
+              Tus planes son <b>{planNames(plan.plans)}</b> en {current.campusName.replace(/^SEDE\s+/i, '')}.
+            </>
           ) : (
             <>
               Tu plan es <b>{current.programName}</b> en {current.campusName.replace(/^SEDE\s+/i, '')}.
@@ -229,7 +239,7 @@ export function PlanPicker() {
             <TriangleAlert size={15} strokeWidth={2} aria-hidden="true" />
             Elegir otro plan borra{' '}
             {plan.items.length === 1 ? 'la materia' : `las ${plan.items.length} materias`} de Mi
-            semestre: sus grupos y su tipología son de este plan.
+            semestre: sus grupos y su tipología son de {plan.plans.length > 1 ? 'estos planes' : 'este plan'}.
           </p>
         )}
 
@@ -239,7 +249,7 @@ export function PlanPicker() {
             onClick={() => navigate({ name: 'program', selection: current })}
           >
             <ArrowLeft size={15} strokeWidth={1.75} aria-hidden="true" />
-            seguir con {current.program}
+            seguir con {planCodes(plan.plans)}
           </button>
         )}
       </header>

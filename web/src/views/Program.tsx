@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeftRight,
   Check,
@@ -10,13 +10,11 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { ApiError, get, routes, STALE_SEATS_SECONDS } from '../api/client';
-import type { CourseDetail, CoursesResponse } from '../api/types';
+import { routes, STALE_SEATS_SECONDS } from '../api/client';
+import type { CoursesResponse } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { useCatalogFilters } from '../hooks/useCatalogFilters';
-import { CONCURRENCY, useCourseDetails } from '../hooks/useCourseDetails';
-import { pooled } from '../lib/pooled';
-import { MAX_RETRIES, backoffMs, isTransient, sleep } from '../lib/retry';
+import { useCourseDetails } from '../hooks/useCourseDetails';
 import { usePlan } from '../hooks/usePlan';
 import { useScheduleConflicts } from '../hooks/useScheduleConflicts';
 import { useScheduleSelection } from '../hooks/useScheduleSelection';
@@ -155,56 +153,7 @@ export function Program({
    * que abrir el plan entero— y `max_age=STALE_SEATS_SECONDS` deja al
    * servidor decidir si de verdad hace falta preguntarle al SIA.
    */
-  const autoMeasured = useRef(false);
-  const [measuringCodes, setMeasuringCodes] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  useEffect(() => {
-    if (autoMeasured.current || !bothSettled || courses.length === 0) return;
-    autoMeasured.current = true;
 
-    const stale = courses.filter((c) =>
-      c.seats
-        ? (Date.now() - Date.parse(c.seats.measured_at)) / 1000 > STALE_SEATS_SECONDS
-        : !c.detail_fetched_at ||
-          (Date.now() - Date.parse(c.detail_fetched_at)) / 1000 > STALE_SEATS_SECONDS,
-    );
-    if (stale.length === 0) return;
-
-    void pooled(stale, CONCURRENCY, async (c) => {
-      setMeasuringCodes((prev) => { const s = new Set(prev); s.add(c.code); return s; });
-      const path = routes.course(scopeOf(c.plan), c.plan.program, c.code, STALE_SEATS_SECONDS);
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          await get<CourseDetail>(path);
-          return;
-        } catch (e) {
-          if (e instanceof ApiError && e.status === 429) return;
-          if (!isTransient(e) || attempt === MAX_RETRIES) return;
-          await sleep(backoffMs(attempt));
-        }
-      }
-    }).then(reload).then(() => { batchFinishedAt.current = Date.now(); });
-    // `reload` fuera a propósito: cambia de identidad en cada render y la
-    // guardia de `autoMeasured` ya asegura que esto corre una sola vez.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bothSettled, courses]);
-
-  // React puede agrupar (batch) los cambios de `loading` si la petición al
-  // SIA responde demasiado rápido (ej. caché de navegador), lo que haría que
-  // `isReloading` nunca pase por `true` y el efecto de limpieza no corra.
-  // Usar `updatedAt` garantiza que detectamos el fin de la petición sin
-  // depender de los repintados intermedios de React.
-  const batchFinishedAt = useRef(0);
-  const catalogUpdatedAt = mine[1] ? Math.max(a.updatedAt, b.updatedAt) : a.updatedAt;
-
-  useEffect(() => {
-    if (measuringCodes.size === 0 || batchFinishedAt.current === 0) return;
-    if (catalogUpdatedAt >= batchFinishedAt.current) {
-      setMeasuringCodes(new Set());
-      batchFinishedAt.current = 0; // Reset para próximos auto-measures
-    }
-  }, [catalogUpdatedAt, measuringCodes]);
 
   /**
    * Los filtros.
@@ -1020,7 +969,6 @@ export function Program({
                         <SeatsCell
                           seats={c.seats}
                           askedAt={c.detail_fetched_at}
-                          measuring={measuringCodes.has(c.code)}
                         />
                         <AddButton
                           item={{

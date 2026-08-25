@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CourseSummary } from '../api/types';
-import { mergeCatalogs } from './catalog';
+import { mergeCatalogs, seatsUnknown } from './catalog';
+import { STALE_SEATS_SECONDS } from '../api/client';
 import type { Selection } from './storage';
 
 function sel(program: string): Selection {
@@ -126,5 +127,49 @@ describe('mergeCatalogs — D6', () => {
     ]);
     expect(conHorarios[0].plan).toEqual(sinHorarios[0].plan);
     expect(conHorarios[0].typology).toBe(sinHorarios[0].typology);
+  });
+});
+
+describe('seatsUnknown', () => {
+  const ago = (seconds: number) => new Date(Date.now() - seconds * 1000).toISOString();
+  const seats = (measured_at: string) => ({
+    available: 5,
+    measured_at,
+    sections: 1,
+    age_seconds: 0,
+  });
+
+  it('sin sello de detalle es incógnita: nadie preguntó nunca', () => {
+    expect(seatsUnknown({})).toBe(true);
+    expect(seatsUnknown({ detail_fetched_at: null })).toBe(true);
+  });
+
+  it('sin cupos pero con sello fresco NO es incógnita: se preguntó y no hay grupos', () => {
+    expect(seatsUnknown({ detail_fetched_at: ago(60) })).toBe(false);
+  });
+
+  it('sin cupos y con sello viejo vuelve a ser incógnita', () => {
+    expect(seatsUnknown({ detail_fetched_at: ago(STALE_SEATS_SECONDS + 60) })).toBe(true);
+  });
+
+  it('con cupos manda el sello de los cupos, no el del detalle', () => {
+    // Detalle viejo, cupos recién medidos → hay dato, no incógnita.
+    expect(
+      seatsUnknown({
+        seats: seats(ago(60)),
+        detail_fetched_at: ago(STALE_SEATS_SECONDS + 600),
+      }),
+    ).toBe(false);
+    // Y al revés: cupos viejos siguen siendo incógnita aunque el detalle sea nuevo.
+    expect(
+      seatsUnknown({
+        seats: seats(ago(STALE_SEATS_SECONDS + 60)),
+        detail_fetched_at: ago(10),
+      }),
+    ).toBe(true);
+  });
+
+  it('una fecha ilegible es incógnita, no un dato fresco', () => {
+    expect(seatsUnknown({ detail_fetched_at: 'ayer' })).toBe(true);
   });
 });

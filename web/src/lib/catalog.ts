@@ -1,9 +1,34 @@
 // Unir los catálogos de uno o dos planes en una sola lista
 // (PLAN-DOUBLE-TITULATION.md, D5 y D6).
 
+import { STALE_SEATS_SECONDS } from '../api/client';
 import type { CourseSummary } from '../api/types';
 import type { Selection } from './storage';
 import { typologyRank } from './typology';
+
+/**
+ * ¿La celda de CUPOS de esta asignatura es un signo de pregunta?
+ *
+ * Un solo sitio para el criterio, porque hasta ahora vivía copiado en tres:
+ * `sortKeyOf` (dónde cae al ordenar), `hasRoom` (si sobrevive al filtro "con
+ * cupos") y la medición automática (a quién hay que preguntarle). Con tres
+ * copias, tocar el umbral en una dejaba una fila con `?` que el filtro
+ * escondía, o una medición que no correspondía a ningún `?` en pantalla.
+ *
+ * Incógnita es exactamente esto:
+ *
+ *   - nunca se pidió el detalle (`detail_fetched_at` ausente), o
+ *   - lo que hay —los cupos si los hay, el sello del detalle si no— tiene
+ *     más de STALE_SEATS_SECONDS.
+ *
+ * NO es incógnita "se preguntó hace poco y no tiene grupos": eso es un dato.
+ */
+export function seatsUnknown(c: Pick<CourseSummary, 'seats' | 'detail_fetched_at'>): boolean {
+  const stamp = c.seats?.measured_at ?? c.detail_fetched_at;
+  if (!stamp) return true;
+  const age = (Date.now() - Date.parse(stamp)) / 1000;
+  return !Number.isFinite(age) || age > STALE_SEATS_SECONDS;
+}
 
 export type MergedCourse = CourseSummary & {
   /** De qué plan salió esta fila: lo que arma su PlanItem y su itemId, y lo

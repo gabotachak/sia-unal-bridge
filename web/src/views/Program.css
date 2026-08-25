@@ -138,13 +138,15 @@
    una fila real (padding 0.5rem×2 + texto ~1.4rem ≈ 2.4rem) para que
    el paso de skeleton a contenido no mueva nada.
 
-   El shimmer usa un gradiente que se desplaza de izquierda a derecha
-   sobre `--surface-2` — el mismo tono opaco que usa :hover en la fila
-   real, así que encaja sin inventar un color nuevo. */
+   El latido es de `opacity` sobre `--surface-2` —el mismo tono opaco que
+   usa :hover en la fila real, así que no inventa un color nuevo—. Era un
+   gradiente corriéndose con `background-position`, que repinta en cada
+   cuadro: noventa pastillas repintando 1.6 s seguidos mientras además
+   llega y se parsea una respuesta de ~358 KB. `opacity` la mueve el
+   compositor y no toca el layout ni el pintado. */
 
-@keyframes shimmer {
-  from { background-position: -200% 0; }
-  to   { background-position:  200% 0; }
+@keyframes skel-pulse {
+  50% { opacity: 0.45; }
 }
 
 .row--skeleton {
@@ -160,14 +162,8 @@
   display: block;
   height: 1rem;
   border-radius: 0.375rem;
-  background: linear-gradient(
-    90deg,
-    var(--surface-2) 25%,
-    var(--sunken)    50%,
-    var(--surface-2) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.6s var(--ease-in-out) infinite;
+  background: var(--surface-2);
+  animation: skel-pulse 1.6s var(--ease-in-out) infinite;
 }
 
 /* Pastilla pequeña: representa texto micro (--t-micro: 0.72rem).
@@ -187,24 +183,28 @@
 @media (prefers-reduced-motion: reduce) {
   .skel {
     animation: none;
-    background: var(--surface-2);
   }
 }
 
-/* Spinner del ? mientras la medición automática está en vuelo.
-   Mismo color y opacidad que `.row__seats.is-unknown` para que se
-   lea como el mismo estado —"todavía no hay dato"— solo que activo. */
+/* Spinner del `?` mientras la medición automática está en vuelo.
+   Solo gira: el color y la opacidad los pone `.row__seats.is-unknown`, que
+   es la clase que lleva el mismo <span>, y con ella el mismo encendido al
+   pasar por la fila. Repetirlos acá los multiplicaba —0.5 heredado × 0.5
+   propio = 0.25— y el spinner salía casi invisible, que es justamente lo
+   que no se veía.
+
+   Con movimiento reducido no se queda quieto: quieto es indistinguible de
+   un ícono cualquiera. Late, como las pastillas del skeleton, para que
+   siga diciendo "esto está pasando ahora". */
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 .skel--spin {
   animation: spin 1s linear infinite;
-  color: var(--accent);
-  opacity: 0.5;
 }
 @media (prefers-reduced-motion: reduce) {
   .skel--spin {
-    animation: none;
+    animation: skel-pulse 1.6s var(--ease-in-out) infinite;
   }
 }
 

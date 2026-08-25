@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
   Check,
@@ -10,11 +10,11 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { routes, STALE_SEATS_SECONDS } from '../api/client';
-import type { CoursesResponse } from '../api/types';
+import { get, routes, STALE_SEATS_SECONDS } from '../api/client';
+import type { CourseDetail, CoursesResponse } from '../api/types';
 import { useApi } from '../hooks/useApi';
 import { useCatalogFilters } from '../hooks/useCatalogFilters';
-import { useCourseDetails } from '../hooks/useCourseDetails';
+import { CONCURRENCY, useCourseDetails } from '../hooks/useCourseDetails';
 import { usePlan } from '../hooks/usePlan';
 import { useScheduleConflicts } from '../hooks/useScheduleConflicts';
 import { useScheduleSelection } from '../hooks/useScheduleSelection';
@@ -35,8 +35,10 @@ import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
 import { useTableSort } from '../hooks/useTableSort';
 import { abbreviateEngineering, fold, formatAge, sentence } from '../lib/format';
 import { classifyConflict, type SectionLike } from '../lib/conflicts';
-import { useDetailCache } from '../lib/detailCache';
-import { mergeCatalogs, type MergedCourse } from '../lib/catalog';
+import { putDetail, useDetailCache } from '../lib/detailCache';
+import { mergeCatalogs, seatsUnknown, type MergedCourse } from '../lib/catalog';
+import { pooled } from '../lib/pooled';
+import { MAX_RETRIES, backoffMs, isTransient, sleep } from '../lib/retry';
 import { typologyLetter, typologySlug } from '../lib/typology';
 import {
   DEFAULT_AVAILABILITY,
@@ -143,19 +145,6 @@ export function Program({
   );
 
   /**
-   * Experimento: medir en segundo plano, sin botón, las materias del
-   * catálogo más viejas que STALE_SEATS_SECONDS —el mismo criterio que ya
-   * usan `sortKeyOf`/`hasRoom` para pintar el signo de pregunta.
-   *
-   * Una sola pasada por catálogo (guardia con `ref`, igual que el scroll):
-   * sin ella, `reload()` al final volvería a armar `courses` y dispararía
-   * la pasada otra vez. Mismo pool de 4 que Mi semestre —no es más agresivo
-   * que abrir el plan entero— y `max_age=STALE_SEATS_SECONDS` deja al
-   * servidor decidir si de verdad hace falta preguntarle al SIA.
-   */
-
-
-  /**
    * Los filtros.
    *
    * Tipología y créditos son conjuntos, no un valor: "3 o 4 créditos" y
@@ -198,6 +187,99 @@ export function Program({
       itemId({ level: c.plan.level, campus: c.plan.campus, program: c.plan.program, code: c.code }),
     [],
   );
+
+  /**
+   * Mide sola, sin botón, toda materia cuya celda de CUPOS es un `?`.
+   *
+   * El criterio es `seatsUnknown` —el MISMO que decide pintar el signo de
+   * pregunta y el que usa el filtro "con cupos"—, así que lo que se mide es
+   * exactamente lo que se ve en duda: ni una fila con `?` que nadie pregunta,
+   * ni una petición que no corresponda a ningún `?`.
+   *
+   * Lo medido NO recarga el catálogo. Se escribe en `detailCache`, el mismo
+   * almacén que ya alimenta el marcado de choques, y la fila lo lee de ahí.
+   * Ese es el punto: la versión anterior llamaba `a.reload()` al terminar la
+   * tanda, y esa recarga rearmaba `courses` —lo que reiniciaba la pasada— y
+   * apagaba los spinners a destiempo, que es por lo que no se veían. Sin
+   * recarga no hay ninguna de las dos carreras.
+   *
+   * `max_age=STALE_SEATS_SECONDS` deja la decisión donde corresponde: si
+   * Postgres lo tiene fresco, la API responde sin tocar el SIA.
+   *
+   * ponytail: una sola pasada al montar (guardia con `ref`, igual que el
+   * scroll). No hay reintento ni refresco periódico; para volver a medir se
+   * entra a la asignatura, que es lo que el `?` ya invitaba a hacer.
+   */
+  const [measuring, setMeasuring] = useState<ReadonlySet<string>>(new Set());
+  const autoMeasured = useRef(false);
+  useEffect(() => {
+    if (autoMeasured.current || courses.length === 0) return;
+    autoMeasured.current = true;
+
+    const targets = courses.filter(seatsUnknown);
+    if (targets.length === 0) return;
+
+    setMeasuring(new Set(targets.map(courseId)));
+
+    // Mismo pool que Mi semestre (`CONCURRENCY`): del otro lado hay N sesiones
+    // ADF y cada una es secuencial, así que pedir de a más solo llena la cola.
+    void pooled(targets, CONCURRENCY, async (c) => {
+      const id = courseId(c);
+      const path = routes.course(
+        { level: c.plan.level, campus: c.plan.campus, faculty: c.plan.faculty },
+        c.plan.program,
+        c.code,
+        STALE_SEATS_SECONDS,
+      );
+
+      try {
+        /**
+         * Los mismos MAX_RETRIES con backoff que usa Mi semestre
+         * (`lib/retry.ts`), y por la misma razón: `sia_noop` y `busy` no son
+         * fallos, son el estado de sesión del SIA cediendo. La petición
+         * idéntica, repetida, funciona.
+         *
+         * Sin esto, un `sia_noop` en el primer intento devolvía la fila al
+         * `?` de la que venía —el spinner giraba, se apagaba, y el signo de
+         * pregunta reaparecía sin que nadie hubiera hecho nada mal—.
+         *
+         * El spinner NO se apaga entre intentos: `measuring` se limpia en el
+         * `finally`, así que la fila dice "midiendo" hasta que hay respuesta
+         * o hasta que se agotaron los intentos. Es la verdad: sigue en curso.
+         *
+         * A diferencia de Mi semestre, los reintentos NO fuerzan `max_age=0`.
+         * Acá nadie apretó nada: forzar cruzaría FETCH_COOLDOWN y cambiaría
+         * un fallo transitorio por un 429 seguro. El `max_age` se queda como
+         * está y el servidor decide.
+         */
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            const res = await get<CourseDetail>(path);
+            putDetail(id, res.data);
+            return;
+          } catch (e) {
+            // Agotados los intentos, en silencio y a propósito: nadie pidió
+            // esta medición. La fila vuelve al `?` que ya tenía, que sigue
+            // siendo verdad, y entrar a la asignatura sigue siendo el camino
+            // para preguntarlo en serio. Un banner rojo acá sería un error
+            // que nadie provocó.
+            if (!isTransient(e) || attempt === MAX_RETRIES) return;
+            await sleep(backoffMs(attempt));
+          }
+        }
+      } finally {
+        setMeasuring((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    });
+    // Sin cleanup que cancele: `putDetail` escribe en un almacén de módulo,
+    // no en este componente. Si alguien navega a la ficha mientras la tanda
+    // corre, lo que llegue le sirve igual —y cancelar en StrictMode dejaría
+    // la única pasada abortada, con el `ref` ya gastado.
+  }, [courses, courseId]);
 
   /**
    * Mi horario: los bloques ya elegidos, que son contra lo que se mide todo
@@ -336,12 +418,38 @@ export function Program({
     };
   }, [courses]);
 
+  /**
+   * El catálogo con los cupos que ESTA sesión ya midió encima.
+   *
+   * Una sola vez, acá, y no en cada sitio que los mire: la celda, el orden
+   * por cupos y el filtro "con cupos" tienen que estar viendo el mismo
+   * número. Cuando la celda leía lo medido pero el filtro seguía leyendo el
+   * catálogo, una materia podía decir "0 cupos" y quedarse igual dentro de
+   * "con cupos" —el filtro la creía incógnita, que es lo que era un segundo
+   * antes—.
+   *
+   * Los dos campos se toman del MISMO objeto, nunca mezclados: un `seats`
+   * nuevo con un sello viejo pintaría una edad que no le corresponde.
+   */
+  const withSeats = useMemo(
+    () =>
+      detailCache.size === 0
+        ? courses
+        : courses.map((c) => {
+            const m = detailCache.get(courseId(c));
+            return m
+              ? { ...c, seats: m.seats, detail_fetched_at: m.detail_fetched_at ?? m.fetched_at }
+              : c;
+          }),
+    [courses, courseId, detailCache],
+  );
+
   /** Se recuerda entre visitas. `null` = como lo mandó el SIA, ya alfabético. */
   const { sort, onSort } = useTableSort('catalog');
 
   const shown = useMemo(() => {
     const needle = fold(q);
-    const kept = courses.filter((c) => {
+    const kept = withSeats.filter((c) => {
       if (
         needle &&
         !fold(c.name).includes(needle) &&
@@ -378,7 +486,7 @@ export function Program({
     });
     return sort ? sortBy(kept, (c) => sortKeyOf(c, sort.col), sort.dir) : kept;
   }, [
-    courses,
+    withSeats,
     q,
     typols,
     creds,
@@ -600,25 +708,41 @@ export function Program({
       </header>
 
       {/* Skeleton: el catálogo tarda entre 3 y 8 s en un miss frío.
-          En vez de bloquear toda la pantalla con un Loading centrado,
-          se pintan filas fantasmas que tienen la misma rejilla que las
-          reales: el encabezado se ve, el número de columnas no cambia
-          y el layout no salta cuando llegan los datos. */}
+          En vez de bloquear toda la pantalla con un Loading centrado, se
+          pintan filas fantasmas sobre la MISMA rejilla que las reales, con
+          la cabecera de verdad encima: el número de columnas no cambia y el
+          layout no salta cuando llegan los datos.
+
+          Cada pastilla lleva su `col-*` como la celda que imita. No es
+          decorativo: bajo 38rem, 35rem y 31.5rem la rejilla suelta columnas
+          y esas clases son lo único que las esconde (styles/table.css). Sin
+          ellas, seis pastillas en una rejilla de tres se desbordaban a
+          renglones de más, y el skeleton dibujaba una tabla que no existe.
+
+          `aria-busy` y `aria-label` van en el <ul>: un solo anuncio para la
+          espera entera, en vez de quince filas vacías que leer. */}
       {!bothSettled && !anyData && (
         <div className="table">
-          <ul className="rows" aria-busy="true" aria-label="Cargando catálogo">
+          <TableHead sort={sort} onSort={onSort} />
+          <ul className="rows" aria-busy="true" aria-label="Cargando el catálogo…">
             {catalogSkeletonRows.map((widths, i) => (
-              <li key={i} className="table__row row--skeleton">
+              <li key={i} className="table__row row--skeleton" aria-hidden="true">
                 {/* código — --t-micro */}
-                <span className="skel skel--sm" style={{ width: widths[0] }} />
+                <span className="skel skel--sm col-code" style={{ width: widths[0] }} />
                 {/* nombre — --t-body */}
                 <span className="skel" style={{ width: widths[1] }} />
                 {/* tipología */}
-                <span className="skel skel--tag" />
+                <span className="skel skel--tag col-typ" />
                 {/* créditos */}
-                <span className="skel skel--sm" style={{ width: '1.2rem', marginLeft: 'auto' }} />
+                <span
+                  className="skel skel--sm col-cr"
+                  style={{ width: '1.2rem', marginLeft: 'auto' }}
+                />
                 {/* cupos */}
-                <span className="skel" style={{ width: widths[2], marginLeft: 'auto' }} />
+                <span
+                  className="skel col-seats"
+                  style={{ width: widths[2], marginLeft: 'auto' }}
+                />
                 {/* acción */}
                 <span className="skel skel--tag" style={{ marginLeft: 'auto', opacity: 0.4 }} />
               </li>
@@ -966,9 +1090,12 @@ export function Program({
                         <span className="row__credits tnum col-cr">
                           {c.credits}
                         </span>
+                        {/* `c` ya viene de `withSeats`: si esta sesión midió
+                            esta materia, lo que se pinta es lo medido. */}
                         <SeatsCell
                           seats={c.seats}
                           askedAt={c.detail_fetched_at}
+                          measuring={measuring.has(id)}
                         />
                         <AddButton
                           item={{
@@ -1066,11 +1193,15 @@ function SeatsCell({
   /** True mientras la medición automática de esta fila está en vuelo. */
   measuring?: boolean;
 }) {
-  // Prioridad máxima: si hay una petición activa para este código, mostrar
-  // el shimmer en vez del `?` — el dato llegará pronto y el UI lo sabe.
+  // Manda sobre todo lo demás: con una petición en vuelo para esta fila, el
+  // `?` sería mentira por unos segundos. Se va cuando llega el dato.
+  //
+  // Sin `aria-label` en el contenedor: con el `sr-only` adentro serían dos
+  // anuncios del mismo estado. El ícono va `aria-hidden` y el texto es el
+  // que se lee.
   if (measuring) {
     return (
-      <span className="row__seats is-unknown col-seats" aria-label="Midiendo cupos">
+      <span className="row__seats is-unknown col-seats">
         <Loader2 size={15} strokeWidth={2} className="skel--spin" aria-hidden="true" />
         <span className="sr-only">Midiendo cupos…</span>
       </span>
@@ -1217,25 +1348,12 @@ function sortKeyOf(c: MergedCourse, col: TableCol): SortKey {
     case 'credits':
       return c.credits;
     case 'seats':
-      if (!c.seats) {
-        // El sello del detalle es lo único que separa 'no hay grupos' de
-        // 'nadie preguntó': sin cupos y sin sello, no se midió nunca.
-        if (
-          !c.detail_fetched_at ||
-          (Date.now() - Date.parse(c.detail_fetched_at)) / 1000 >
-            STALE_SEATS_SECONDS
-        ) {
-          return SEATS_RANK.unknown;
-        }
-        return SEATS_RANK.noOffer;
-      }
-      // Con grupos pero info desactualizada → incógnita también.
-      if (
-        (Date.now() - Date.parse(c.seats.measured_at)) / 1000 >
-        STALE_SEATS_SECONDS
-      ) {
-        return SEATS_RANK.unknown;
-      }
+      // Mismo criterio que el `?` de la celda (`seatsUnknown`, lib/catalog.ts):
+      // lo que se ve en duda cae junto al ordenar.
+      if (seatsUnknown(c)) return SEATS_RANK.unknown;
+      // Sin cupos y con sello fresco: se preguntó y no hay grupos. El cero
+      // es un dato, no una incógnita.
+      if (!c.seats) return SEATS_RANK.noOffer;
       return c.seats.available === 0 ? SEATS_RANK.full : c.seats.available;
   }
 }
@@ -1259,20 +1377,8 @@ function toggle<T>(set: ReadonlySet<T>, v: T): ReadonlySet<T> {
  * de esas la respuesta ya se sabe.
  */
 function hasRoom(c: MergedCourse): boolean {
-  if (c.seats) {
-    // Si el dato está desactualizado, no sabemos el estado real → incógnita.
-    if (
-      (Date.now() - Date.parse(c.seats.measured_at)) / 1000 >
-      STALE_SEATS_SECONDS
-    ) {
-      return true;
-    }
-    return c.seats.available > 0;
-  }
-  return (
-    !c.detail_fetched_at ||
-    (Date.now() - Date.parse(c.detail_fetched_at)) / 1000 > STALE_SEATS_SECONDS
-  );
+  if (seatsUnknown(c)) return true;
+  return (c.seats?.available ?? 0) > 0;
 }
 
 /**

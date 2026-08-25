@@ -95,16 +95,41 @@
   }
 }
 
+/* Marcas del banco (Bre-B + Nequi), tal cual las dan — logos de marca, no
+   se recolorean con el tema, igual que el QR del banco original. */
+.donate__brands {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.donate__brand-logo {
+  height: 1.9rem;
+  width: auto;
+}
+
+.donate__brand-logo--nequi {
+  height: 2.6rem;
+}
+
+.donate__brand-sep {
+  width: 1px;
+  height: 1.6rem;
+  background: var(--rule-strong);
+}
+
+/* SVG propio (ver `donateQrPath.ts`), no la imagen del banco: los módulos
+   pintan con `currentColor`, así que siguen el tema sin perder contraste —
+   oscuros sobre claro en modo claro, claros sobre oscuro en modo oscuro. */
 .donate__qr {
   width: 100%;
   max-width: 16rem;
   height: auto;
+  padding: 0.75rem;
   border-radius: var(--radius);
-  /* El PNG del banco ya trae su propio marco blanco (ver llave.jpg): un
-     borde más encima solo lo hubiera duplicado. Este aro es para el modo
-     oscuro, donde ese blanco flota sin nada que lo contenga. */
-  outline: 1px solid var(--rule);
-  outline-offset: -1px;
+  background: var(--surface);
+  color: var(--text);
+  shape-rendering: crispEdges;
 }
 
 .donate__key {
@@ -150,4 +175,63 @@
 }
 .donate__key-value:active {
   transform: scale(0.97);
+}
+
+/* ── Gracias a quien ya donó ──────────────────────────────────────────
+   Franja angosta, no una segunda portada: sin ícono ni título grande que
+   compita con "Si esto te sirvió". Ocupa el ancho completo del bloque de
+   arriba (no los 20rem de la card) para que 14 chips no se amontonen. */
+
+.donate__thanks {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  margin-top: var(--gap-lg);
+  padding-top: var(--gap-lg);
+  border-top: 1px solid var(--rule);
+}
+
+.donate__thanks-label {
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* Cada nombre entra por su cuenta, como si llegaran uno a uno a dejar su
+   café — no toda la lista de golpe. El `rise` es el mismo de siempre, solo
+   escalonado por índice (ver el `animationDelay` inline). */
+.donate__thanks-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.donate__thanks-chip {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  transition:
+    border-color var(--fast) var(--ease-out),
+    color var(--fast) var(--ease-out),
+    background var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .donate__thanks-chip:hover {
+    border-color: var(--warn);
+    color: var(--warn);
+    background: var(--warn-soft);
+    transform: translateY(-2px) rotate(-1deg);
+  }
 }

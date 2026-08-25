@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Check, Copy, HeartHandshake } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { AppLink } from "../components/AppLink";
 import { usePlan } from "../hooks/usePlan";
+import { DONATE_QR_PATH, DONATE_QR_VIEWBOX } from "./donateQrPath";
 import "./Donate.css";
 
 const BRE_B_KEY = "@NEQUIGAB107";
@@ -18,6 +19,14 @@ export function Donate() {
   const plan = usePlan();
   const sel = plan.selection;
   const [copied, setCopied] = useState(false);
+  const [donors, setDonors] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch("/donors.json")
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setDonors)
+      .catch(() => {});
+  }, []);
 
   async function copyKey() {
     try {
@@ -52,20 +61,15 @@ export function Donate() {
               aria-hidden="true"
             />
 
-            <p className="eyebrow rise">gracias</p>
-            <h1
-              className="donate__title rise"
-              style={{ animationDelay: "60ms" }}
-            >
+            <h1 className="donate__title rise">
               Si esto te <em>sirvió</em>
             </h1>
-            <p
-              className="donate__lead rise"
-              style={{ animationDelay: "120ms" }}
-            >
+            <p className="donate__lead rise" style={{ animationDelay: "60ms" }}>
               SIA Bridge es gratis, sin cuentas y sin anuncios. Vive en un
               servidor que alguien tiene en la sala de su casa. Si facilité la
-              tarde de inscripción, puedes invitarme un café aquí. <span className="emoji-mobile">👇</span><span className="emoji-desktop">👉</span>
+              tarde de inscripción, puedes invitarme un café aquí.{" "}
+              <span className="emoji-mobile">👇</span>
+              <span className="emoji-desktop">👉</span>
             </p>
           </div>
 
@@ -73,16 +77,31 @@ export function Donate() {
             className="donate__card rise"
             style={{ animationDelay: "180ms" }}
           >
-            <img
+            <div className="donate__brands">
+              <img
+                className="donate__brand-logo"
+                src="/bre-b-logo.svg"
+                alt="Bre-B"
+              />
+              <span className="donate__brand-sep" aria-hidden="true" />
+              <img
+                className="donate__brand-logo donate__brand-logo--nequi"
+                src="/nequi-logo.png"
+                alt="Nequi"
+              />
+            </div>
+
+            <svg
               className="donate__qr"
-              src="/donate-qr.webp"
-              width={723}
-              height={881}
-              alt="Código QR Bre-B para donar a NEQUIGAB107"
-            />
+              viewBox={DONATE_QR_VIEWBOX}
+              role="img"
+              aria-label="Código QR Bre-B para donar a NEQUIGAB107"
+            >
+              <path stroke="currentColor" d={DONATE_QR_PATH} />
+            </svg>
 
             <div className="donate__key">
-              <span className="donate__key-label">o con tu llave Bre-B</span>
+              <span className="donate__key-label">o con mi llave</span>
               <button
                 type="button"
                 className="donate__key-value tnum"
@@ -98,6 +117,26 @@ export function Donate() {
             </div>
           </div>
         </div>
+
+        {donors.length > 0 && (
+          <div className="donate__thanks">
+            <span className="donate__thanks-label">gracias especiales a</span>
+            <ul className="donate__thanks-chips">
+              {donors.map((name, i) => (
+                <li
+                  key={name}
+                  className="donate__thanks-chip rise"
+                  style={{ animationDelay: `${260 + i * 40}ms` }}
+                >
+                  {name}
+                </li>
+              ))}
+            </ul>
+            <span className="donate__thanks-label">
+              quienes creyeron en el proyecto
+            </span>
+          </div>
+        )}
       </div>
     </Layout>
   );

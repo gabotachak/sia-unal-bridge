@@ -95,16 +95,18 @@
   }
 }
 
+/* SVG propio (ver `donateQrPath.ts`), no la imagen del banco: los módulos
+   pintan con `currentColor`, así que siguen el tema sin perder contraste —
+   oscuros sobre claro en modo claro, claros sobre oscuro en modo oscuro. */
 .donate__qr {
   width: 100%;
   max-width: 16rem;
   height: auto;
+  padding: 0.75rem;
   border-radius: var(--radius);
-  /* El PNG del banco ya trae su propio marco blanco (ver llave.jpg): un
-     borde más encima solo lo hubiera duplicado. Este aro es para el modo
-     oscuro, donde ese blanco flota sin nada que lo contenga. */
-  outline: 1px solid var(--rule);
-  outline-offset: -1px;
+  background: var(--surface);
+  color: var(--text);
+  shape-rendering: crispEdges;
 }
 
 .donate__key {

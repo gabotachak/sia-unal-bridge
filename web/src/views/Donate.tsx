@@ -3,6 +3,7 @@ import { ArrowLeft, Check, Copy, HeartHandshake } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { AppLink } from "../components/AppLink";
 import { usePlan } from "../hooks/usePlan";
+import { DONATE_QR_PATH, DONATE_QR_VIEWBOX } from "./donateQrPath";
 import "./Donate.css";
 
 const BRE_B_KEY = "@NEQUIGAB107";
@@ -76,13 +77,14 @@ export function Donate() {
             className="donate__card rise"
             style={{ animationDelay: "180ms" }}
           >
-            <img
+            <svg
               className="donate__qr"
-              src="/donate-qr.webp"
-              width={723}
-              height={881}
-              alt="Código QR Bre-B para donar a NEQUIGAB107"
-            />
+              viewBox={DONATE_QR_VIEWBOX}
+              role="img"
+              aria-label="Código QR Bre-B para donar a NEQUIGAB107"
+            >
+              <path stroke="currentColor" d={DONATE_QR_PATH} />
+            </svg>
 
             <div className="donate__key">
               <span className="donate__key-label">o con mi llave Bre-B</span>

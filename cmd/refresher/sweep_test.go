@@ -166,7 +166,7 @@ func opts(mode, campus string) refresher.Options {
 	return refresher.Options{
 		Mode: mode, Campus: campus, Workers: 2,
 		MaxDuration: time.Minute,
-		// The courtesy limiter is off: it is a ticker, and here it would only
+		// The rate limiter is off: it is a ticker, and here it would only
 		// make the test slow.
 		RatePostsPerSec: 0,
 	}

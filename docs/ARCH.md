@@ -232,9 +232,11 @@ Dos trampas propias de este proyecto:
   de la cascada: una conexión que solo sirvió dropdowns muere igual.
 
 **Tamaño del pool en fase 1: 4.** Con 1-2 devuelves `503` en cuanto hay dos pestañas
-abiertas, y el servidor da para 8 sin despeinarse. Por encima de eso el límite es la
-cortesía con la UNAL —4 conexiones crawleando son ~120 MB/min contra un servidor público
-de universidad—, no la capacidad.
+abiertas. El techo por arriba es **80: el óptimo medido** (rampa contra producción
+2026-08-19, [OPEN-QUESTIONS §5](OPEN-QUESTIONS.md)) — 100 % de aciertos y latencia p50
+plana hasta ahí, y 88 ya degrada ~4.5 %. 4 es lo que pide el tráfico de hoy, no un
+límite; subirlo hasta 80 menos lo que use el `Refresher` es una decisión de
+configuración, no de diseño.
 
 ### Rutas mínimas medidas
 

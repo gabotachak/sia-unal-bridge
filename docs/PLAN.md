@@ -235,7 +235,7 @@ de `API.md`, con `X-Cache: miss` la primera vez y `hit` la segunda.
 
 `internal/refresher` + `cmd/refresher`, consumiendo los mismos casos de uso que la API.
 Cuatro modos (`reference`, `catalog`, `detail --scope=global|plan`, `seats --scope=hot`),
-`errgroup` acotado al pool, limitador de cortesía, presupuesto de reloj y `refresh_run`
+`errgroup` acotado al pool, limitador de tasa, presupuesto de reloj y `refresh_run`
 para observabilidad. El checkpoint son los marcadores de frescura: reanudar es volver a
 correr.
 

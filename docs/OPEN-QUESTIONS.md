@@ -183,9 +183,8 @@ N=8   8/8 ok   0 errores   0 throttling   8 listados distintos (sin contaminaci�
       el reloj lo domina el bootstrap, no la concurrencia
 ```
 
-En ese momento 8 quedó como techo por no haberse probado más alto, no porque fallara —
-de ahí que el pool de fase 1 se describiera como "cortesía, no restricción del servidor".
-Eso ya no es una suposición: se probó.
+En ese momento 8 quedó como techo por no haberse probado más alto, no porque fallara.
+Eso ya no es una suposición: se probó, y el número real es 80.
 
 **Segunda ronda (2026-08-19)**, rampa contra producción vía la propia API dockerizada
 (`SIA_POOL_SIZE` recreado por nivel, N fetches de detalle concurrentes, uno por conexión
@@ -203,11 +202,11 @@ detalle) más algún `sia_noop`. Se confirmó que no es un bug de esos códigos 
 particular: los mismos cursos que fallaron en paralelo responden 200 limpio en
 solitario (N=1). Es degradación real de concurrencia, no ruido de datos.
 
-**Techo probado: 80 conexiones concurrentes, limpio. 88 ya degrada.** El número no
-es cortesía — es el borde medido. `SIA_POOL_SIZE` de producción sigue en un valor muy
-por debajo de esto (el tráfico actual no lo necesita); lo que cambia es que ahora hay
-~10× de margen medido antes de tocar el borde real, no una regla de buena educación
-inventada.
+**80 es el óptimo medido: 80 conexiones concurrentes, limpio. 88 ya degrada.** Es el
+borde real del servidor, no una estimación ni un tope autoimpuesto. `SIA_POOL_SIZE` de
+producción sigue muy por debajo porque el tráfico de hoy no lo necesita; lo que cambia
+es que ahora el margen hasta el borde está medido, y subir el pool es una decisión de
+configuración con un número detrás.
 
 ---
 

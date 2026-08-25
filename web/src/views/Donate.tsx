@@ -85,7 +85,7 @@ export function Donate() {
             />
 
             <div className="donate__key">
-              <span className="donate__key-label">o con tu llave Bre-B</span>
+              <span className="donate__key-label">o con mi llave Bre-B</span>
               <button
                 type="button"
                 className="donate__key-value tnum"

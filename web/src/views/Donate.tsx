@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Check, Copy, HeartHandshake } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { AppLink } from "../components/AppLink";
@@ -18,6 +18,14 @@ export function Donate() {
   const plan = usePlan();
   const sel = plan.selection;
   const [copied, setCopied] = useState(false);
+  const [donors, setDonors] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch("/donors.json")
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setDonors)
+      .catch(() => {});
+  }, []);
 
   async function copyKey() {
     try {
@@ -52,20 +60,15 @@ export function Donate() {
               aria-hidden="true"
             />
 
-            <p className="eyebrow rise">gracias</p>
-            <h1
-              className="donate__title rise"
-              style={{ animationDelay: "60ms" }}
-            >
+            <h1 className="donate__title rise">
               Si esto te <em>sirvió</em>
             </h1>
-            <p
-              className="donate__lead rise"
-              style={{ animationDelay: "120ms" }}
-            >
+            <p className="donate__lead rise" style={{ animationDelay: "60ms" }}>
               SIA Bridge es gratis, sin cuentas y sin anuncios. Vive en un
               servidor que alguien tiene en la sala de su casa. Si facilité la
-              tarde de inscripción, puedes invitarme un café aquí. <span className="emoji-mobile">👇</span><span className="emoji-desktop">👉</span>
+              tarde de inscripción, puedes invitarme un café aquí.{" "}
+              <span className="emoji-mobile">👇</span>
+              <span className="emoji-desktop">👉</span>
             </p>
           </div>
 
@@ -98,6 +101,26 @@ export function Donate() {
             </div>
           </div>
         </div>
+
+        {donors.length > 0 && (
+          <div className="donate__thanks">
+            <span className="donate__thanks-label">gracias especiales a</span>
+            <ul className="donate__thanks-chips">
+              {donors.map((name, i) => (
+                <li
+                  key={name}
+                  className="donate__thanks-chip rise"
+                  style={{ animationDelay: `${260 + i * 40}ms` }}
+                >
+                  {name}
+                </li>
+              ))}
+            </ul>
+            <span className="donate__thanks-label">
+              quienes creyeron en el proyecto
+            </span>
+          </div>
+        )}
       </div>
     </Layout>
   );

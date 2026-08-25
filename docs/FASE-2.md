@@ -67,7 +67,7 @@ Lo que ya existe y no hay que volver a construir:
   (el de cupos pasó a ser `section.seats_checked_at` en el paso 6 — ver *Cupos*).
 
 Lo que **no** existe y esta fase agrega: enumeración masiva, control de concurrencia
-propio, presupuesto de cortesía, cadencia y observabilidad de corridas.
+propio, límite de tasa propio, cadencia y observabilidad de corridas.
 
 ---
 
@@ -211,7 +211,7 @@ costumbre.
 | `errgroup` con `SetLimit(W)` sobre la **lista de programas** | W goroutines, una por conexión disponible. Más goroutines no aceleran nada: se quedan bloqueadas en `Pool.Acquire`, que es el verdadero semáforo |
 | Una goroutine **por programa**, nunca por asignatura | localidad. La conexión queda parqueada en el programa; repartir sus 98 asignaturas entre workers reparquea en cada una y reabre §30/§31/§33 |
 | `pool.Keepalive` en su propia goroutine | igual que en `cmd/bridge`: la sesión muere a los ~4.2 min y un barrido tiene huecos (transacciones largas, esperas del limitador) |
-| `rate.Limiter` compartido por los workers | presupuesto de cortesía. Ver *Cadencia* |
+| `rate.Limiter` compartido por los workers | techo de POSTs/s del job entero, para que no compita con la API por el pool. Ver *Cadencia* |
 | `signal.NotifyContext` + `ctx` que atraviesa todo | parar en cualquier punto es seguro porque el checkpoint está en la base |
 
 ### El pool del job es suyo, no el de la API
@@ -229,10 +229,10 @@ conexiones(api) + conexiones(refresher) ≤ 80      ← el techo medido (OPEN-QU
    4                     +  4              =  8   ← ventana de mantenimiento, API ociosa
 ```
 
-80 es el resultado de una rampa medida contra producción (2026-08-19), no un número de
-cortesía: 88 concurrentes ya rompe ~4.5% de las peticiones. Los valores por defecto de
-arriba se quedan chicos frente a ese techo a propósito — es margen medido, no una regla
-inventada para no molestar al SIA.
+80 es el óptimo medido: rampa contra producción (2026-08-19), 100% de aciertos y
+latencia p50 plana hasta 80, y 88 concurrentes ya rompe ~4.5% de las peticiones. Los
+valores por defecto de arriba se quedan chicos frente a ese techo porque el trabajo de
+hoy cabe de sobra, no porque el techo sea otro.
 
 **Coste aceptado:** dos procesos no comparten `singleflight`, así que el job y un
 cliente pueden pedir la misma asignatura a la vez y gastar dos POSTs en vez de uno. Es
@@ -338,8 +338,9 @@ asignatura):
 | 600 asignaturas | 15 min | ~2.6 GB |
 | 1 200 asignaturas | 15 min (2 workers) | ~5.2 GB |
 
-Empezar en **200–300** y subir con datos: es ~1 GB/día contra un servidor público de
-universidad. El límite es la cortesía, no la capacidad — el SIA ni se entera.
+Empezar en **200–300** y subir con datos: es ~1 GB/día. El límite es el ancho de banda
+propio y el reloj del barrido, no el SIA — el óptimo medido son 80 conexiones
+concurrentes y el job usa 2.
 
 ---
 
@@ -497,7 +498,7 @@ un log, sin abrir una sola conexión al SIA.
 | `REFRESH_WORKERS` | `2` | goroutines = conexiones. Con la API arriba, **≤ 4** |
 | `REFRESH_POOL_SIZE` | `= REFRESH_WORKERS` | más conexiones que workers no sirve para nada |
 | `REFRESH_MAX_DURATION` | `4h` | presupuesto de reloj; corta limpio y reanuda mañana |
-| `REFRESH_RATE_POSTS_PER_SEC` | `6` | cortesía. 2 workers rinden ~4/s; esto es techo, no freno |
+| `REFRESH_RATE_POSTS_PER_SEC` | `6` | techo, no freno: 2 workers rinden ~4/s y nunca lo tocan |
 | `REFRESH_CATALOG_MAX_AGE` | `168h` | TTL que el modo `catalog` sostiene |
 | `REFRESH_DETAIL_MAX_AGE` | `24h` | ídem para `detail` |
 | `REFRESH_HOT_SET_SIZE` | `250` | asignaturas del barrido de cupos |
@@ -514,7 +515,7 @@ invariante de ≤ 80 (techo medido, `OPEN-QUESTIONS.md` §5).
 | La UNAL repinta la página a mitad de barrido | circuit breaker del paso 5; la colección Bruno deja de pasar | abortar, re-mapear con [`FIELDS.md`](FIELDS.md) |
 | **Datos plausibles y equivocados, ×135 000** | no da síntoma — es el fallo propio de este dominio | las aserciones del paso 5 existen solo para esto |
 | El job ahoga a la API | `503 busy` en tráfico real | pool propio + invariante ≤ 80; bajar `REFRESH_WORKERS` |
-| Cortesía con un servidor público | **18.8 MB/min** por worker hoy; ~4 tras el paso 3 | `RATE_POSTS_PER_SEC`, ventana nocturna, hot set chico |
+| Ancho de banda del barrido | **18.8 MB/min** por worker hoy; ~4 tras el paso 3 | `RATE_POSTS_PER_SEC`, ventana nocturna, hot set chico |
 | `seat_snapshot` crece sin freno | tamaño de tabla | dedupe del paso 6; retención si aun así crece |
 | Cambio de semestre | `SIA_TERM` cambia y todo queda viejo de golpe | `section` está *keyed* por `term`: lo viejo queda como historial. Disparo manual de `catalog` + `detail` |
 | Dos corridas solapadas | filas duplicadas en `refresh_run` | `pg_try_advisory_lock` por modo |

@@ -33,7 +33,15 @@ services:
     environment:
       # Hostname `db` es el nombre del servicio en la red interna de Docker,
       # NO localhost. El DATABASE_URL del .env (sección 4) es para el host.
-      DATABASE_URL: postgres://${POSTGRES_USER:-sia}:${POSTGRES_PASSWORD:-sia}@db:5432/${POSTGRES_DB:-sia_bridge}?sslmode=disable
+      #
+      # `pool_max_conns` explícito porque el default de pgx es max(4, NumCPU):
+      # en un VPS de 2 vCPU son CUATRO conexiones de base para SIA_POOL_SIZE
+      # workers haciendo write-behind. No es incorrecto —el trabajo de DB son
+      # ms contra los ~8 s del SIA, así que se serializa y ya— pero deja el
+      # tamaño del pool de Postgres atado al hardware en vez de a la carga.
+      # 16 sobra para 32 workers y cabe de lejos en el max_connections=100 por
+      # defecto de Postgres.
+      DATABASE_URL: postgres://${POSTGRES_USER:-sia}:${POSTGRES_PASSWORD:-sia}@db:5432/${POSTGRES_DB:-sia_bridge}?sslmode=disable&pool_max_conns=16
       PORT: 8080
       SIA_BASE_URL: ${SIA_BASE_URL:-https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf}
       SIA_POOL_SIZE: ${SIA_POOL_SIZE:-4}

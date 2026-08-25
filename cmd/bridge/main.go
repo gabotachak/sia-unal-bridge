@@ -44,12 +44,18 @@ func main() {
 	}
 	defer st.Close()
 
-	slog.Info("bootstrapping SIA connection pool", "size", cfg.SIAPoolSize)
+	// NewPool returns as soon as the pool is usable, not full: it blocks for
+	// the first few connections and fills the rest in the background. The
+	// wait here is bounded by that handful, not by SIA_POOL_SIZE, so raising
+	// the pool no longer lengthens the window in which this process has not
+	// reached ListenAndServe and the service is down.
+	slog.Info("bootstrapping SIA connection pool", "target_size", cfg.SIAPoolSize)
 	pool, err := sia.NewPool(ctx, cfg.SIABaseURL, cfg.SIAPoolSize)
 	if err != nil {
 		slog.Error("sia pool", "err", err)
 		os.Exit(1)
 	}
+	slog.Info("SIA connection pool ready", "ready", pool.Ready(), "target_size", cfg.SIAPoolSize)
 	go pool.Keepalive(ctx)
 
 	src := sia.NewSource(pool)

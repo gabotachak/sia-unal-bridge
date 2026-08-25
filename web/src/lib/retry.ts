@@ -1,7 +1,7 @@
 // Reintentos de lo que el SIA falla solo.
 //
 // Vive acá y no dentro de useApi porque /semestre no usa useApi: dispara sus
-// peticiones a mano, de a cuatro en paralelo. Las dos rutas tienen que
+// peticiones a mano, varias en paralelo. Las dos rutas tienen que
 // reintentar con el MISMO criterio, o la misma materia se comportaría distinto
 // según desde qué pantalla se pide.
 
@@ -16,8 +16,9 @@ import { ApiError } from '../api/client';
  * (`sia_noop`) que el back traduce a error explícito. Abrir una sesión nueva y
  * repetir funciona.
  *
- * `busy` es distinto pero se trata igual: el pool son 4 conexiones y estaban
- * todas ocupadas. Esperar un momento es literalmente la solución.
+ * `busy` es distinto pero se trata igual: el pool tiene un número fijo de
+ * conexiones (`SIA_POOL_SIZE`) y estaban todas ocupadas. Esperar un momento es
+ * literalmente la solución.
  */
 export const TRANSIENT_CODES = new Set(['sia_noop', 'sia_session_lost', 'busy']);
 

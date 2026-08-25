@@ -8,7 +8,7 @@ import (
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
 
-// POST estimates per unit of work, for the courtesy limiter. Both are
+// POST estimates per unit of work, for the rate limiter. Both are
 // measured averages, not guesses: 1380 programs cost ~2760 POSTs of catalog,
 // and a course detail is the cb1 of findRow plus the detail itself.
 const (
@@ -77,8 +77,8 @@ func (r *refresher) catalogSweep(ctx context.Context) error {
 	}
 	return r.eachProgram(ctx, programs, func(ctx context.Context, p catalog.Program) (int, bool, error) {
 		// Pre-checked here as well as inside Service.Catalog: the point is
-		// to count it as SKIPPED and to not spend courtesy budget on a
-		// program that is not going to be fetched.
+		// to count it as SKIPPED and to not spend rate budget on a program
+		// that is not going to be fetched.
 		if catalog.Fresh(p.CatalogFetchedAt, r.opts.CatalogMaxAge, time.Now()) {
 			return 0, true, nil
 		}

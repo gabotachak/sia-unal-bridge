@@ -192,7 +192,7 @@ Es un catálogo público de una universidad, sin `robots.txt`. Aun así:
   puede paralelizar con moderación — respetando
   `conexiones(api) + conexiones(refresher) ≤ 80`. Los valores por defecto se quedan
   muy por debajo de eso; el tráfico real no lo pide.
-- `REFRESH_RATE_POSTS_PER_SEC` es el presupuesto de cortesía del Job, y la ventana
+- `REFRESH_RATE_POSTS_PER_SEC` es el techo de POSTs/s del Job, y la ventana
   nocturna es para el barrido pesado, no para los cupos.
 
 Durante el desarrollo, trabaja contra fixtures y toca el servidor real solo para

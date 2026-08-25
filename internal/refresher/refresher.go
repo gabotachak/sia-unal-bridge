@@ -63,8 +63,8 @@ type Options struct {
 	// freshness marks in the database, not a cursor.
 	MaxDuration time.Duration
 
-	// RatePostsPerSec is courtesy, not throughput control: 2 workers yield
-	// ~4 POSTs/s on their own, so this is a ceiling. 0 disables it.
+	// RatePostsPerSec is a ceiling, not throughput control: 2 workers yield
+	// ~4 POSTs/s on their own and never reach it. 0 disables it.
 	RatePostsPerSec float64
 
 	CatalogMaxAge time.Duration
@@ -304,10 +304,10 @@ func (r *refresher) record(unit string, courses int, skipped bool, err error) {
 	}
 }
 
-// limiter is the courtesy budget: one shared ticker, not a token bucket, so
-// unused capacity does not accumulate into a burst against a public
-// university server. It costs each operation up to 1/rate of latency, which
-// at the default 6/s is ~167 ms against operations that take ~1 s.
+// limiter is one shared ticker, not a token bucket, so unused capacity does
+// not accumulate into a burst that would compete with the API for the pool.
+// It costs each operation up to 1/rate of latency, which at the default 6/s
+// is ~167 ms against operations that take ~1 s.
 type limiter struct {
 	ticker *time.Ticker
 }

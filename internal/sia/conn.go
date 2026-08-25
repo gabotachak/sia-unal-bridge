@@ -67,9 +67,9 @@ type SIAConn struct {
 	DetailRegion int
 
 	// Traffic counters, atomic because Pool.Stats reads them from another
-	// goroutine while this connection is checked out. They are the courtesy
-	// budget made visible: "18.8 MB/min por worker" is a number this
-	// project has to keep an eye on (docs/FASE-2.md "Riesgos").
+	// goroutine while this connection is checked out. They make the sweep's
+	// bandwidth visible: "18.8 MB/min por worker" is a number this project
+	// has to keep an eye on (docs/FASE-2.md "Riesgos").
 	posts, bytes atomic.Int64
 
 	LastUsed time.Time

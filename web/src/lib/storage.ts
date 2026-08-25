@@ -26,7 +26,7 @@ const PLANS_KEY = 'tablero.planes.v2';
 export const MAX_PLANS = 2;
 
 /** Tope de materias en el semestre. Es un presupuesto de mediciones contra
- *  el SIA —una petición de detalle por materia, pool de 4—, no una cuota
+ *  el SIA —una petición de detalle por materia, acotada por el pool—, no una cuota
  *  académica: no depende de cuántos planes haya. */
 export const MAX_ITEMS = 20;
 

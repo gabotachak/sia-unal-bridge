@@ -77,6 +77,20 @@ export function Donate() {
             className="donate__card rise"
             style={{ animationDelay: "180ms" }}
           >
+            <div className="donate__brands">
+              <img
+                className="donate__brand-logo"
+                src="/bre-b-logo.svg"
+                alt="Bre-B"
+              />
+              <span className="donate__brand-sep" aria-hidden="true" />
+              <img
+                className="donate__brand-logo donate__brand-logo--nequi"
+                src="/nequi-logo.png"
+                alt="Nequi"
+              />
+            </div>
+
             <svg
               className="donate__qr"
               viewBox={DONATE_QR_VIEWBOX}
@@ -87,7 +101,7 @@ export function Donate() {
             </svg>
 
             <div className="donate__key">
-              <span className="donate__key-label">o con mi llave Bre-B</span>
+              <span className="donate__key-label">o con mi llave</span>
               <button
                 type="button"
                 className="donate__key-value tnum"

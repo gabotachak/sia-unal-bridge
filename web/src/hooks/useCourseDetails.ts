@@ -7,8 +7,22 @@ import { pooled } from '../lib/pooled';
 import { getDetail, putDetail } from '../lib/detailCache';
 import { itemId, type PlanItem } from '../lib/storage';
 
-/** El pool del back son 4 sesiones ADF. Pedir de a más no acelera nada. */
-export const CONCURRENCY = 4;
+/**
+ * Cuántas peticiones en vuelo a la vez. Tiene que seguir a `SIA_POOL_SIZE`:
+ * del otro lado hay ese número de sesiones ADF y cada una es estrictamente
+ * secuencial, así que pedir de a más no acelera nada — las de sobra se
+ * encolan en `Pool.Acquire` hasta `SIA_ACQUIRE_TIMEOUT_SECONDS` y salen 503.
+ *
+ * Y no puede pasarse de `RATE_LIMIT_BURST`: el limitador por IP no encola,
+ * rechaza con 429 en el acto (`internal/httpapi/ratelimit.go`). Una ráfaga
+ * inicial mayor que el balde se come el sobrante de una.
+ *
+ * Invariante, con los valores de `.env.example`:
+ *
+ *     CONCURRENCY ≤ SIA_POOL_SIZE  y  CONCURRENCY ≤ RATE_LIMIT_BURST
+ *            32   ≤       32                32   ≤        40
+ */
+export const CONCURRENCY = 32;
 
 export type Row = {
   item: PlanItem;
@@ -59,8 +73,8 @@ function readyAtFrom(detail: CourseDetail): number {
  * Trae y mantiene los grupos+cupos de una lista de materias.
  *
  * Extraído de Semester.tsx: Mi semestre y Horario piden exactamente lo
- * mismo —el detalle de cada materia de `plan.items`, con el mismo pool de 4
- * conexiones y el mismo cooldown del back— así que la lógica vive una sola
+ * mismo —el detalle de cada materia de `plan.items`, con el mismo pool de
+ * `CONCURRENCY` conexiones y el mismo cooldown del back— así que la lógica vive una sola
  * vez acá y cada pantalla decide cómo pintarla.
  */
 export function useCourseDetails(items: PlanItem[]) {

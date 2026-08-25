@@ -5,16 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
 
-// DefaultPoolSize is fase 1's chosen size. Measured against production
-// (2026-08-19): the SIA takes up to 80 concurrent sessions cleanly; 88
-// already shows ~4.5% failures (docs/OPEN-QUESTIONS.md §5). 4 is sized to
-// current real traffic, not a server constraint — see docs/ARCH.md
-// "Concurrencia".
+// DefaultPoolSize is fase 1's chosen size. 80 is the measured optimum:
+// against production (2026-08-19) the SIA runs 80 concurrent sessions clean
+// with flat p50 latency, and 88 already shows ~4.5% failures
+// (docs/OPEN-QUESTIONS.md §5). 4 is sized to current real traffic; the
+// headroom up to 80 is a config decision — see docs/ARCH.md "Concurrencia".
 const DefaultPoolSize = 4
 
 // keepaliveTick / keepaliveIdle: the session dies after ~4.2min idle, not
@@ -35,6 +36,25 @@ const (
 // every request until the process was restarted.
 const rebootstrapTimeout = 45 * time.Second
 
+// readyBeforeServing is how many connections NewPool bootstraps before it
+// returns; the rest are filled in the background.
+//
+// Why not all of them: bootstrapping is SEQUENTIAL (see NewPool) and costs
+// 0.15–7 s each with a very wide spread (GOTCHAS §25). At size 4 that is a
+// rounding error, but the pool is a config knob now — at 32 it is up to
+// ~3.7 min during which cmd/bridge has not reached ListenAndServe and the
+// service is simply down. The startup cost stopped being proportional to
+// the pool the moment the pool stopped being 4.
+//
+// Why not one: a single connection serves one request at a time, so the
+// first seconds after a deploy would be a queue. Four is what fase 1 ran on
+// for months — enough to serve real traffic while the rest arrive.
+const readyBeforeServing = 4
+
+// fillRetryDelay paces the background filler's retries. The SIA being down
+// is exactly when this loop must not become a hot loop against it.
+const fillRetryDelay = 15 * time.Second
+
 // Pool is a fixed set of live SIAConn, handed out one at a time. The
 // channel IS the mutex: a connection is only in the channel while idle, so
 // holding it across an entire logical operation (Acquire ... release)
@@ -45,39 +65,107 @@ type Pool struct {
 	conns   chan *SIAConn
 	size    int
 
+	// mu guards all. The background filler appends to it after NewPool has
+	// returned, so it is no longer written once at construction — and
+	// Stats already read it from another goroutine.
+	mu sync.Mutex
 	// all is every connection the pool owns, checked out or not — the
 	// channel only holds the idle ones, so it cannot answer "how much
-	// traffic did this process generate". Written once at construction,
-	// read-only afterwards.
+	// traffic did this process generate".
 	all []*SIAConn
 }
 
-// NewPool bootstraps size connections SEQUENTIALLY — never fan them out in
-// parallel. The bootstrap alone can hit 4.5MB; size of them at once is the
-// mistake docs/ARCH.md calls out ("Bootstraps en fan-out").
+// NewPool returns a pool that is USABLE, not necessarily full: it bootstraps
+// readyBeforeServing connections and fills the rest in the background.
+//
+// Bootstraps are SEQUENTIAL, never fanned out — the bootstrap alone can hit
+// 4.5MB and doing size of them at once is the mistake docs/ARCH.md calls out
+// ("Bootstraps en fan-out"). The background filler keeps that property; it
+// is one goroutine adding one connection at a time.
+//
+// A bootstrap that fails no longer kills the process. It used to: one bad
+// bootstrap out of size returned an error, cmd/bridge called os.Exit(1), and
+// docker's restart policy tried all of them again. That is P(start) = p^size
+// — invisible at 4, a crash loop at 32. Now the failures are logged and
+// retried by the filler, and the only fatal case is the honest one: not a
+// single connection could be bootstrapped, so there is nothing to serve
+// with.
 func NewPool(ctx context.Context, baseURL string, size int) (*Pool, error) {
 	if size <= 0 {
 		size = DefaultPoolSize
 	}
 	p := &Pool{baseURL: baseURL, conns: make(chan *SIAConn, size), size: size}
-	for i := 0; i < size; i++ {
-		c, err := NewConn(baseURL)
-		if err != nil {
-			return nil, fmt.Errorf("sia: pool: new conn %d: %w", i, err)
+
+	var lastErr error
+	for i := 0; i < min(size, readyBeforeServing); i++ {
+		if err := p.add(ctx); err != nil {
+			lastErr = err
+			slog.Warn("sia: pool: bootstrap failed at startup, continuing", "conn", i, "err", err)
 		}
-		if _, err := c.Bootstrap(ctx); err != nil {
-			return nil, fmt.Errorf("sia: pool: bootstrap conn %d: %w", i, err)
-		}
-		p.all = append(p.all, c)
-		p.conns <- c
+	}
+	if p.Ready() == 0 {
+		return nil, fmt.Errorf("sia: pool: no connection could be bootstrapped: %w", lastErr)
+	}
+	if p.Ready() < size {
+		go p.fill(ctx)
 	}
 	return p, nil
 }
 
+// add bootstraps one connection and hands it to the pool. The send never
+// blocks: conns is buffered to size and add is never called beyond it.
+func (p *Pool) add(ctx context.Context) error {
+	c, err := NewConn(p.baseURL)
+	if err != nil {
+		return fmt.Errorf("sia: pool: new conn: %w", err)
+	}
+	if _, err := c.Bootstrap(ctx); err != nil {
+		return fmt.Errorf("sia: pool: bootstrap: %w", err)
+	}
+	p.mu.Lock()
+	p.all = append(p.all, c)
+	p.mu.Unlock()
+	p.conns <- c
+	return nil
+}
+
+// fill brings the pool up to size, one connection at a time, retrying until
+// ctx is done. It never gives up: a transient SIA outage during startup
+// would otherwise shrink the pool for the lifetime of the process, and the
+// operator would see a pool of 6 where the config says 32 with nothing to
+// explain it.
+func (p *Pool) fill(ctx context.Context) {
+	for p.Ready() < p.size {
+		if err := p.add(ctx); err != nil {
+			if ctx.Err() != nil {
+				return // shutting down; not a failure worth logging
+			}
+			slog.Warn("sia: pool: background fill failed, retrying",
+				"ready", p.Ready(), "target", p.size, "err", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(fillRetryDelay):
+			}
+		}
+	}
+	slog.Info("sia: pool: filled", "size", p.size)
+}
+
+// Ready is how many connections the pool owns right now — at or below size
+// while the background filler is still working.
+func (p *Pool) Ready() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.all)
+}
+
 // Stats reports the traffic this pool has generated: POSTs made and bytes
 // read (bootstraps included). It is what refresh_run stores and what makes
-// the courtesy budget of docs/FASE-2.md auditable instead of estimated.
+// the bandwidth figures of docs/FASE-2.md auditable instead of estimated.
 func (p *Pool) Stats() (posts, bytes int64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	for _, c := range p.all {
 		posts += c.posts.Load()
 		bytes += c.bytes.Load()

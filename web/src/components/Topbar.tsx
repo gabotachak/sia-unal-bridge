@@ -50,40 +50,44 @@ export function Topbar() {
       title: 'Empezar de nuevo',
       danger: true,
       confirmLabel: 'Empezar de nuevo',
-      body:
-        n > 0 ? (
-          <>
-            {double ? (
-              <>
-                <p>Se borran los planes:</p>
-                {plan.plans.map((p) => (
-                  <p className="plan-attr-row" key={p.program}>
-                    <span
-                      className="chip__code tnum row__plan-tag"
-                      style={{ color: planColorVar(p.program, plan.plans) }}
-                    >
-                      {p.program}
-                    </span>
-                    <b>{abbreviateEngineering(sentence(p.programName))}</b>
-                  </p>
-                ))}
-              </>
-            ) : (
-              <p>
-                Se borra el plan <b>{abbreviateEngineering(sentence(plan.plans[0].programName))}</b>.
-              </p>
-            )}
+      // El plan se nombra SIEMPRE, con materias guardadas o sin ellas. Antes,
+      // sin materias, el aviso decía "el plan elegido" a secas — y por debajo
+      // de 420px el chip de la barra deja solo el código (Topbar.css), así que
+      // quien tocara la papelera en un teléfono no tenía en NINGUNA parte de
+      // la pantalla el nombre de lo que estaba a punto de borrar.
+      body: (
+        <>
+          {double ? (
+            <>
+              <p>Se borran los planes:</p>
+              {plan.plans.map((p) => (
+                <p className="plan-attr-row" key={p.program}>
+                  <span
+                    className="chip__code tnum row__plan-tag"
+                    style={{ color: planColorVar(p.program, plan.plans) }}
+                  >
+                    {p.program}
+                  </span>
+                  <b>{abbreviateEngineering(sentence(p.programName))}</b>
+                </p>
+              ))}
+            </>
+          ) : (
+            <p>
+              Se borra el plan <b>{abbreviateEngineering(sentence(plan.plans[0].programName))}</b>.
+            </p>
+          )}
+          {n > 0 && (
             <p>
               Y {n === 1 ? 'la materia guardada' : `las ${n} materias guardadas`} en Mi semestre.
             </p>
-            <p>No se puede deshacer.</p>
-          </>
-        ) : (
-          <p>
-            Se {double ? 'borran los planes elegidos' : 'borra el plan elegido'} y todo vuelve al
-            comienzo.
-          </p>
-        ),
+          )}
+          {/* El cierre cambia con lo que hay en juego: con materias guardadas
+              la última línea es la advertencia, sin ellas es lo que tranquiliza
+              —volver al comienzo— porque no se pierde nada armado. */}
+          <p>{n > 0 ? 'No se puede deshacer.' : 'Todo vuelve al comienzo.'}</p>
+        </>
+      ),
     });
     if (!ok) return;
 

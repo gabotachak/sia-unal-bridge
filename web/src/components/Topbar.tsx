@@ -97,8 +97,14 @@ export function Topbar() {
     // Una recarga no tiene ese problema: nada en memoria sobrevive, y la
     // pantalla inicial que arma NavProvider sale del localStorage que se
     // acaba de vaciar — que es plan-picker, porque ya no hay selección.
+    //
+    // Y antes de recargar, borrar el `screen` de la entrada del historial: una
+    // recarga NO lo borra sola, así que quedaría apuntando al catálogo del
+    // plan recién borrado (NavProvider lo filtra igual, esto es el cinturón).
+    // `replace` en vez de `assign` para no dejar esa entrada atrás.
     clearStored();
-    window.location.assign('/');
+    window.history.replaceState(null, '', '/');
+    window.location.replace('/');
   }
 
   const themeLabel =

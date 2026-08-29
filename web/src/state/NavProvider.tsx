@@ -26,8 +26,18 @@ export function NavProvider({ children }: { children: React.ReactNode }) {
     selection ? { name: 'program', selection } : { name: 'plan-picker' },
   );
 
-  const [screen, setScreen] = useState<Screen>(
-    () => (window.history.state?.screen as Screen | undefined) ?? initial,
+  // El `screen` guardado en `history.state` SOBREVIVE a la recarga: recargar
+  // no borra el estado de la entrada del historial. "Empezar de nuevo" vacía
+  // el localStorage y recarga, así que sin este filtro la app vuelve a pintar
+  // la pantalla vieja —el catálogo de un plan que ya no existe— en vez del
+  // onboarding. Sin plan elegido, la ÚNICA pantalla válida es `initial`.
+  const restore = useCallback(
+    (saved: Screen | undefined): Screen => (selection && saved ? saved : initial),
+    [selection, initial],
+  );
+
+  const [screen, setScreen] = useState<Screen>(() =>
+    restore(window.history.state?.screen as Screen | undefined),
   );
 
   useEffect(() => {
@@ -41,11 +51,11 @@ export function NavProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     function onPopState(e: PopStateEvent) {
-      setScreen((e.state?.screen as Screen | undefined) ?? initial);
+      setScreen(restore(e.state?.screen as Screen | undefined));
     }
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [initial]);
+  }, [restore]);
 
   const navigate = useCallback((next: Screen, opts?: { replace?: boolean }) => {
     if (opts?.replace) window.history.replaceState({ screen: next }, '', '/');

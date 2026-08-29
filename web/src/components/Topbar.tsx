@@ -1,4 +1,4 @@
-import { CalendarDays, Coffee, LayoutList, ListChecks, Monitor, Moon, Sun, Trash2 } from 'lucide-react';
+import { CalendarDays, Coffee, LayoutList, ListChecks, Moon, Sun, SunMoon, Trash2 } from 'lucide-react';
 import { AppLink } from './AppLink';
 import { useConfirm } from './Confirm';
 import { useTheme } from '../hooks/useTheme';
@@ -240,9 +240,15 @@ export function Topbar() {
             <span className="donatebtn__word">Invítame un café</span>
           </AppLink>
 
+          {/* `SunMoon` —la luna metida entre los rayos del sol— y no un monitor:
+              el monitor decía "pantalla", que es el aparato, no el ajuste, y
+              en un teléfono ni siquiera es la forma del aparato que se tiene
+              en la mano. Este icono es literalmente los otros dos estados
+              superpuestos, que es lo que "el del sistema" significa: ni claro
+              ni oscuro fijo, el que mande afuera. */}
           <IconButton onClick={cycle} label={themeLabel} tip="left">
             {theme === 'system' ? (
-              <Monitor size={ICON} strokeWidth={STROKE} />
+              <SunMoon size={ICON} strokeWidth={STROKE} />
             ) : resolved === 'dark' ? (
               <Moon size={ICON} strokeWidth={STROKE} />
             ) : (

@@ -758,8 +758,12 @@ la única salida es que la persona adivine que el botón de la papelera arriba
 
 Arreglo, en el manejador de error de las vistas que dependen de la selección:
 ante `code === 'unknown_program'`, ofrecer explícitamente "elegir otro plan"
-llamando a `clearStored()` + `window.location.assign('/')`, el mismo camino que
-`Topbar.startOver` ya usa y ya explica por qué recarga en vez de navegar.
+llamando a `clearStored()` + `history.replaceState(null, '', '/')` +
+`window.location.replace('/')`, el mismo camino que `Topbar.startOver` ya usa y
+ya explica por qué recarga en vez de navegar. Los tres pasos, no solo el
+primero: el `screen` guardado en `history.state` sobrevive a la recarga, así
+que sin limpiarlo la app vuelve a pintar el plan que se acaba de borrar
+(`NavProvider` lo filtra igual, pero la entrada del historial queda sucia).
 
 ### D2 — Materias apagadas en Mi semestre
 

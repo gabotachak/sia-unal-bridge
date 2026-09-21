@@ -9,7 +9,26 @@ Mismo formato que [`PLAN.md`](PLAN.md): pasos con criterio de aceptación. La
 justificación de cada número vive en el documento que lo midió; aquí solo está el
 enlace.
 
-> **Estado: implementada y verificada contra producción el 2026-08-17.**
+> **El barrido por cron se abandonó el 2026-09-21.** Lo que sigue es el diseño y lo medido
+> al implementarlo; el binario y sus cuatro modos siguen ahí como herramienta manual, pero
+> ya no hay crontab ni cadencia. Por qué:
+>
+> - **`detail --scope=global`** pide cada asignatura desde UN plan cualquiera, y la
+>   visibilidad de los grupos es por plan: a los demás planes no les ahorra su POST ni les
+>   pinta cupos. Su última corrida fueron 191 343 POSTs y 5.9 GB, para mantener una frescura
+>   de 24 h cuando la interfaz da por viejo un cupo de más de una hora.
+> - **`seats --scope=hot`** (~3 GB/día) adivinaba qué le interesa a la gente. La interfaz
+>   ahora mide lo que alguien está mirando, por el carril de fondo del pool, con los cupos
+>   compartidos entre planes y una electiva a 3 POSTs.
+> - **`catalog`** y **`reference`** eran baratos, pero refrescaban los 1380 planes cada semana
+>   para ahorrarle la espera a los pocos que se abren. La API ahora sirve el catálogo guardado
+>   y lo refresca por detrás de quien preguntó (`docs/API.md`, "Frescura"): nadie espera, y
+>   solo se refresca lo que alguien abre.
+> - Todo ese tráfico salía de la misma IP que la API. Si el SIA la limita, caen los dos.
+>
+> Diagnóstico completo: [`FABLE-IMPROVEMENTS.md`](FABLE-IMPROVEMENTS.md).
+>
+> **Estado original: implementada y verificada contra producción el 2026-08-17.**
 > `internal/refresher` + `cmd/refresher`, migración `00002`, los cuatro modos, `/v1/status`
 > y el crontab de `deploy/cron.d/sia-refresher`. Lo medido y las desviaciones respecto a
 > este plan están al final, en [Resultado](#resultado-2026-08-17).

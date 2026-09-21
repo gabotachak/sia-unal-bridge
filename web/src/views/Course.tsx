@@ -32,7 +32,7 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
   // read-through decide si eso significa cache o SIA — no hay un segundo
   // useEffect peleando con el cooldown por su cuenta (docs/PLAN-SIACHANGES.md A3).
   const path = routes.course(scope, program, code, STALE_SEATS_SECONDS);
-  const { data, error, loading, elapsed, attempt, reload } = useApi<CourseDetail>(path);
+  const { data, freshness, error, loading, elapsed, attempt, reload } = useApi<CourseDetail>(path);
 
   /**
    * A dónde vuelve la flecha.
@@ -174,6 +174,17 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
       )}
       {fault && <Fault error={fault} level={level} onRetry={() => reload()} />}
       {rateLimited && <p className="course__cooldown">{rateLimited.humane}</p>}
+      {/* X-Cache: stale — el SIA no respondió y la API sirvió lo que ya tenía.
+          El dato está a la vista con su edad; esto dice POR QUÉ es viejo. */}
+      {freshness?.cache === 'stale' && !error && (
+        <p className="course__warning">
+          <TriangleAlert size={16} strokeWidth={2} aria-hidden="true" />
+          <span>
+            El SIA no respondió ahora mismo. Estos son los últimos datos guardados; mira de cuándo
+            es cada cupo.
+          </span>
+        </p>
+      )}
       {isNoopWithData && (
         <p className="course__warning">
           <TriangleAlert size={16} strokeWidth={2} aria-hidden="true" />

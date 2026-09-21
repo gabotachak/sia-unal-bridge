@@ -8,6 +8,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, get } from '../api/client';
 import { MAX_RETRIES, backoffMs, isTransient, sleep } from '../lib/retry';
 
+/** Volver a la pestaña vuelve a pedir solo si lo que hay en pantalla tiene
+ *  más que esto. 5 min es el TTL de cupos de la API: antes de eso la
+ *  respuesta sería la misma. */
+const REVISIT_AFTER_MS = 5 * 60 * 1000;
+
 export type State<T> = {
   data: T | null;
   error: ApiError | null;
@@ -46,6 +51,9 @@ export function useApi<T>(path: string | null): State<T> {
   // la respuesta que llegó sigue siendo la que interesa: si el usuario navegó
   // mientras el SIA tardaba 8 s, la respuesta vieja debe descartarse.
   const override = useRef<string | null>(null);
+  // Cuándo llegó la última respuesta buena, para no volver a pedir por cada
+  // alt-tab: el catálogo son ~300 KB y rearmar la lista entera.
+  const lastOk = useRef(0);
 
   const reload = useCallback((overridePath?: string) => {
     override.current = overridePath ?? null;
@@ -64,7 +72,7 @@ export function useApi<T>(path: string | null): State<T> {
   useEffect(() => {
     if (!path) return;
     const onVisible = () => {
-      if (document.visibilityState === 'visible') reload();
+      if (document.visibilityState === 'visible' && Date.now() - lastOk.current > REVISIT_AFTER_MS) reload();
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
@@ -102,6 +110,7 @@ export function useApi<T>(path: string | null): State<T> {
           if (cancelled) return;
           setData(res.data);
           setError(null);
+          lastOk.current = Date.now();
           return;
         } catch (e) {
           if (cancelled) return;

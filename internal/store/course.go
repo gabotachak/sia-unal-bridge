@@ -21,9 +21,12 @@ import (
 // viceversa.
 func (s *Store) UpsertCatalog(ctx context.Context, program catalog.Program, offerings []catalog.CourseOffering) error {
 	return s.withTx(ctx, func(tx pgx.Tx) error {
+		// Queued and sent as ONE batch: two statements per course, one round
+		// trip each, was ~1400 round trips for a Medellín plan (694 courses).
+		batch := &pgx.Batch{}
 		for _, o := range offerings {
 			c := o.Course
-			if _, err := tx.Exec(ctx, `
+			batch.Queue(`
 				INSERT INTO course (campus_code, code, name, credits, description, fetched_at)
 				VALUES ($1, $2, $3, $4, $5, now())
 				ON CONFLICT (campus_code, code) DO UPDATE SET
@@ -32,17 +35,17 @@ func (s *Store) UpsertCatalog(ctx context.Context, program catalog.Program, offe
 					description = EXCLUDED.description,
 					fetched_at = now()`,
 				c.CampusCode, c.Code, c.Name, c.Credits, c.Description,
-			); err != nil {
-				return fmt.Errorf("store: UpsertCatalog: course %s: %w", c.Code, err)
-			}
-
-			if _, err := tx.Exec(ctx, `
+			)
+			batch.Queue(`
 				INSERT INTO course_program (program_id, campus_code, code, typology)
 				VALUES ($1, $2, $3, $4)
 				ON CONFLICT (program_id, code) DO UPDATE SET typology = EXCLUDED.typology, disabled_at = NULL`,
 				program.ID, c.CampusCode, c.Code, o.Typology,
-			); err != nil {
-				return fmt.Errorf("store: UpsertCatalog: course_program %s: %w", c.Code, err)
+			)
+		}
+		if batch.Len() > 0 {
+			if err := tx.SendBatch(ctx, batch).Close(); err != nil {
+				return fmt.Errorf("store: UpsertCatalog: upsert courses: %w", err)
 			}
 		}
 

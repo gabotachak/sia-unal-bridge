@@ -97,6 +97,22 @@ paths:
                       (reference · catalog · detail · seats). Vacío si nunca corrió.
                     additionalProperties:
                       $ref: "#/components/schemas/RefreshRun"
+                  sia:
+                    type: object
+                    description: >
+                      Cómo le va a ESTE proceso contra el SIA, contado desde que arrancó.
+                      `healthz` solo dice que el proceso vive: un `fetches_failed` que
+                      crece contra `fetches_ok`, o un `last_ok` que se queda atrás, es el
+                      pool pudriéndose aunque `healthz` diga `ok`.
+                    properties:
+                      pool_size: { type: integer }
+                      ready: { type: integer, description: Conexiones ya creadas. }
+                      fetches_ok: { type: integer }
+                      fetches_failed: { type: integer }
+                      noops: { type: integer, description: Respuestas vacías del SIA (sesión muerta o estado roto). }
+                      posts: { type: integer, description: POSTs enviados al SIA. }
+                      bytes: { type: integer, description: Bytes recibidos del SIA, bootstraps incluidos. }
+                      last_ok: { type: string, format: date-time }
 
   /version:
     get:
@@ -320,6 +336,7 @@ paths:
         - $ref: "#/components/parameters/Faculty"
         - $ref: "#/components/parameters/Level"
         - $ref: "#/components/parameters/MaxAge"
+        - $ref: "#/components/parameters/Background"
       responses:
         "200":
           description: La asignatura con sus grupos
@@ -571,6 +588,15 @@ components:
         Segundos. Sobreescribe el default del recurso. `0` fuerza la consulta al SIA.
         Un valor negativo o no numérico es `400`.
       schema: { type: integer, minimum: 0, examples: [0, 300] }
+    Background:
+      name: background
+      in: query
+      required: false
+      description: |
+        `1` = esta lectura no la pidió una persona (p. ej. un cliente que recorre un
+        catálogo entero para refrescar su columna de cupos). No cuenta como demanda para
+        el hot set del Refresher. No cambia nada más de la respuesta.
+      schema: { type: string, enum: ["1"] }
 
   headers:
     Age:
@@ -580,8 +606,12 @@ components:
       description: "`max-age` efectivo del recurso."
       schema: { type: string, examples: ["max-age=300"] }
     XCache:
-      description: Si la respuesta salió de Postgres o costó una consulta al SIA.
-      schema: { type: string, enum: [hit, miss] }
+      description: |
+        Si la respuesta salió de Postgres (`hit`) o costó una consulta al SIA (`miss`).
+        `stale`: la consulta al SIA **falló** y se sirvió lo que Postgres ya tenía, aunque
+        esté vencido — solo en el detalle, y nunca con `max_age=0`. La edad de cada dato
+        sigue viajando con él, así que nada se hace pasar por fresco.
+      schema: { type: string, enum: [hit, miss, stale] }
     XSIAFetchMs:
       description: Solo en `miss`. Latencia de la consulta al SIA.
       schema: { type: integer }
@@ -742,7 +772,27 @@ components:
         credits: { type: integer }
         typology: { type: string }
         description: { type: string }
-        fetched_at: { type: string, format: date-time }
+        fetched_at:
+          type: string
+          format: date-time
+          description: |
+            Sello de la fila de la asignatura, GLOBAL: lo mueve cualquier plan y también
+            un refresco de catálogo. No es "cuándo se midió desde este plan" — para eso
+            está `detail_fetched_at`, que es además el que mira el cooldown.
+        detail_fetched_at:
+          type: string
+          format: date-time
+          description: Igual que en el listado — cuándo pidió ESTE plan el detalle.
+        seats:
+          description: |
+            El mismo agregado del listado (suma de los grupos que este plan ve, con el
+            sello del más viejo). Ausente si ningún grupo tiene medición.
+          type: object
+          properties:
+            available: { type: integer }
+            sections: { type: integer }
+            measured_at: { type: string, format: date-time }
+            age_seconds: { type: integer }
         sections:
           type: array
           items: { $ref: "#/components/schemas/Section" }

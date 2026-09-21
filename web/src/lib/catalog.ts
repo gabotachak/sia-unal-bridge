@@ -2,7 +2,7 @@
 // (PLAN-DOUBLE-TITULATION.md, D5 y D6).
 
 import { STALE_SEATS_SECONDS } from '../api/client';
-import type { CourseSummary } from '../api/types';
+import type { CourseDetail, CourseSeats, CourseSummary } from '../api/types';
 import type { Selection } from './storage';
 import { typologyRank } from './typology';
 
@@ -28,6 +28,33 @@ export function seatsUnknown(c: Pick<CourseSummary, 'seats' | 'detail_fetched_at
   if (!stamp) return true;
   const age = (Date.now() - Date.parse(stamp)) / 1000;
   return !Number.isFinite(age) || age > STALE_SEATS_SECONDS;
+}
+
+/**
+ * El agregado de cupos de una asignatura, sacado de su detalle.
+ *
+ * El detalle de la API NO trae `seats` a nivel de asignatura —ese campo es
+ * del listado (openapi.yaml: CourseSummary sí, CourseDetail no)—, solo los
+ * cupos de cada grupo. El tipo `CourseDetail` lo hereda de `CourseSummary` y
+ * por eso leer `detail.seats` compila, pero siempre da `undefined`: la celda
+ * pasaba de la rueda a "sin grupos" con los grupos recién medidos en la mano.
+ *
+ * Misma cuenta que `ProgramCourses` en el back (internal/store/course.go):
+ * suma de los grupos CON medición, sello del más viejo, cuántos son. Sin
+ * ningún grupo medido no hay agregado — igual que allá.
+ */
+export function seatsFromDetail(detail: Pick<CourseDetail, 'sections'>): CourseSeats | undefined {
+  const measured = detail.sections.flatMap((s) => (s.seats ? [s.seats] : []));
+  if (measured.length === 0) return undefined;
+  const oldest = measured.reduce((a, b) =>
+    Date.parse(a.measured_at) <= Date.parse(b.measured_at) ? a : b,
+  );
+  return {
+    available: measured.reduce((n, s) => n + s.available, 0),
+    measured_at: oldest.measured_at,
+    sections: measured.length,
+    age_seconds: oldest.age_seconds,
+  };
 }
 
 export type MergedCourse = CourseSummary & {

@@ -72,6 +72,7 @@ niveles que la API nunca había recorrido, y §40, encontrada en vivo el 2026-08
 | `docs/COMMIT-CONVENTION.md` | **Formato de commits — leer antes de hacer commit** |
 | `docs/PLAN.md` | **Plan de implementación: pasos, criterios de aceptación, fixtures** |
 | `docs/FASE-2.md` | **La fase 2: el Job, su concurrencia, su cadencia y lo medido al implementarla** |
+| `docs/FABLE-IMPROVEMENTS.md` | Diagnóstico del 2026-09-20 (pool envenenado, tormenta de mediciones), qué se corrigió y qué queda |
 | `docs/ARCH.md` | Arquitectura: puertos, read-through, pool de sesiones, concurrencia |
 | `docs/API.md` | Contrato HTTP: endpoints, IDs públicos, frescura, errores |
 | `docs/LAYOUT.md` | Árbol de paquetes Go: qué vive en cada uno y por qué |

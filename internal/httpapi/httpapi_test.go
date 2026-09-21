@@ -325,7 +325,8 @@ func (f *fakeSIA) FetchCatalog(context.Context, catalog.ProgramKey) ([]catalog.C
 func (f *fakeSIA) FetchElectives(context.Context, catalog.ProgramKey) ([]catalog.CourseOffering, error) {
 	return nil, nil
 }
-func (f *fakeSIA) FetchDetail(_ context.Context, _ catalog.ProgramKey, code, term string) (catalog.CourseOffering, error) {
+func (f *fakeSIA) FetchDetail(_ context.Context, _ catalog.ProgramKey, ref catalog.CourseRef, term string) (catalog.CourseOffering, error) {
+	code := ref.Code
 	f.detailCalls++
 	return catalog.CourseOffering{
 		Course: catalog.Course{
@@ -344,7 +345,7 @@ func (f *fakeSIA) FetchDetail(_ context.Context, _ catalog.ProgramKey, code, ter
 func (f *fakeSIA) FetchDetails(ctx context.Context, key catalog.ProgramKey, refs []catalog.CourseRef, term string,
 	yield func(catalog.CourseOffering, error) error) error {
 	for _, ref := range refs {
-		o, err := f.FetchDetail(ctx, key, ref.Code, term)
+		o, err := f.FetchDetail(ctx, key, ref, term)
 		if yerr := yield(o, err); yerr != nil {
 			return yerr
 		}
@@ -389,7 +390,10 @@ func TestCourseDetail_MissThenHit(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("json: %v", err)
 	}
-	for _, field := range []string{"campus_code", "code", "name", "credits", "typology", "description", "fetched_at", "sections"} {
+	// seats and detail_fetched_at: same two fields, same meaning, as a catalog
+	// row. The web client read them off the detail for weeks while the API
+	// did not send them, and painted "sin grupos" over freshly measured seats.
+	for _, field := range []string{"campus_code", "code", "name", "credits", "typology", "description", "fetched_at", "sections", "seats", "detail_fetched_at"} {
 		if _, ok := body[field]; !ok {
 			t.Errorf("missing field %q in response: %s", field, w.Body.String())
 		}
@@ -547,8 +551,8 @@ func TestCooldown_BlocksSecondForcedRefresh(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body["error"] != "rate_limit" {
-		t.Errorf("got error=%v, want rate_limit", body["error"])
+	if body["error"] != "refresh_cooldown" {
+		t.Errorf("got error=%v, want refresh_cooldown", body["error"])
 	}
 	if body["retry_after_seconds"] == nil {
 		t.Error("expected retry_after_seconds in the body")

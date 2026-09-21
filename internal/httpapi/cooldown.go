@@ -29,6 +29,11 @@ import (
 // cause the very POST it exists to prevent, and answer 429 while hiding the
 // data it just paid for.
 //
+// Its error code is refresh_cooldown, not the limiter's rate_limit: both are
+// 429, but one says "this course is fresh, the number you have is right" and
+// the other "you are sending too much". A client told the first when the
+// second happened draws the wrong conclusion.
+//
 // A course with nothing cached passes. That request is a first fetch, not a
 // refresh; 429 to a client that has never been served anything is a dead end.
 func (a *api) refreshBlocked(c *gin.Context, program catalog.Program, code string, maxAge time.Duration) bool {
@@ -53,7 +58,7 @@ func (a *api) refreshBlocked(c *gin.Context, program catalog.Program, code strin
 	retryAfter := int(math.Ceil(remaining.Seconds()))
 	c.Header("Retry-After", strconv.Itoa(retryAfter))
 	c.JSON(http.StatusTooManyRequests, gin.H{
-		"error":               "rate_limit",
+		"error":               "refresh_cooldown",
 		"message":             "refresh too soon: this course was fetched from SIA less than the cooldown ago",
 		"cooldown_seconds":    int(a.cooldown.Seconds()),
 		"retry_after_seconds": retryAfter,

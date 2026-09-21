@@ -231,7 +231,7 @@ elige. Quien no quiera manejarlo, usa la ruta canónica.
 | Método | Ruta | Notas |
 |---|---|---|
 | `GET` | `/v1/healthz` | liveness |
-| `GET` | `/v1/status` | cobertura de la cache, estado de conexiones vivas y **última corrida del `Refresher`** |
+| `GET` | `/v1/status` | cobertura de la cache, **salud del camino al SIA** (`sia`: fetches ok/fallidos, noops, POSTs, bytes, último fetch bueno — `healthz` solo dice que el proceso vive) y **última corrida del `Refresher`** |
 | `GET` | `/v1/version` | tag semver y commit del build corriendo (`{"version","commit"}`) — ver `docs/COMMANDS.md` |
 | `GET` | `/v1/openapi.yaml` | el contrato, embebido en el binario |
 | `GET` | `/v1/docs` | Swagger UI sobre ese contrato (con sus estáticos bajo `/v1/docs/`) |
@@ -345,6 +345,14 @@ igual**: están todos los grupos que Industrial *podría* ver, pero no cuáles. 
 
 Compensación: los cupos de ese POST son frescos para todos los planes.
 
+Y esa compensación se cobra: cuando un plan **ya sabe** qué grupos ve (su sello tiene
+menos de 24 h) y todos esos grupos tienen cupos medidos dentro del `max_age` pedido —los
+haya medido el plan que sea—, la respuesta es `hit` aunque el sello del plan sea más viejo
+que ese `max_age`. La visibilidad es por plan; la frescura de los cupos, global. Medido el
+2026-09-20 sobre un plan de Bogotá: 136 de 267 asignaturas estaban en ese estado, cada una
+un viaje al SIA por un número que otro plan acababa de escribir. Un grupo sin medición, o
+una asignatura sin grupos, no prueba nada y va al SIA como siempre.
+
 ### Cabeceras
 
 | Cabecera | Valor |
@@ -353,6 +361,17 @@ Compensación: los cupos de ese POST son frescos para todos los planes.
 | `Cache-Control` | `max-age` efectivo del recurso |
 | `X-Cache` | `hit` · `miss` · `stale` |
 | `X-SIA-Fetch-Ms` | solo en `miss`; latencia del SIA |
+
+`stale`: la consulta al SIA **falló** y se sirvió lo que Postgres ya tenía, aunque esté
+vencido, en vez de un 502. Solo en el detalle, y nunca con `max_age=0` — quien fuerza una
+medición quiere un número nuevo o un error, no uno viejo disfrazado. Tampoco cuando el SIA
+responde que la asignatura ya no está en el plan: ese 404 es la respuesta. Cada dato
+sigue llevando su edad, así que nada se hace pasar por fresco.
+
+`?background=1` en el detalle marca una lectura que no pidió una persona (un cliente que
+recorre un catálogo para refrescar su columna de cupos). No cuenta como demanda para el
+hot set, y en el pool va por el **carril de fondo** —a lo sumo medio pool—, de modo que
+nunca deja sin conexión a quien abrió una ficha.
 
 Los cupos además llevan la edad **en el body**, porque nunca se sirve un cupo sin decir
 de cuándo es:
@@ -459,7 +478,7 @@ listado y guarda el crudo aparte.
 | Sesión caducada tras N reintentos | `502` | `sia_session_lost` |
 | Pool ocupado / timeout | `503` + `Retry-After` | `busy` |
 | `max_age` inválido | `400` | `bad_request` |
-| Refresh forzado antes del cooldown (mismo curso) | `429` + `Retry-After` | `rate_limit` |
+| Refresh forzado antes del cooldown (mismo curso) | `429` + `Retry-After` | `refresh_cooldown` |
 | Límite de requests por IP superado (cualquier endpoint) | `429` + `Retry-After` | `rate_limit` |
 
 **El `404` y el `200` con `sections: []` son casos distintos y no se pueden colapsar.**

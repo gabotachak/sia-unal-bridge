@@ -5,11 +5,18 @@
 // después de pintar). Se escriben bien UNA vez y las vistas no vuelven a verlos.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, get } from '../api/client';
+import { ApiError, get, type Freshness } from '../api/client';
 import { MAX_RETRIES, backoffMs, isTransient, sleep } from '../lib/retry';
+
+/** Volver a la pestaña vuelve a pedir solo si lo que hay en pantalla tiene
+ *  más que esto. 5 min es el TTL de cupos de la API: antes de eso la
+ *  respuesta sería la misma. */
+const REVISIT_AFTER_MS = 5 * 60 * 1000;
 
 export type State<T> = {
   data: T | null;
+  /** De dónde salió `data`: cache, SIA, o `stale` (el SIA falló y esto es lo guardado). */
+  freshness: Freshness | null;
   error: ApiError | null;
   loading: boolean;
   /** Segundos transcurridos en la petición en curso. Para el cronómetro. */
@@ -36,6 +43,7 @@ export type State<T> = {
  */
 export function useApi<T>(path: string | null): State<T> {
   const [data, setData] = useState<T | null>(null);
+  const [freshness, setFreshness] = useState<Freshness | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -46,6 +54,9 @@ export function useApi<T>(path: string | null): State<T> {
   // la respuesta que llegó sigue siendo la que interesa: si el usuario navegó
   // mientras el SIA tardaba 8 s, la respuesta vieja debe descartarse.
   const override = useRef<string | null>(null);
+  // Cuándo llegó la última respuesta buena, para no volver a pedir por cada
+  // alt-tab: el catálogo son ~300 KB y rearmar la lista entera.
+  const lastOk = useRef(0);
 
   const reload = useCallback((overridePath?: string) => {
     override.current = overridePath ?? null;
@@ -64,7 +75,7 @@ export function useApi<T>(path: string | null): State<T> {
   useEffect(() => {
     if (!path) return;
     const onVisible = () => {
-      if (document.visibilityState === 'visible') reload();
+      if (document.visibilityState === 'visible' && Date.now() - lastOk.current > REVISIT_AFTER_MS) reload();
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
@@ -101,7 +112,9 @@ export function useApi<T>(path: string | null): State<T> {
           const res = await get<T>(target);
           if (cancelled) return;
           setData(res.data);
+          setFreshness(res.freshness);
           setError(null);
+          lastOk.current = Date.now();
           return;
         } catch (e) {
           if (cancelled) return;
@@ -135,5 +148,5 @@ export function useApi<T>(path: string | null): State<T> {
     };
   }, [path, nonce]);
 
-  return { data, error, loading, elapsed, attempt, reload };
+  return { data, freshness, error, loading, elapsed, attempt, reload };
 }

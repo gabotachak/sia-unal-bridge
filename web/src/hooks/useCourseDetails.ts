@@ -24,6 +24,13 @@ import { itemId, type PlanItem } from '../lib/storage';
  */
 export const CONCURRENCY = 32;
 
+/**
+ * La carga al abrir la pantalla (sin forzar) nadie la pidió con un clic: casi
+ * todo sale de cache, y lo que no, no tiene por qué ocupar 32 conexiones del
+ * pool de todos. El ancho completo es para el botón de medir.
+ */
+const PASSIVE_CONCURRENCY = 6;
+
 export type Row = {
   item: PlanItem;
   detail: CourseDetail | null;
@@ -65,7 +72,12 @@ const newRow = (item: PlanItem): Row => {
 
 /** Cuándo vuelve a estar disponible una materia según lo que respondió la API. */
 function readyAtFrom(detail: CourseDetail): number {
-  const at = detail.fetched_at ? Date.parse(detail.fetched_at) : NaN;
+  // `detail_fetched_at` es el sello de ESTE plan, el mismo que mira el cooldown
+  // del back. `fetched_at` es de la fila global de la asignatura —lo mueve
+  // cualquier plan, y un refresco de catálogo— y queda solo como respaldo
+  // para una API que todavía no mande el otro.
+  const stamp = detail.detail_fetched_at ?? detail.fetched_at;
+  const at = stamp ? Date.parse(stamp) : NaN;
   return Number.isFinite(at) ? at + FETCH_COOLDOWN * 1000 : 0;
 }
 
@@ -138,7 +150,7 @@ export function useCourseDetails(items: PlanItem[]) {
       setTotal(targets.length);
       setRows((prev) => prev.map((r) => ({ ...r, error: undefined })));
 
-      await pooled(targets, CONCURRENCY, async (item) => {
+      await pooled(targets, force ? CONCURRENCY : PASSIVE_CONCURRENCY, async (item) => {
         const id = itemId(item);
         const scope = { level: item.level, campus: item.campus, faculty: item.faculty };
 

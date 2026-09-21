@@ -3,6 +3,8 @@
 # con otro proyecto en el server, avisar para reasignar antes de aplicar.
 
 sia-api.gabotachak.dev {
+	# La API no comprime por su cuenta y un catálogo son ~300 KB de JSON.
+	encode zstd gzip
 	reverse_proxy localhost:18080
 }
 

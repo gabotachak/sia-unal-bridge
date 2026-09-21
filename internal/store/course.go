@@ -21,9 +21,12 @@ import (
 // viceversa.
 func (s *Store) UpsertCatalog(ctx context.Context, program catalog.Program, offerings []catalog.CourseOffering) error {
 	return s.withTx(ctx, func(tx pgx.Tx) error {
+		// Queued and sent as ONE batch: two statements per course, one round
+		// trip each, was ~1400 round trips for a Medellín plan (694 courses).
+		batch := &pgx.Batch{}
 		for _, o := range offerings {
 			c := o.Course
-			if _, err := tx.Exec(ctx, `
+			batch.Queue(`
 				INSERT INTO course (campus_code, code, name, credits, description, fetched_at)
 				VALUES ($1, $2, $3, $4, $5, now())
 				ON CONFLICT (campus_code, code) DO UPDATE SET
@@ -32,17 +35,17 @@ func (s *Store) UpsertCatalog(ctx context.Context, program catalog.Program, offe
 					description = EXCLUDED.description,
 					fetched_at = now()`,
 				c.CampusCode, c.Code, c.Name, c.Credits, c.Description,
-			); err != nil {
-				return fmt.Errorf("store: UpsertCatalog: course %s: %w", c.Code, err)
-			}
-
-			if _, err := tx.Exec(ctx, `
+			)
+			batch.Queue(`
 				INSERT INTO course_program (program_id, campus_code, code, typology)
 				VALUES ($1, $2, $3, $4)
 				ON CONFLICT (program_id, code) DO UPDATE SET typology = EXCLUDED.typology, disabled_at = NULL`,
 				program.ID, c.CampusCode, c.Code, o.Typology,
-			); err != nil {
-				return fmt.Errorf("store: UpsertCatalog: course_program %s: %w", c.Code, err)
+			)
+		}
+		if batch.Len() > 0 {
+			if err := tx.SendBatch(ctx, batch).Close(); err != nil {
+				return fmt.Errorf("store: UpsertCatalog: upsert courses: %w", err)
 			}
 		}
 
@@ -81,6 +84,22 @@ func (s *Store) UpsertCatalog(ctx context.Context, program catalog.Program, offe
 //
 // Nunca dispara una consulta al SIA: una asignatura cuyo detalle nunca se
 // pidió sale con Seats nil, y esa ausencia es la respuesta honesta.
+//
+// Dos filtros sobre qué grupos cuentan, los dos contra datos viejos que se
+// hacen pasar por actuales:
+//
+//   - solo el periodo MÁS NUEVO que se conozca de la asignatura: al cambiar de
+//     periodo, un plan que todavía no pidió el detalle seguía viendo —y
+//     sumando— los grupos del anterior;
+//   - un grupo cuyo último detalle llegó SIN "Cupos disponibles:" no aporta su
+//     número viejo (seats_checked_at se quedó atrás de fetched_at): el SIA dejó
+//     de reportarlo, y su sello viejo se volvía el "más viejo" de la asignatura,
+//     vencida para siempre sin que ninguna medición pudiera refrescarla.
+//
+// El orden lleva COLLATE explícito: la base corre en postgres:alpine, cuyo
+// locale por defecto ordena por bytes, y ahí "Álgebra Lineal" cae DESPUÉS de
+// "Zoología" — medido en producción, era la 265 de 267 del plan 2879. El
+// cliente pinta el listado tal cual llega, "ya alfabético".
 func (s *Store) ProgramCourses(ctx context.Context, programID int64) ([]catalog.CourseOffering, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT c.campus_code, c.code, c.name, c.credits, c.description, c.fetched_at, cp.typology,
@@ -103,9 +122,12 @@ func (s *Store) ProgramCourses(ctx context.Context, programID int64) ([]catalog.
 				LIMIT 1
 			) latest ON true
 			WHERE sec.campus_code = cp.campus_code AND sec.code = cp.code
+			  AND sec.term = (SELECT max(s2.term) FROM section s2
+			                  WHERE s2.campus_code = sec.campus_code AND s2.code = sec.code)
+			  AND coalesce(sec.seats_checked_at, latest.measured_at) >= sec.fetched_at - interval '5 minutes'
 		) seats ON true
 		WHERE cp.program_id = $1 AND cp.disabled_at IS NULL
-		ORDER BY c.name`,
+		ORDER BY c.name COLLATE "es-x-icu"`,
 		programID,
 	)
 	if err != nil {
@@ -162,7 +184,7 @@ func (s *Store) SearchCourses(ctx context.Context, campusCode, q string) ([]cata
 		  AND EXISTS (SELECT 1 FROM course_program cp
 		              WHERE cp.campus_code = course.campus_code AND cp.code = course.code
 		                AND cp.disabled_at IS NULL)
-		ORDER BY name LIMIT 100`,
+		ORDER BY name COLLATE "es-x-icu" LIMIT 100`,
 		campusCode, q,
 	)
 	if err != nil {

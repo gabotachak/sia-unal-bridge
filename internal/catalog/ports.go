@@ -71,7 +71,11 @@ type SIASource interface {
 	// FetchDetail fetches one course's groups from the program's viewpoint.
 	// The returned Course has Sections populated; Code/Name/Credits/
 	// Description come from the detail header, not the listing.
-	FetchDetail(ctx context.Context, key ProgramKey, code, term string) (CourseOffering, error)
+	//
+	// ref.Name is optional and only an optimisation: with it the listing is
+	// narrowed through it11 (241 KB → 15–27 KB, docs/FASE-2.md paso 3), and a
+	// name that no longer matches falls back to the full listing.
+	FetchDetail(ctx context.Context, key ProgramKey, ref CourseRef, term string) (CourseOffering, error)
 
 	// FetchDetails fetches several courses of the SAME program over ONE
 	// connection, invoking yield per result so the caller persists

@@ -27,6 +27,13 @@ var (
 	commit  = "unknown"
 )
 
+func writeTimeout(requestBudget time.Duration) time.Duration {
+	if requestBudget <= 0 {
+		return 0
+	}
+	return requestBudget + 15*time.Second
+}
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -72,9 +79,13 @@ func main() {
 		// implicit, since there's no request body ceiling to reason about yet.
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
-		MaxHeaderBytes:    1 << 20,
+		// Must outlast the request budget (requestTimeout = SIAAcquireTimeout):
+		// at a flat 30 s, a miss that queued for the pool and then fetched was
+		// cut off mid-flight and the client saw a dead connection, not a 503.
+		// 0 (no budget configured) means no write deadline either.
+		WriteTimeout:   writeTimeout(cfg.SIAAcquireTimeout),
+		IdleTimeout:    60 * time.Second,
+		MaxHeaderBytes: 1 << 20,
 	}
 
 	// signal.NotifyContext intercepts SIGINT/SIGTERM and stops the process

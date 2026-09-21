@@ -3,6 +3,7 @@ package sia
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -81,5 +82,91 @@ func TestPool_ExclusiveAcrossConcurrentAcquires(t *testing.T) {
 	defer cancel()
 	if _, _, err := p.Acquire(shortCtx); !errors.Is(err, catalog.ErrBusy) {
 		t.Fatalf("got %v, want ErrBusy: both conns are checked out", err)
+	}
+}
+
+// acquireAt prefers the idle connection already parked on the program, even
+// when it is not the first one in the (FIFO) channel — and hands the others
+// back untouched.
+func TestAcquireAt_PrefersTheConnectionParkedOnTheProgram(t *testing.T) {
+	key := catalog.ProgramKey{Level: 0, Campus: 2, Faculty: 8, Program: 3, CampusCode: "1101"}
+	elsewhere := &SIAConn{}
+	parked := &SIAConn{parked: true, ParkedAt: key}
+	p := &Pool{conns: make(chan *SIAConn, 2), size: 2}
+	p.conns <- elsewhere
+	p.conns <- parked
+
+	got, release, err := p.acquireAt(context.Background(), &key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != parked {
+		t.Fatal("got the first idle connection, want the one parked on the program")
+	}
+	if len(p.conns) != 1 {
+		t.Fatalf("the skipped connection did not go back: %d idle, want 1", len(p.conns))
+	}
+	release()
+
+	other := catalog.ProgramKey{Level: 0, Campus: 6, Faculty: 4, Program: 2, CampusCode: "1102"}
+	if _, release, err = p.acquireAt(context.Background(), &other); err != nil {
+		t.Fatalf("no match must fall back to any idle connection: %v", err)
+	}
+	release()
+}
+
+// Background work may hold at most half the pool: with its lane full, more
+// background work waits (and gives up as busy) while a person's request still
+// gets a connection.
+func TestDoAt_BackgroundLaneLeavesRoomForInteractiveWork(t *testing.T) {
+	p := &Pool{conns: make(chan *SIAConn, 2), size: 2, bg: make(chan struct{}, 1)}
+	p.conns <- &SIAConn{}
+	p.conns <- &SIAConn{}
+	noop := func(*SIAConn) (struct{}, error) { return struct{}{}, nil }
+
+	p.bg <- struct{}{} // one background operation in flight
+
+	short, cancel := context.WithTimeout(catalog.WithBackground(context.Background()), 20*time.Millisecond)
+	defer cancel()
+	if _, err := DoAt(short, p, nil, noop); !errors.Is(err, catalog.ErrBusy) {
+		t.Fatalf("second background op: got %v, want ErrBusy", err)
+	}
+	if _, err := DoAt(context.Background(), p, nil, noop); err != nil {
+		t.Fatalf("interactive op with the background lane full: %v", err)
+	}
+}
+
+// The scenario that took production down: two people open a catalog (a burst
+// of background measurements each) while a third opens one course. With every
+// connection up for grabs the third waited behind all of it; with the lane,
+// the interactive request gets a connection while the sweep is still running.
+func TestDoAt_APersonIsServedWhileCatalogSweepsRun(t *testing.T) {
+	const size = 4
+	p := &Pool{conns: make(chan *SIAConn, size), size: size, bg: make(chan struct{}, size/2)}
+	for range size {
+		p.conns <- &SIAConn{}
+	}
+	slow := func(*SIAConn) (struct{}, error) { time.Sleep(60 * time.Millisecond); return struct{}{}, nil }
+
+	var sweep sync.WaitGroup
+	bg := catalog.WithBackground(context.Background())
+	for range 40 { // two catalogs' worth of measurements
+		sweep.Add(1)
+		go func() { defer sweep.Done(); _, _ = DoAt(bg, p, nil, slow) }()
+	}
+	time.Sleep(20 * time.Millisecond) // the sweep owns its lane by now
+
+	start := time.Now()
+	if _, err := DoAt(context.Background(), p, nil, slow); err != nil {
+		t.Fatal(err)
+	}
+	// One operation is 60 ms. Queued behind the sweep (40 ops over 4 conns)
+	// it would be ~600 ms.
+	if waited := time.Since(start); waited > 200*time.Millisecond {
+		t.Fatalf("the interactive request took %v: it queued behind the background sweep", waited)
+	}
+	sweep.Wait()
+	if h := p.Health(); h.FetchesOK != 41 || h.FetchesFailed != 0 {
+		t.Fatalf("health = %+v, want 41 ok / 0 failed", h)
 	}
 }

@@ -359,3 +359,12 @@
     display: none;
   }
 }
+
+/* Cupos vencidos: el número sigue ahí, atenuado, con su edad — vencido no es
+   desconocido. El tono del número lo pone `.seatfig--stale`. */
+.row__seats.is-stale small {
+  color: var(--text-faint);
+}
+.row__seats small .skel--spin {
+  vertical-align: -1px;
+}

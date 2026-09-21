@@ -3,18 +3,17 @@ import {
   ArrowLeftRight,
   Check,
   CornerUpLeft,
-  HelpCircle,
-  Loader2,
   SlidersHorizontal,
   Ticket,
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { get, routes, STALE_SEATS_SECONDS } from '../api/client';
+import { ApiError, get, routes, STALE_SEATS_SECONDS } from '../api/client';
 import type { CourseDetail, CoursesResponse } from '../api/types';
 import { useApi } from '../hooks/useApi';
+import { useNow } from '../hooks/useNow';
 import { useCatalogFilters } from '../hooks/useCatalogFilters';
-import { CONCURRENCY, useCourseDetails } from '../hooks/useCourseDetails';
+import { useCourseDetails } from '../hooks/useCourseDetails';
 import { usePlan } from '../hooks/usePlan';
 import { useScheduleConflicts } from '../hooks/useScheduleConflicts';
 import { useScheduleSelection } from '../hooks/useScheduleSelection';
@@ -22,24 +21,21 @@ import { Layout } from '../components/Layout';
 import { AppLink } from '../components/AppLink';
 import { AvailabilityFields } from '../components/AvailabilityPicker';
 import { useConfirm } from '../components/Confirm';
-import { AddButton } from '../components/AddButton';
+import { CatalogRow } from '../components/CatalogRow';
 import { Empty, Fault } from '../components/States';
 import { SearchInput } from '../components/SearchInput';
-import { SeatsFigure } from '../components/Seats';
 import { TableHead } from '../components/TableHead';
 import { Tooltip } from '../components/Tooltip';
-import { CopyCode } from '../components/CopyCode';
-import { PlanAttributionRow, type PlanAttribution } from '../components/PlanAttributionRow';
+import type { PlanAttribution } from '../components/PlanAttributionRow';
 import type { TableCol } from '../lib/table';
 import { SEATS_RANK, sortBy, type SortKey } from '../lib/sort';
 import { useTableSort } from '../hooks/useTableSort';
-import { abbreviateEngineering, fold, formatAge, sentence } from '../lib/format';
+import { abbreviateEngineering, fold, sentence } from '../lib/format';
 import { classifyConflict, type SectionLike } from '../lib/conflicts';
-import { putDetail, useDetailCache } from '../lib/detailCache';
-import { mergeCatalogs, seatsUnknown, type MergedCourse } from '../lib/catalog';
-import { pooled } from '../lib/pooled';
+import { putDetails, useDetailCache } from '../lib/detailCache';
+import { mergeCatalogs, seatsFromDetail, seatsUnknown, type MergedCourse } from '../lib/catalog';
+import { createQueue, pickToMeasure } from '../lib/pooled';
 import { MAX_RETRIES, backoffMs, isTransient, sleep } from '../lib/retry';
-import { typologyLetter, typologySlug } from '../lib/typology';
 import {
   DEFAULT_AVAILABILITY,
   courseFitsAvailability,
@@ -48,6 +44,14 @@ import {
 import { itemId, planCodes, planNames, type Selection } from '../lib/storage';
 import type { Screen } from '../state/nav';
 import './Program.css';
+
+/**
+ * Cuántas mediciones automáticas en vuelo. Muy por debajo de `CONCURRENCY`
+ * (la de Mi semestre, que sí responde a un botón): esto nadie lo pidió, y del
+ * otro lado el carril de fondo de la API es medio pool para TODOS los
+ * catálogos abiertos a la vez.
+ */
+const AUTO_MEASURE_CONCURRENCY = 6;
 
 function scopeOf(s: Selection) {
   return { level: s.level, campus: s.campus, faculty: s.faculty };
@@ -189,97 +193,98 @@ export function Program({
   );
 
   /**
-   * Mide sola, sin botón, toda materia cuya celda de CUPOS es un `?`.
+   * Mide sola, sin botón, las materias cuya celda de CUPOS está en duda — pero
+   * solo las que se están MIRANDO.
    *
-   * El criterio es `seatsUnknown` —el MISMO que decide pintar el signo de
-   * pregunta y el que usa el filtro "con cupos"—, así que lo que se mide es
-   * exactamente lo que se ve en duda: ni una fila con `?` que nadie pregunta,
-   * ni una petición que no corresponda a ningún `?`.
+   * El criterio sigue siendo `seatsUnknown`, el mismo del filtro "con cupos".
+   * Lo que cambió es cuándo: la primera versión medía el catálogo entero al
+   * montar, y como nada mantiene los cupos a menos de STALE_SEATS_SECONDS eso
+   * eran TODAS las filas — 267 detalles por abrir un plan de Bogotá, ~1000
+   * POSTs al SIA, con 32 en vuelo: el pool entero de la API para una persona
+   * (docs/FABLE-IMPROVEMENTS.md §3). Ahora una fila se mide cuando entra a la
+   * pantalla (el `IntersectionObserver` de más abajo), de a
+   * AUTO_MEASURE_CONCURRENCY, por el carril de fondo de la API
+   * (`background`), y salir del catálogo suelta lo que no había empezado.
    *
-   * Lo medido NO recarga el catálogo. Se escribe en `detailCache`, el mismo
-   * almacén que ya alimenta el marcado de choques, y la fila lo lee de ahí.
-   * Ese es el punto: la versión anterior llamaba `a.reload()` al terminar la
-   * tanda, y esa recarga rearmaba `courses` —lo que reiniciaba la pasada— y
-   * apagaba los spinners a destiempo, que es por lo que no se veían. Sin
-   * recarga no hay ninguna de las dos carreras.
+   * Lo medido NO recarga el catálogo: se escribe en `detailCache` y la fila lo
+   * lee de ahí. Y se escribe UNA vez por frame, no una por respuesta: cada
+   * escritura repinta la lista, y con ocho respuestas por segundo eso era la
+   * lista entera rearmándose ocho veces para cambiar ocho celdas.
    *
-   * `max_age=STALE_SEATS_SECONDS` deja la decisión donde corresponde: si
-   * Postgres lo tiene fresco, la API responde sin tocar el SIA.
-   *
-   * ponytail: una sola pasada al montar (guardia con `ref`, igual que el
-   * scroll). No hay reintento ni refresco periódico; para volver a medir se
-   * entra a la asignatura, que es lo que el `?` ya invitaba a hacer.
+   * ponytail: cada materia se intenta una vez por visita a esta pantalla. Sin
+   * refresco periódico; para volver a medir se entra a la asignatura.
    */
+  // Un solo reloj para las edades de toda la lista: cada fila calculaba la suya
+  // con Date.now() al pintarse, y como van memoizadas se quedaba congelada
+  // ("0 s" diez minutos después de medir).
+  const now = useNow(30_000);
   const [measuring, setMeasuring] = useState<ReadonlySet<string>>(new Set());
-  const autoMeasured = useRef(false);
-  useEffect(() => {
-    if (autoMeasured.current || courses.length === 0) return;
-    autoMeasured.current = true;
+  const attempted = useRef(new Set<string>());
+  const measureQueue = useMemo(() => {
+    const arrived: [string, CourseDetail][] = [];
+    const finished: string[] = [];
+    let frame = 0;
+    const flush = () => {
+      frame = 0;
+      putDetails(arrived.splice(0));
+      const done = finished.splice(0);
+      setMeasuring((prev) => {
+        const next = new Set(prev);
+        for (const id of done) next.delete(id);
+        return next;
+      });
+    };
 
-    const targets = courses.filter(seatsUnknown);
-    if (targets.length === 0) return;
-
-    setMeasuring(new Set(targets.map(courseId)));
-
-    // Mismo pool que Mi semestre (`CONCURRENCY`): del otro lado hay N sesiones
-    // ADF y cada una es secuencial, así que pedir de a más solo llena la cola.
-    void pooled(targets, CONCURRENCY, async (c) => {
+    return createQueue<MergedCourse>(AUTO_MEASURE_CONCURRENCY, async (c) => {
       const id = courseId(c);
       const path = routes.course(
         { level: c.plan.level, campus: c.plan.campus, faculty: c.plan.faculty },
         c.plan.program,
         c.code,
         STALE_SEATS_SECONDS,
+        true,
       );
 
       try {
         /**
          * Los mismos MAX_RETRIES con backoff que usa Mi semestre
-         * (`lib/retry.ts`), y por la misma razón: `sia_noop` y `busy` no son
-         * fallos, son el estado de sesión del SIA cediendo. La petición
-         * idéntica, repetida, funciona.
+         * (`lib/retry.ts`): `sia_noop` y `busy` son el estado de sesión del
+         * SIA cediendo, y la petición idéntica, repetida, funciona. El
+         * spinner no se apaga entre intentos: sigue en curso.
          *
-         * Sin esto, un `sia_noop` en el primer intento devolvía la fila al
-         * `?` de la que venía —el spinner giraba, se apagaba, y el signo de
-         * pregunta reaparecía sin que nadie hubiera hecho nada mal—.
+         * Los reintentos NO fuerzan `max_age=0`. Acá nadie apretó nada:
+         * forzar cruzaría FETCH_COOLDOWN y cambiaría un fallo transitorio por
+         * un 429 seguro.
          *
-         * El spinner NO se apaga entre intentos: `measuring` se limpia en el
-         * `finally`, así que la fila dice "midiendo" hasta que hay respuesta
-         * o hasta que se agotaron los intentos. Es la verdad: sigue en curso.
-         *
-         * A diferencia de Mi semestre, los reintentos NO fuerzan `max_age=0`.
-         * Acá nadie apretó nada: forzar cruzaría FETCH_COOLDOWN y cambiaría
-         * un fallo transitorio por un 429 seguro. El `max_age` se queda como
-         * está y el servidor decide.
+         * Agotados los intentos, en silencio: nadie pidió esta medición, y la
+         * fila se queda con lo que ya mostraba, que sigue siendo verdad.
          */
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
           try {
             const res = await get<CourseDetail>(path);
-            putDetail(id, res.data);
+            arrived.push([id, res.data]);
             return;
           } catch (e) {
-            // Agotados los intentos, en silencio y a propósito: nadie pidió
-            // esta medición. La fila vuelve al `?` que ya tenía, que sigue
-            // siendo verdad, y entrar a la asignatura sigue siendo el camino
-            // para preguntarlo en serio. Un banner rojo acá sería un error
-            // que nadie provocó.
-            if (!isTransient(e) || attempt === MAX_RETRIES) return;
+            if (attempt === MAX_RETRIES) return;
+            // El 429 del limitador por IP no encola, rechaza. Un Retry-After
+            // largo es el cooldown de la materia, no el balde: ahí se suelta.
+            if (e instanceof ApiError && e.status === 429 && (e.retryAfter ?? 1) <= 5) {
+              await sleep((e.retryAfter ?? 1) * 1000 + backoffMs(0));
+              continue;
+            }
+            if (!isTransient(e)) return;
             await sleep(backoffMs(attempt));
           }
         }
       } finally {
-        setMeasuring((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
+        finished.push(id);
+        if (!frame) frame = requestAnimationFrame(flush);
       }
     });
-    // Sin cleanup que cancele: `putDetail` escribe en un almacén de módulo,
-    // no en este componente. Si alguien navega a la ficha mientras la tanda
-    // corre, lo que llegue le sirve igual —y cancelar en StrictMode dejaría
-    // la única pasada abortada, con el `ref` ya gastado.
-  }, [courses, courseId]);
+  }, [courseId]);
+  // Salir del catálogo deja de pedir. Lo que ya está en vuelo llega igual y se
+  // aprovecha: `detailCache` es de módulo, no de este componente.
+  useEffect(() => () => measureQueue.clear(), [measureQueue]);
 
   /**
    * Mi horario: los bloques ya elegidos, que son contra lo que se mide todo
@@ -431,15 +436,28 @@ export function Program({
    * Los dos campos se toman del MISMO objeto, nunca mezclados: un `seats`
    * nuevo con un sello viejo pintaría una edad que no le corresponde.
    */
+  const mergedSeats = useRef(new WeakMap<MergedCourse, { from: CourseDetail; row: MergedCourse }>());
   const withSeats = useMemo(
     () =>
       detailCache.size === 0
         ? courses
         : courses.map((c) => {
             const m = detailCache.get(courseId(c));
-            return m
-              ? { ...c, seats: m.seats, detail_fetched_at: m.detail_fetched_at ?? m.fetched_at }
-              : c;
+            if (!m) return c;
+            // El MISMO objeto mientras ni la fila ni su detalle cambien: las
+            // filas van memoizadas, y un `{...c}` nuevo por cada materia
+            // medida, en cada escritura, las repintaba a todas.
+            const known = mergedSeats.current.get(c);
+            if (known?.from === m) return known.row;
+            // `seatsFromDetail` de respaldo: una API anterior no manda el
+            // agregado en el detalle (lib/catalog.ts). Igual con el sello.
+            const row = {
+              ...c,
+              seats: m.seats ?? seatsFromDetail(m),
+              detail_fetched_at: m.detail_fetched_at ?? m.fetched_at,
+            };
+            mergedSeats.current.set(c, { from: m, row });
+            return row;
           }),
     [courses, courseId, detailCache],
   );
@@ -499,6 +517,41 @@ export function Program({
     courseId,
     sort,
   ]);
+
+  /**
+   * Quién se mide: la fila en duda que entra a la pantalla (con margen, para
+   * que al hacer scroll el número ya esté). Una sola vez por materia.
+   */
+  const listRef = useRef<HTMLUListElement>(null);
+  const unknownById = useMemo(() => {
+    const map = new Map<string, MergedCourse>();
+    for (const c of shown) if (seatsUnknown(c)) map.set(courseId(c), c);
+    return map;
+  }, [shown, courseId]);
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || unknownById.size === 0) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible: string[] = [];
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          io.unobserve(e.target);
+          visible.push((e.target as HTMLElement).dataset.cid ?? '');
+        }
+        const picked = pickToMeasure(visible, unknownById, attempted.current);
+        for (const c of picked) measureQueue.push(c);
+        const queued = picked.map(courseId);
+        if (queued.length) setMeasuring((prev) => new Set([...prev, ...queued]));
+      },
+      { rootMargin: '400px 0px' },
+    );
+    for (const li of list.children) {
+      const id = (li as HTMLElement).dataset.cid;
+      if (id && unknownById.has(id) && !attempted.current.has(id)) io.observe(li);
+    }
+    return () => io.disconnect();
+  }, [unknownById, measureQueue, courseId]);
 
   const total = courses.length;
   const facetCount =
@@ -1008,109 +1061,31 @@ export function Program({
                   no sabe truncar celdas sin romper el ancho. */}
               <TableHead sort={sort} onSort={onSort} />
 
-              <ul className="rows">
+              <ul className="rows" ref={listRef}>
                 {shown.map((c) => {
                   const id = courseId(c);
-                  // Rojo: el grupo YA elegido choca — un bloqueo real. Ocre:
-                  // todavía no elegiste grupo y NINGUNO de los que hay te
-                  // sirve — un aviso, antes de comprometerte.
-                  const isActiveConflict = conflictCourseIds.active.has(id);
-                  const isPotentialConflict =
-                    conflictCourseIds.potential.has(id);
-                  const inConflict = isActiveConflict || isPotentialConflict;
-                  const attr = mine.length > 1 ? attributionOf(c) : null;
                   return (
-                    <li key={c.code}>
-                      <AppLink
-                        className={`row table__row ${isActiveConflict ? 'is-conflict' : ''} ${isPotentialConflict ? 'is-conflict-potential' : ''}`}
-                        to={{ name: 'course', selection: c.plan, code: c.code, alsoIn: c.alsoIn }}
-                      >
-                        <CopyCode code={c.code} className="row__code tnum col-code" />
-                        <span className="row__name">
-                          {inConflict && (
-                            <Tooltip
-                              content={
-                                <p className="tt-body">
-                                  {isActiveConflict
-                                    ? 'El grupo elegido choca con tu horario actual.'
-                                    : 'Ningún grupo de esta materia te sirve: todos chocan con tu horario actual.'}
-                                </p>
-                              }
-                            >
-                              <span
-                                className="row__conflict-icon"
-                                role="img"
-                                aria-label={
-                                  isActiveConflict
-                                    ? 'El grupo elegido choca con tu horario actual'
-                                    : 'Ningún grupo de esta materia te sirve: todos chocan con tu horario actual'
-                                }
-                              >
-                                <TriangleAlert
-                                  size={13}
-                                  strokeWidth={2}
-                                  aria-hidden="true"
-                                />
-                              </span>
-                            </Tooltip>
-                          )}
-                          <Tooltip
-                            content={
-                              <p className="tt-title">{sentence(c.name)}</p>
-                            }
-                            onlyIfTruncated
-                          >
-                            <span className="row__name-text">
-                              {sentence(c.name)}
-                            </span>
-                          </Tooltip>
-                        </span>
-                        <Tooltip
-                          content={
-                            attr ? (
-                              <PlanTypologyInfo
-                                primary={attr.primary}
-                                secondary={attr.secondary}
-                                plans={mine}
-                              />
-                            ) : (
-                              <>
-                                <p className="tt-eyebrow">Tipología</p>
-                                <p className="tt-title">{c.typology}</p>
-                              </>
-                            )
-                          }
-                        >
-                          <span
-                            className={`tag tag--${typologySlug(attr?.primary.typology ?? c.typology)} col-typ`}
-                          >
-                            {typologyLetter(attr?.primary.typology ?? c.typology)}
-                          </span>
-                        </Tooltip>
-                        <span className="row__credits tnum col-cr">
-                          {c.credits}
-                        </span>
-                        {/* `c` ya viene de `withSeats`: si esta sesión midió
-                            esta materia, lo que se pinta es lo medido. */}
-                        <SeatsCell
-                          seats={c.seats}
-                          askedAt={c.detail_fetched_at}
-                          measuring={measuring.has(id)}
-                        />
-                        <AddButton
-                          item={{
-                            level: c.plan.level,
-                            campus: c.plan.campus,
-                            program: c.plan.program,
-                            faculty: c.plan.faculty,
-                            code: c.code,
-                            name: c.name,
-                            credits: c.credits,
-                            typology: c.typology,
-                          }}
-                        />
-                      </AppLink>
-                    </li>
+                    <CatalogRow
+                      key={c.code}
+                      c={c}
+                      id={id}
+                      // Rojo: el grupo YA elegido choca — un bloqueo real. Ocre:
+                      // todavía no elegiste grupo y NINGUNO de los que hay te
+                      // sirve — un aviso, antes de comprometerte.
+                      conflict={
+                        conflictCourseIds.active.has(id)
+                          ? 'active'
+                          : conflictCourseIds.potential.has(id)
+                            ? 'potential'
+                            : null
+                      }
+                      // Solo con doble titulación: con un plan son `null` y
+                      // `undefined` fijos, y la fila memoizada no se repinta.
+                      attr={mine.length > 1 ? attributionOf(c) : null}
+                      plans={mine.length > 1 ? mine : undefined}
+                      measuring={measuring.has(id)}
+                      now={now}
+                    />
                   );
                 })}
               </ul>
@@ -1129,211 +1104,6 @@ export function Program({
 }
 
 /**
- * Cómo cuenta esta materia en cada uno de mis planes — el contenido del
- * hover de la letra de tipología (col-typ). Antes había además un chip por
- * plan pegado al nombre (PlanTag); se quitó por pedido explícito —comía
- * espacio de lectura sin decir nada que este hover no dijera ya— así que
- * esto quedó como el único lugar donde se ve la atribución.
- *
- * `primary`/`secondary` ya vienen decididos por `attributionOf`: acá no se
- * elige nada, solo se pinta con `PlanAttributionRow` (components/), la
- * misma que usan Course.tsx y CourseCard.tsx (PLAN-DOUBLE-TITULATION.md D6
- * interfaz §7).
- */
-function PlanTypologyInfo({
-  primary,
-  secondary,
-  plans,
-}: {
-  primary: PlanAttribution;
-  secondary?: PlanAttribution;
-  plans: readonly Selection[];
-}) {
-  return (
-    <>
-      <PlanAttributionRow attr={primary} plans={plans} mine />
-      {/* Si la materia está en el otro plan, se dice siempre — coincida o no
-          la tipología. Antes se callaba cuando coincidía ("ruido puro"),
-          pero eso era tratar la coincidencia como si no hubiera "ganador"
-          que anunciar; el punto es al revés: coincidan o no, es información
-          real sobre AMBOS planes, y callarla es lo que se leía raro. */}
-      {secondary && <PlanAttributionRow attr={secondary} plans={plans} />}
-    </>
-  );
-}
-
-
-/**
- * Los cupos de la asignatura, sumados sobre los grupos que este plan ve.
- *
- * Tres estados, y la diferencia entre dos de ellos es la que importa:
- *
- *   sin preguntar   → un signo de pregunta. Nadie pidió el detalle todavía.
- *   sin grupos      → 0. Se preguntó y el SIA contestó que no hay oferta.
- *   con grupos      → el número, verde si queda algo y óxido si es cero.
- *
- * Los dos primeros se veían igual —un guion— y eso era mentir por omisión:
- * "no sé" y "no hay" son respuestas distintas. Lo que los separa es
- * `detail_fetched_at`, el sello de la última vez que este plan pidió el
- * detalle.
- *
- * Sin botón de recargar a propósito: acá se muestra lo que la base YA tiene.
- * Un botón por fila invitaría a disparar una consulta al SIA por cada una de
- * las 313 asignaturas. El signo de pregunta no es un botón aparte —la fila
- * entera ya es un enlace— sino la señal de que ahí adentro hay algo que
- * averiguar: entrar a la asignatura mide todos sus grupos de un POST.
- */
-function SeatsCell({
-  seats,
-  askedAt,
-  measuring = false,
-}: {
-  seats?: MergedCourse['seats'];
-  askedAt?: string | null;
-  /** True mientras la medición automática de esta fila está en vuelo. */
-  measuring?: boolean;
-}) {
-  // Manda sobre todo lo demás: con una petición en vuelo para esta fila, el
-  // `?` sería mentira por unos segundos. Se va cuando llega el dato.
-  //
-  // Sin `aria-label` en el contenedor: con el `sr-only` adentro serían dos
-  // anuncios del mismo estado. El ícono va `aria-hidden` y el texto es el
-  // que se lee.
-  if (measuring) {
-    return (
-      <span className="row__seats is-unknown col-seats">
-        <Loader2 size={15} strokeWidth={2} className="skel--spin" aria-hidden="true" />
-        <span className="sr-only">Midiendo cupos…</span>
-      </span>
-    );
-  }
-  if (!seats) {
-    if (!askedAt) {
-      return (
-        <Tooltip
-          content={
-            <p className="tt-body">
-              Nunca se le preguntó al SIA por esta asignatura. Ábrela para medir
-              sus cupos.
-            </p>
-          }
-        >
-          <span className="row__seats is-unknown col-seats">
-            <HelpCircle size={15} strokeWidth={2} aria-hidden="true" />
-            <span className="sr-only">Cupos sin consultar</span>
-          </span>
-        </Tooltip>
-      );
-    }
-    // "Sin grupos" tampoco es para siempre: la UNAL puede programar oferta
-    // mañana. Así que lleva su edad igual que todo lo demás — la del sello del
-    // detalle, calculada acá porque el reloj del servidor solo sella los cupos.
-    const ageSeconds = (Date.now() - Date.parse(askedAt)) / 1000;
-
-    if (ageSeconds > STALE_SEATS_SECONDS) {
-      const staleTimeText =
-        STALE_SEATS_SECONDS >= 3600
-          ? `${Math.floor(STALE_SEATS_SECONDS / 3600)} ${Math.floor(STALE_SEATS_SECONDS / 3600) === 1 ? 'hora' : 'horas'}`
-          : `${Math.floor(STALE_SEATS_SECONDS / 60)} ${Math.floor(STALE_SEATS_SECONDS / 60) === 1 ? 'minuto' : 'minutos'}`;
-
-      return (
-        <Tooltip
-          content={
-            <p className="tt-body">
-              Hace más de {staleTimeText} que se midieron los cupos. Ábrela para volver
-              a preguntar.
-            </p>
-          }
-        >
-          <span className="row__seats is-unknown col-seats">
-            <HelpCircle size={15} strokeWidth={2} aria-hidden="true" />
-            <span className="sr-only">Cupos desactualizados</span>
-          </span>
-        </Tooltip>
-      );
-    }
-
-    const age = formatAge(ageSeconds);
-    return (
-      <Tooltip
-        content={
-          <>
-            <p className="tt-title">Sin grupos programados</p>
-            <p className="tt-body">
-              Consultado el {new Date(askedAt).toLocaleString('es-CO')}.
-            </p>
-          </>
-        }
-      >
-        <span className="row__seats is-none col-seats">
-          <SeatsFigure available={null} announce={false} />
-          <small>
-            sin grupos<span className="row__age tnum"> · {age}</span>
-          </small>
-        </span>
-      </Tooltip>
-    );
-  }
-  const seatsAgeSeconds = (Date.now() - Date.parse(seats.measured_at)) / 1000;
-  if (seatsAgeSeconds > STALE_SEATS_SECONDS) {
-    const staleTimeText =
-      STALE_SEATS_SECONDS >= 3600
-        ? `${Math.floor(STALE_SEATS_SECONDS / 3600)} ${Math.floor(STALE_SEATS_SECONDS / 3600) === 1 ? 'hora' : 'horas'}`
-        : `${Math.floor(STALE_SEATS_SECONDS / 60)} ${Math.floor(STALE_SEATS_SECONDS / 60) === 1 ? 'minuto' : 'minutos'}`;
-
-    return (
-      <Tooltip
-        content={
-          <p className="tt-body">
-            Hace más de {staleTimeText} que se midieron los cupos. Ábrela para volver
-            a preguntar.
-          </p>
-        }
-      >
-        <span className="row__seats is-unknown col-seats">
-          <HelpCircle size={15} strokeWidth={2} aria-hidden="true" />
-          <span className="sr-only">Cupos desactualizados</span>
-        </span>
-      </Tooltip>
-    );
-  }
-
-  return (
-    <Tooltip
-      content={
-        <ul className="tt-rows">
-          <li className="tt-row">
-            <span>Cupos</span>
-            <b className="tnum">{seats.available}</b>
-          </li>
-          <li className="tt-row">
-            <span>Grupos</span>
-            <b className="tnum">{seats.sections}</b>
-          </li>
-          <li className="tt-row">
-            <span>Medido</span>
-            <b>{new Date(seats.measured_at).toLocaleString('es-CO')}</b>
-          </li>
-        </ul>
-      }
-    >
-      <span
-        className={`row__seats col-seats ${seats.available === 0 ? 'is-zero' : 'is-open'}`}
-      >
-        {/* Sin animar: en el catálogo el número no cambia después de cargar, y
-            313 filas aleteando en la primera pintura serían ruido y trabajo por
-            nada. La forma y el color sí son los mismos que en la ficha. */}
-        <SeatsFigure
-          available={seats.available}
-          tone={seats.available === 0 ? 'empty' : 'ok'}
-        />
-        <small className="tnum">{formatAge(seats.age_seconds)}</small>
-      </span>
-    </Tooltip>
-  );
-}
-
-/**
  * Por qué se ordena cada columna. Cupos es la única con matiz: los cuatro
  * estados de la celda caen en una sola recta según SEATS_RANK.
  */
@@ -1348,9 +1118,9 @@ function sortKeyOf(c: MergedCourse, col: TableCol): SortKey {
     case 'credits':
       return c.credits;
     case 'seats':
-      // Mismo criterio que el `?` de la celda (`seatsUnknown`, lib/catalog.ts):
-      // lo que se ve en duda cae junto al ordenar.
-      if (seatsUnknown(c)) return SEATS_RANK.unknown;
+      // Una fila que MUESTRA un número —aunque esté vencido— cae donde dice
+      // ese número; incógnita es solo la que pinta el signo de pregunta.
+      if (!c.seats && seatsUnknown(c)) return SEATS_RANK.unknown;
       // Sin cupos y con sello fresco: se preguntó y no hay grupos. El cero
       // es un dato, no una incógnita.
       if (!c.seats) return SEATS_RANK.noOffer;

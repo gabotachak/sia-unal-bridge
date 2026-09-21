@@ -21,7 +21,14 @@ import (
 // "never" includes never adding latency to it either, so the write runs in
 // its own goroutine with its own context. c.Request.Context() dies the moment
 // the handler returns, which a fire-and-forget write would otherwise race.
+//
+// ?background=1 opts out: a client sweeping a whole catalog to refresh its
+// seats column is not a person asking for THIS course, and counting it made
+// every listed course look equally popular.
 func (a *api) recordDemand(c *gin.Context, campusCode, code string) {
+	if c.Query("background") == "1" {
+		return
+	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -49,7 +56,14 @@ func (a *api) courseDetail(c *gin.Context) {
 		return
 	}
 
-	offering, res, err := a.svc.CourseDetail(c.Request.Context(), program, code, maxAge)
+	// ?background=1 also puts the fetch in the pool's background lane, so a
+	// catalog-wide seats sweep can never hold every SIA connection while a
+	// person waits for the page they actually opened (sia.Pool).
+	ctx := c.Request.Context()
+	if c.Query("background") == "1" {
+		ctx = catalog.WithBackground(ctx)
+	}
+	offering, res, err := a.svc.CourseDetail(ctx, program, code, maxAge)
 	if err != nil {
 		writeError(c, err, "unknown_course")
 		return
@@ -194,11 +208,23 @@ func courseDetailJSON(o catalog.CourseOffering, now time.Time) gin.H {
 	for i, s := range o.Course.Sections {
 		sections[i] = sectionJSON(s, now)
 	}
-	return gin.H{
+	h := gin.H{
 		"campus_code": o.Course.CampusCode, "code": o.Course.Code, "name": o.Course.Name,
 		"credits": o.Course.Credits, "typology": o.Typology, "description": o.Course.Description,
 		"fetched_at": o.Course.FetchedAt, "sections": sections,
 	}
+	// Same two fields, same meaning, as the listing (courseSummaryJSON): a
+	// client that already knows how to read a catalog row can read this.
+	if o.DetailFetchedAt != nil {
+		h["detail_fetched_at"] = o.DetailFetchedAt
+	}
+	if o.Seats != nil {
+		h["seats"] = gin.H{
+			"available": o.Seats.Available, "measured_at": o.Seats.MeasuredAt,
+			"sections": o.Seats.Sections, "age_seconds": int(now.Sub(o.Seats.MeasuredAt).Seconds()),
+		}
+	}
+	return h
 }
 
 func sectionJSON(s catalog.Section, now time.Time) gin.H {

@@ -24,6 +24,8 @@ func NewSource(pool *Pool) *Source {
 	return &Source{pool: pool}
 }
 
+func (s *Source) Health() catalog.SIAHealth { return s.pool.Health() }
+
 func (s *Source) FetchLevels(ctx context.Context) ([]catalog.LabelOption, error) {
 	return Do(ctx, s.pool, func(conn *SIAConn) ([]catalog.LabelOption, error) {
 		opts, err := conn.FetchLevels(ctx)
@@ -83,7 +85,7 @@ func toDomainOptions(opts []Option) []catalog.DropdownOption {
 }
 
 func (s *Source) FetchCatalog(ctx context.Context, key catalog.ProgramKey) ([]catalog.CourseOffering, error) {
-	return Do(ctx, s.pool, func(conn *SIAConn) ([]catalog.CourseOffering, error) {
+	return DoAt(ctx, s.pool, &key, func(conn *SIAConn) ([]catalog.CourseOffering, error) {
 		body, err := conn.FetchCatalog(ctx, key)
 		if err != nil {
 			return nil, err
@@ -97,7 +99,7 @@ func (s *Source) FetchCatalog(ctx context.Context, key catalog.ProgramKey) ([]ca
 }
 
 func (s *Source) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([]catalog.CourseOffering, error) {
-	return Do(ctx, s.pool, func(conn *SIAConn) ([]catalog.CourseOffering, error) {
+	return DoAt(ctx, s.pool, &key, func(conn *SIAConn) ([]catalog.CourseOffering, error) {
 		bodies, err := conn.FetchElectives(ctx, key)
 		if err != nil {
 			return nil, err
@@ -142,9 +144,9 @@ func electiveRows(bodies [][]byte) ([]Row, error) {
 	return rows, nil
 }
 
-func (s *Source) FetchDetail(ctx context.Context, key catalog.ProgramKey, code, term string) (catalog.CourseOffering, error) {
-	return Do(ctx, s.pool, func(conn *SIAConn) (catalog.CourseOffering, error) {
-		return fetchDetail(ctx, conn, key, catalog.CourseRef{Code: code}, term)
+func (s *Source) FetchDetail(ctx context.Context, key catalog.ProgramKey, ref catalog.CourseRef, term string) (catalog.CourseOffering, error) {
+	return DoAt(ctx, s.pool, &key, func(conn *SIAConn) (catalog.CourseOffering, error) {
+		return fetchDetail(ctx, conn, key, ref, term)
 	})
 }
 
@@ -158,7 +160,7 @@ func (s *Source) FetchDetail(ctx context.Context, key catalog.ProgramKey, code, 
 // the first expiry is a batch that never finishes.
 func (s *Source) FetchDetails(ctx context.Context, key catalog.ProgramKey, refs []catalog.CourseRef, term string,
 	yield func(catalog.CourseOffering, error) error) error {
-	_, err := Do(ctx, s.pool, func(conn *SIAConn) (struct{}, error) {
+	_, err := DoAt(ctx, s.pool, &key, func(conn *SIAConn) (struct{}, error) {
 		for _, ref := range refs {
 			if err := ctx.Err(); err != nil {
 				return struct{}{}, err
@@ -194,7 +196,7 @@ func (s *Source) FetchDetails(ctx context.Context, key catalog.ProgramKey, refs 
 
 func fetchDetail(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, ref catalog.CourseRef, term string) (catalog.CourseOffering, error) {
 	code := ref.Code
-	row, err := findRow(ctx, conn, key, code, ref.Name)
+	row, err := findRow(ctx, conn, key, ref)
 	if err != nil {
 		return catalog.CourseOffering{}, err
 	}
@@ -253,10 +255,11 @@ func fetchDetail(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, ref
 //     form state carries it11 on every POST, so clearing the field IS the
 //     reset — and it happens here, inside the logical operation, with the
 //     same criterion by which FetchCatalog reposts soc4.
-func findRow(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code, name string) (Row, error) {
+func findRow(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, ref catalog.CourseRef) (Row, error) {
+	code, name := ref.Code, ref.Name
 	if name != "" {
 		conn.form.Nombre = name
-		row, err := findRowInListings(ctx, conn, key, code)
+		row, err := findRowInListings(ctx, conn, key, code, ref.Elective)
 		conn.form.Nombre = "" // see above: never leave the filter behind
 		if err == nil {
 			return row, nil
@@ -264,7 +267,7 @@ func findRow(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code, n
 		// 0 rows, a parse failure, or a code the filter did not match
 		// (accents, odd names) all fall through to the full listings.
 	}
-	return findRowInListings(ctx, conn, key, code)
+	return findRowInListings(ctx, conn, key, code, ref.Elective)
 }
 
 // findRowInListings looks for code in the regular listing and then in the
@@ -283,7 +286,19 @@ func findRow(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code, n
 // crawled hours earlier) 404ing on every forced refresh — indistinguishable
 // from "doesn't exist" from the outside. Now a catalog-fetch failure is kept
 // and, if electives doesn't resolve it either, surfaced instead of masked.
-func findRowInListings(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code string) (Row, error) {
+//
+// electiveFirst is a shortcut for a course known to be libre elección: those
+// never appear in the regular listing, so searching it first was 1–2 POSTs
+// (soc4 back to 0, cb1) spent on a guaranteed miss — measured at ~9 POSTs per
+// elective detail, against 5 when the connection is already on soc4=7. It only
+// reorders: if the electives search does not have the code, or breaks, the
+// full check below still runs, errors and all.
+func findRowInListings(ctx context.Context, conn *SIAConn, key catalog.ProgramKey, code string, electiveFirst bool) (Row, error) {
+	if electiveFirst {
+		if row, err := conn.FindElectiveRow(ctx, key, code); err == nil {
+			return row, nil
+		}
+	}
 	body, catalogErr := conn.FetchCatalog(ctx, key)
 	if catalogErr == nil {
 		rows, perr := ParseList(body)

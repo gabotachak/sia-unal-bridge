@@ -10,7 +10,8 @@ vendor/
 .env
 .env.local
 
-# datos de Postgres del bind mount local (PGDATA_DIR en .env, default ./pgdata)
+# datos de Postgres del bind mount local (PGDATA_DIR en .env, default ./.pgdata)
+/.pgdata/
 /pgdata/
 /pgdata*/
 

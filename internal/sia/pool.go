@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
@@ -73,6 +74,16 @@ type Pool struct {
 	// channel only holds the idle ones, so it cannot answer "how much
 	// traffic did this process generate".
 	all []*SIAConn
+
+	// bg caps how many connections background work (catalog.WithBackground)
+	// may hold at once — half the pool. Without it one client sweeping a
+	// catalog for seats held all 32 while somebody else's catalog miss queued
+	// behind measurements nobody had asked for.
+	bg chan struct{}
+
+	// Health counters, since process start (Pool.Health).
+	fetchesOK, fetchesFailed, noops atomic.Int64
+	lastOK                          atomic.Int64 // unix nanos, 0 = never
 }
 
 // NewPool returns a pool that is USABLE, not necessarily full: it bootstraps
@@ -94,7 +105,8 @@ func NewPool(ctx context.Context, baseURL string, size int) (*Pool, error) {
 	if size <= 0 {
 		size = DefaultPoolSize
 	}
-	p := &Pool{baseURL: baseURL, conns: make(chan *SIAConn, size), size: size}
+	p := &Pool{baseURL: baseURL, conns: make(chan *SIAConn, size), size: size,
+		bg: make(chan struct{}, max(1, size/2))}
 
 	var lastErr error
 	for i := 0; i < min(size, readyBeforeServing); i++ {
@@ -187,6 +199,53 @@ func (p *Pool) Acquire(ctx context.Context) (*SIAConn, func(), error) {
 	}
 }
 
+// acquireAt is Acquire with a preference: an idle connection already parked
+// on key skips the cascade — 2 POSTs instead of 6, ~1.3 s instead of ~10 s
+// (docs/ARCH.md). The channel is FIFO and knows nothing about where each
+// connection sits, so this looks through what is idle RIGHT NOW, keeps the
+// first match and puts the rest back. No match, or an empty pool, falls back
+// to the plain blocking Acquire: affinity is a saving, never a wait.
+func (p *Pool) acquireAt(ctx context.Context, key *catalog.ProgramKey) (*SIAConn, func(), error) {
+	if key != nil {
+		var hit *SIAConn
+		var skipped []*SIAConn
+	scan:
+		for range p.size {
+			select {
+			case c := <-p.conns:
+				if c.parked && c.ParkedAt == *key && c.DetailRegion == 0 {
+					hit = c
+					break scan
+				}
+				skipped = append(skipped, c)
+			default:
+				break scan
+			}
+		}
+		for _, c := range skipped {
+			p.conns <- c
+		}
+		if hit != nil {
+			return hit, func() { p.conns <- hit }, nil
+		}
+	}
+	return p.Acquire(ctx)
+}
+
+// Health is the pool's own account of how the path to the SIA is doing.
+func (p *Pool) Health() catalog.SIAHealth {
+	posts, bytes := p.Stats()
+	h := catalog.SIAHealth{
+		PoolSize: p.size, Ready: p.Ready(), Posts: posts, Bytes: bytes,
+		FetchesOK: p.fetchesOK.Load(), FetchesFailed: p.fetchesFailed.Load(), Noops: p.noops.Load(),
+	}
+	if ns := p.lastOK.Load(); ns != 0 {
+		t := time.Unix(0, ns)
+		h.LastOK = &t
+	}
+	return h
+}
+
 // Keepalive pings idle connections every keepaliveInterval until ctx is
 // done. Busy connections (checked out via Acquire) are untouched — they're
 // not in the channel, so pingIdle simply never sees them, which is exactly
@@ -246,16 +305,50 @@ drain:
 // The repair never runs on the caller's context: a cancelled request is
 // precisely when the connection is most likely to be left mid-operation.
 func Do[T any](ctx context.Context, p *Pool, fn func(*SIAConn) (T, error)) (T, error) {
+	return DoAt(ctx, p, nil, fn)
+}
+
+// DoAt is Do for an operation that starts by walking to a program: it prefers
+// a connection already parked there (acquireAt). Background work first takes
+// a slot of the background lane.
+func DoAt[T any](ctx context.Context, p *Pool, key *catalog.ProgramKey, fn func(*SIAConn) (T, error)) (out T, err error) {
 	var zero T
-	conn, release, err := p.Acquire(ctx)
+	if p.bg != nil && catalog.IsBackground(ctx) {
+		select {
+		case p.bg <- struct{}{}:
+			defer func() { <-p.bg }()
+		case <-ctx.Done():
+			return zero, catalog.ErrBusy
+		}
+	}
+	conn, release, err := p.acquireAt(ctx, key)
 	if err != nil {
 		return zero, err
 	}
 	defer release()
+	defer func() {
+		if err == nil {
+			p.fetchesOK.Add(1)
+			p.lastOK.Store(time.Now().UnixNano())
+		} else if ctx.Err() == nil { // a caller that left is not the SIA failing
+			p.fetchesFailed.Add(1)
+		}
+	}()
 
-	out, err := fn(conn)
+	// A connection that answered noop even on a fresh session last time is
+	// not trusted with this request: it starts over first.
+	if conn.suspect {
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rebootstrapTimeout)
+		_, _ = conn.Bootstrap(rctx)
+		cancel()
+	}
+
+	out, err = fn(conn)
 	if err == nil {
 		return out, nil
+	}
+	if errors.Is(err, catalog.ErrSIANoop) {
+		p.noops.Add(1)
 	}
 	if !isRecoverable(err) {
 		repair(conn)
@@ -272,6 +365,15 @@ func Do[T any](ctx context.Context, p *Pool, fn func(*SIAConn) (T, error)) (T, e
 
 	out, err = fn(conn)
 	if err != nil {
+		// A noop that survives a brand new session is not session death, and
+		// its body is the only clue to what it is instead.
+		var noop *NoopError
+		if errors.As(err, &noop) {
+			p.noops.Add(1)
+			conn.suspect = true
+			slog.Warn("sia: noop survived a re-bootstrap", "bytes", len(noop.Body), "expired", noop.Expired,
+				"head", string(noop.Body[:min(len(noop.Body), 200)]))
+		}
 		repair(conn)
 		return zero, err
 	}

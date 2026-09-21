@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -17,6 +18,10 @@ import (
 func writeError(c *gin.Context, err error, notFoundCode string) {
 	var aerr *catalog.AmbiguousError
 	switch {
+	case errors.Is(err, context.Canceled):
+		// The client hung up. Nobody reads this response, and it is not a
+		// server error: it used to log ERROR + 500 and bury the real ones.
+		c.AbortWithStatus(499)
 	case errors.Is(err, catalog.ErrNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": notFoundCode, "message": err.Error()})
 	case errors.As(err, &aerr):

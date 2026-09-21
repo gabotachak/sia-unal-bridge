@@ -8,7 +8,8 @@ import type { Candidate } from './types';
 /** Lo que la API dice sobre la frescura de cada respuesta. */
 export type Freshness = {
   /** 'hit' = salió de Postgres. 'miss' = costó una consulta al SIA. */
-  cache: 'hit' | 'miss' | null;
+  /** 'stale' = el SIA falló y la API sirvió lo que ya tenía, aunque esté vencido. */
+  cache: 'hit' | 'miss' | 'stale' | null;
   /** Segundos desde que se midió el dato más viejo de la respuesta. */
   age: number;
   /** Cuántos segundos la API considera fresco este recurso. */
@@ -80,6 +81,8 @@ export class ApiError extends Error {
       case 'unknown_section':
         return 'Ese grupo no existe, o todavía no reporta cupos.';
       case 'rate_limit':
+        return 'Demasiadas peticiones seguidas. Espera unos segundos y vuelve a intentar.';
+      case 'refresh_cooldown':
         return this.retryAfter
           ? `Esta asignatura se midió hace un momento. Se puede volver a medir en ${this.retryAfter} s.`
           : 'Esta asignatura se midió hace un momento. Hay que esperar un poco para volver a medir.';
@@ -195,7 +198,10 @@ export const routes = {
   // horario armado contra el que chocar — quien entra a mirar no lo paga.
   courses: (s: Scope, program: string, include?: 'schedules') =>
     `/campuses/${enc(s.campus)}/programs/${enc(program)}/courses${q({ faculty: s.faculty, level: s.level, include })}`,
-  course: (s: Scope, program: string, code: string, maxAge?: number) =>
+  // `background`: esta lectura no la pidió una persona (la medición automática
+  // del catálogo). La API no la cuenta como demanda y la manda por el carril
+  // de fondo del pool, para que no le quite la conexión a quien abrió una ficha.
+  course: (s: Scope, program: string, code: string, maxAge?: number, background?: boolean) =>
     `/campuses/${enc(s.campus)}/programs/${enc(program)}/courses/${enc(code)}` +
-    q({ faculty: s.faculty, level: s.level, max_age: maxAge }),
+    q({ faculty: s.faculty, level: s.level, max_age: maxAge, background: background ? 1 : undefined }),
 };

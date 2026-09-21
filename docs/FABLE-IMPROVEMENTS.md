@@ -486,6 +486,36 @@ Sin Docker ni sudo: Go 1.27 y Postgres 18.6 en espacio de usuario (binarios de
   ficha, volver (la fila conserva el número sin rueda) y agregar a Mi semestre: sin errores
   de página ni de API.
 
+### Cuarta pasada: lo mismo, en Docker
+
+Con el daemon ya disponible se repitió todo sobre los contenedores del repo, que es como
+corre en producción: `docker compose build` de `api`, `web` y `refresher` desde esta rama,
+`db` con `deploy/initdb` (crea `sia_bridge_test` sola), migraciones con goose.
+
+- `go test -race ./internal/... ./cmd/...` contra el **Postgres del contenedor**: verde.
+- Por el **nginx del contenedor `web`** (:13000): `Content-Encoding: gzip` en todo — el
+  catálogo baja de 271 KB a **91 KB** en el cable, el bundle de 319 KB a 113 KB —, proxy
+  `/v1` bien, detalle con `seats` (19, igual que producción) y `detail_fetched_at`,
+  `429 refresh_cooldown`, `?background=1`. 7 fetches al SIA, 0 fallidos, 0 noops.
+- **Chromium contra el bundle de producción** servido por nginx: 19 peticiones al abrir un
+  catálogo de 272 filas, todas con `background=1`; rueda → número; ficha, volver y Mi
+  semestre sin errores. En `course_demand` solo quedaron las lecturas de persona: ninguna
+  de las ~27 mediciones automáticas.
+- **`refresher` en su contenedor** (`--mode=seats --scope=hot`): 6 asignaturas, 0 fallos,
+  45 POSTs — el cambio de firma de `FetchDetail` no tocó el Job.
+
+Y Docker destapó dos bugs que el Postgres suelto escondía, los dos corregidos acá:
+
+- **Los nombres con tilde salían al final del catálogo.** `postgres:alpine` ordena por
+  bytes, así que `ORDER BY c.name` mandaba "Álgebra Lineal" después de "Uitoto II" —
+  verificado en producción: era la 265 de 267 del plan 2879. Ahora el orden lleva
+  `COLLATE "es-x-icu"`; en el contenedor pasó del puesto 270 al 4. Con test (falla sin el fix).
+- **El segundo `docker compose build` moría** con `permission denied` sobre `pgdata/18/docker`:
+  con `PGDATA_DIR=./pgdata` (el default de `.env.example`) el bind mount de Postgres, que es
+  de root, entraba al contexto del build. `pgdata/` va ahora en `.dockerignore`. En el server
+  no pasa porque `PGDATA_DIR` apunta fuera del repo. Por lo mismo `go vet ./...` y
+  `make test` fallan con la base levantada desde el repo; usar `./internal/... ./cmd/...`.
+
 No probado: comportamiento bajo carga real de varios usuarios, y el fix del jar contra
 el envenenamiento real — solo se reproduce con días de tráfico. `/v1/status` → `sia` es
 lo que lo va a decir después de desplegar.

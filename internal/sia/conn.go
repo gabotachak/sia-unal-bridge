@@ -34,6 +34,11 @@ type SIAConn struct {
 	viewState string
 	form      formState
 
+	// suspect: a noop survived a brand new session on this connection. The
+	// next operation re-bootstraps before trusting it (Pool.DoAt); a
+	// successful Bootstrap clears it.
+	suspect bool
+
 	ParkedAt catalog.ProgramKey // cascade already done for this program; zero value = never cascaded
 	parked   bool
 
@@ -143,6 +148,7 @@ func (c *SIAConn) Bootstrap(ctx context.Context) ([]byte, error) {
 	c.navLevel, c.navCampus, c.navFaculty = -1, -1, -1
 	c.navTipologia, c.navModo, c.navSedeElect = "", "", ""
 	c.DetailRegion = 0
+	c.suspect = false
 	c.LastUsed = time.Now()
 	return body, nil
 }

@@ -24,6 +24,8 @@ func NewSource(pool *Pool) *Source {
 	return &Source{pool: pool}
 }
 
+func (s *Source) Health() catalog.SIAHealth { return s.pool.Health() }
+
 func (s *Source) FetchLevels(ctx context.Context) ([]catalog.LabelOption, error) {
 	return Do(ctx, s.pool, func(conn *SIAConn) ([]catalog.LabelOption, error) {
 		opts, err := conn.FetchLevels(ctx)
@@ -83,7 +85,7 @@ func toDomainOptions(opts []Option) []catalog.DropdownOption {
 }
 
 func (s *Source) FetchCatalog(ctx context.Context, key catalog.ProgramKey) ([]catalog.CourseOffering, error) {
-	return Do(ctx, s.pool, func(conn *SIAConn) ([]catalog.CourseOffering, error) {
+	return DoAt(ctx, s.pool, &key, func(conn *SIAConn) ([]catalog.CourseOffering, error) {
 		body, err := conn.FetchCatalog(ctx, key)
 		if err != nil {
 			return nil, err
@@ -97,7 +99,7 @@ func (s *Source) FetchCatalog(ctx context.Context, key catalog.ProgramKey) ([]ca
 }
 
 func (s *Source) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([]catalog.CourseOffering, error) {
-	return Do(ctx, s.pool, func(conn *SIAConn) ([]catalog.CourseOffering, error) {
+	return DoAt(ctx, s.pool, &key, func(conn *SIAConn) ([]catalog.CourseOffering, error) {
 		bodies, err := conn.FetchElectives(ctx, key)
 		if err != nil {
 			return nil, err
@@ -143,7 +145,7 @@ func electiveRows(bodies [][]byte) ([]Row, error) {
 }
 
 func (s *Source) FetchDetail(ctx context.Context, key catalog.ProgramKey, code, term string) (catalog.CourseOffering, error) {
-	return Do(ctx, s.pool, func(conn *SIAConn) (catalog.CourseOffering, error) {
+	return DoAt(ctx, s.pool, &key, func(conn *SIAConn) (catalog.CourseOffering, error) {
 		return fetchDetail(ctx, conn, key, catalog.CourseRef{Code: code}, term)
 	})
 }
@@ -158,7 +160,7 @@ func (s *Source) FetchDetail(ctx context.Context, key catalog.ProgramKey, code, 
 // the first expiry is a batch that never finishes.
 func (s *Source) FetchDetails(ctx context.Context, key catalog.ProgramKey, refs []catalog.CourseRef, term string,
 	yield func(catalog.CourseOffering, error) error) error {
-	_, err := Do(ctx, s.pool, func(conn *SIAConn) (struct{}, error) {
+	_, err := DoAt(ctx, s.pool, &key, func(conn *SIAConn) (struct{}, error) {
 		for _, ref := range refs {
 			if err := ctx.Err(); err != nil {
 				return struct{}{}, err

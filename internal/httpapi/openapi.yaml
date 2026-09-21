@@ -97,6 +97,22 @@ paths:
                       (reference · catalog · detail · seats). Vacío si nunca corrió.
                     additionalProperties:
                       $ref: "#/components/schemas/RefreshRun"
+                  sia:
+                    type: object
+                    description: >
+                      Cómo le va a ESTE proceso contra el SIA, contado desde que arrancó.
+                      `healthz` solo dice que el proceso vive: un `fetches_failed` que
+                      crece contra `fetches_ok`, o un `last_ok` que se queda atrás, es el
+                      pool pudriéndose aunque `healthz` diga `ok`.
+                    properties:
+                      pool_size: { type: integer }
+                      ready: { type: integer, description: Conexiones ya creadas. }
+                      fetches_ok: { type: integer }
+                      fetches_failed: { type: integer }
+                      noops: { type: integer, description: Respuestas vacías del SIA (sesión muerta o estado roto). }
+                      posts: { type: integer, description: POSTs enviados al SIA. }
+                      bytes: { type: integer, description: Bytes recibidos del SIA, bootstraps incluidos. }
+                      last_ok: { type: string, format: date-time }
 
   /version:
     get:
@@ -320,6 +336,7 @@ paths:
         - $ref: "#/components/parameters/Faculty"
         - $ref: "#/components/parameters/Level"
         - $ref: "#/components/parameters/MaxAge"
+        - $ref: "#/components/parameters/Background"
       responses:
         "200":
           description: La asignatura con sus grupos
@@ -571,6 +588,15 @@ components:
         Segundos. Sobreescribe el default del recurso. `0` fuerza la consulta al SIA.
         Un valor negativo o no numérico es `400`.
       schema: { type: integer, minimum: 0, examples: [0, 300] }
+    Background:
+      name: background
+      in: query
+      required: false
+      description: |
+        `1` = esta lectura no la pidió una persona (p. ej. un cliente que recorre un
+        catálogo entero para refrescar su columna de cupos). No cuenta como demanda para
+        el hot set del Refresher. No cambia nada más de la respuesta.
+      schema: { type: string, enum: ["1"] }
 
   headers:
     Age:

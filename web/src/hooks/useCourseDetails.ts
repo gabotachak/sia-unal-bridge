@@ -24,6 +24,13 @@ import { itemId, type PlanItem } from '../lib/storage';
  */
 export const CONCURRENCY = 32;
 
+/**
+ * La carga al abrir la pantalla (sin forzar) nadie la pidió con un clic: casi
+ * todo sale de cache, y lo que no, no tiene por qué ocupar 32 conexiones del
+ * pool de todos. El ancho completo es para el botón de medir.
+ */
+const PASSIVE_CONCURRENCY = 6;
+
 export type Row = {
   item: PlanItem;
   detail: CourseDetail | null;
@@ -143,7 +150,7 @@ export function useCourseDetails(items: PlanItem[]) {
       setTotal(targets.length);
       setRows((prev) => prev.map((r) => ({ ...r, error: undefined })));
 
-      await pooled(targets, CONCURRENCY, async (item) => {
+      await pooled(targets, force ? CONCURRENCY : PASSIVE_CONCURRENCY, async (item) => {
         const id = itemId(item);
         const scope = { level: item.level, campus: item.campus, faculty: item.faculty };
 

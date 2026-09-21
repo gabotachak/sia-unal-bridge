@@ -276,7 +276,8 @@ Ese endpoint sirve solo del Store y **declara su cobertura**:
 }
 ```
 
-El `Refresher` (fase 2) hace crecer esa cobertura sola, sin cambiar el contrato, y
+El `Refresher` (fase 2) puede hacer crecer esa cobertura sin cambiar el contrato — hoy es
+una herramienta manual, su cron se abandonó (ver [FASE-2.md](FASE-2.md)) —, y
 `/v1/status` cuenta lo que hizo — sin eso, "la cobertura crece sola" es una afirmación que
 nadie puede comprobar:
 
@@ -320,6 +321,22 @@ Defaults iniciales, a calibrar con uso real:
 | detalle: visibilidad por plan | 24 h | `course_program.detail_fetched_at` |
 | cupos | 5 min | `section.seats_checked_at` |
 
+**Catálogo y referencia: se sirve lo que hay y se refresca detrás.** Pasado su TTL, un
+catálogo (o la lista de sedes, o el directorio de una sede) que **ya existe** en Postgres
+se responde igual, al instante, con `X-Cache: stale`, y la consulta al SIA corre por
+detrás de quien preguntó: el siguiente que lo pida ya lo recibe fresco. Casi no cambian
+dentro de un periodo, y hacer esperar 3–10 s a alguien para entregarle lo mismo que ya
+estaba guardado era la razón de ser del barrido semanal del `Refresher` — que refrescaba
+los 1380 planes para ahorrarle la espera a los pocos que se abren. Solo esperan:
+
+- quien abre algo que **nunca** se trajo (no hay nada que servir — pasa una vez en la vida
+  de cada plan);
+- quien manda `?max_age=0`: forzar una consulta es pedir esa consulta.
+
+Si el refresco de atrás falla, se sigue sirviendo lo guardado y se reintenta a lo sumo una
+vez por minuto por recurso. El **detalle y los cupos no entran acá**: son volátiles, y ahí
+`stale` solo aparece cuando el SIA falla (ver Cabeceras).
+
 El default de cupos es el único elegido a ojo: hoy no se mueven (medido, 0 cambios en
 347 grupos a lo largo de 35 min en pre-inscripción). El ritmo real solo se puede medir
 cuando abran las inscripciones el 27/08 ([OPEN-QUESTIONS §2](OPEN-QUESTIONS.md)), y es
@@ -362,8 +379,12 @@ una asignatura sin grupos, no prueba nada y va al SIA como siempre.
 | `X-Cache` | `hit` · `miss` · `stale` |
 | `X-SIA-Fetch-Ms` | solo en `miss`; latencia del SIA |
 
-`stale`: la consulta al SIA **falló** y se sirvió lo que Postgres ya tenía, aunque esté
-vencido, en vez de un 502. Solo en el detalle, y nunca con `max_age=0` — quien fuerza una
+`stale` tiene dos orígenes, y en los dos el dato es el guardado y lleva su edad:
+
+- en **catálogo y referencia**, es lo normal pasado el TTL: se sirve y se refresca detrás
+  (ver Frescura);
+- en el **detalle**, la consulta al SIA **falló** y se sirvió lo que Postgres ya tenía,
+  aunque esté vencido, en vez de un 502. Nunca con `max_age=0` — quien fuerza una
 medición quiere un número nuevo o un error, no uno viejo disfrazado. Tampoco cuando el SIA
 responde que la asignatura ya no está en el plan: ese 404 es la respuesta. Cada dato
 sigue llevando su edad, así que nada se hace pasar por fresco.

@@ -1086,3 +1086,119 @@ func TestCourseDetail_TellsTheSourceWhenTheCourseIsAnElective(t *testing.T) {
 		}
 	}
 }
+
+// eventually polls for something a background refresh is expected to do.
+func eventually(t *testing.T, what string, ok func() bool) {
+	t.Helper()
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+		if ok() {
+			return
+		}
+	}
+	t.Fatalf("never happened: %s", what)
+}
+
+// With ServeStale, a catalog that exists is answered at once — however old —
+// and refreshed behind the caller. This is what replaced the Refresher's
+// weekly sweep: nobody waits 3–8 s for a listing Postgres already had.
+func TestCatalog_ServeStaleAnswersNowAndRefreshesBehind(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{delay: 100 * time.Millisecond}
+	svc := NewService(store, sia, "2026-2")
+	svc.ServeStale = true
+	ctx := context.Background()
+	program, _ := store.UpsertProgram(ctx, testProgram(0))
+
+	// Never fetched: nothing to serve, so this one waits for the SIA.
+	if _, res, err := svc.Catalog(ctx, program, DefaultFreshness); err != nil || res.Cache != CacheMiss {
+		t.Fatalf("first ever read: cache=%q err=%v, want a blocking miss", res.Cache, err)
+	}
+
+	// Eight days later.
+	old := time.Now().Add(-8 * 24 * time.Hour)
+	store.mu.Lock()
+	p := store.programs[program.ID]
+	p.CatalogFetchedAt = &old
+	store.programs[program.ID] = p
+	store.mu.Unlock()
+	program.CatalogFetchedAt = &old
+
+	start := time.Now()
+	offerings, res, err := svc.Catalog(ctx, program, DefaultFreshness)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Cache != CacheStale || len(offerings) == 0 {
+		t.Fatalf("stale read: cache=%q with %d courses, want the stored catalog flagged stale", res.Cache, len(offerings))
+	}
+	if waited := time.Since(start); waited > 50*time.Millisecond {
+		t.Fatalf("stale read took %v: it waited for the SIA (fetch = 100 ms)", waited)
+	}
+
+	// A second reader right behind the first does not start a second fetch.
+	if _, _, err := svc.Catalog(ctx, program, DefaultFreshness); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the background refresh re-stamps the catalog", func() bool {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		return store.programs[program.ID].CatalogFetchedAt.After(old)
+	})
+	if got := sia.catalogCalls.Load(); got != 2 {
+		t.Fatalf("got %d catalog fetches, want 2 (the first ever + ONE background refresh)", got)
+	}
+
+	// max_age=0 is a forced fetch: it waits, stale or not.
+	if _, res, err := svc.Catalog(ctx, program, 0); err != nil || res.Cache != CacheMiss {
+		t.Fatalf("forced read: cache=%q err=%v, want a blocking miss", res.Cache, err)
+	}
+}
+
+// Off by default: the Refresher, run by hand, needs the fetch to have happened
+// when Catalog returns.
+func TestCatalog_WithoutServeStaleAStaleCatalogBlocks(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+	program, _ := store.UpsertProgram(ctx, testProgram(0))
+	old := time.Now().Add(-8 * 24 * time.Hour)
+	program.CatalogFetchedAt = &old
+
+	if _, res, err := svc.Catalog(ctx, program, DefaultFreshness); err != nil || res.Cache != CacheMiss {
+		t.Fatalf("cache=%q err=%v, want a blocking miss", res.Cache, err)
+	}
+}
+
+// Same rule for the reference lists: a directory that exists is served while
+// the ~15-POST cascade runs behind, instead of a 7–10 s wait.
+func TestReference_ServeStaleServesTheStoredDirectory(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	svc.ServeStale = true
+	ctx := context.Background()
+
+	if _, err := svc.ProgramsInFaculty(ctx, "1101", "", "pregrado"); err != nil {
+		t.Fatal(err)
+	}
+	calls := sia.directoryCalls.Load()
+
+	// Forty days later every reference marker is past its 30 d.
+	store.mu.Lock()
+	for scope := range store.reference {
+		store.reference[scope] = time.Now().Add(-40 * 24 * time.Hour)
+	}
+	store.mu.Unlock()
+	sia.delay = 100 * time.Millisecond
+
+	start := time.Now()
+	programs, err := svc.ProgramsInFaculty(ctx, "1101", "", "pregrado")
+	if err != nil || len(programs) == 0 {
+		t.Fatalf("got %d programs, err=%v — want the stored directory", len(programs), err)
+	}
+	if waited := time.Since(start); waited > 50*time.Millisecond {
+		t.Fatalf("took %v: it waited for the cascade", waited)
+	}
+	eventually(t, "the directory cascade runs behind", func() bool { return sia.directoryCalls.Load() == calls+1 })
+}

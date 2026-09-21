@@ -85,9 +85,16 @@ func (s *Store) UpsertCatalog(ctx context.Context, program catalog.Program, offe
 // Nunca dispara una consulta al SIA: una asignatura cuyo detalle nunca se
 // pidió sale con Seats nil, y esa ausencia es la respuesta honesta.
 //
-// Solo cuentan los grupos del periodo MÁS NUEVO que se conozca de la asignatura:
-// al cambiar de periodo, un plan que todavía no pidió el detalle seguía viendo —y
-// sumando— los grupos del anterior.
+// Dos filtros sobre qué grupos cuentan, los dos contra datos viejos que se
+// hacen pasar por actuales:
+//
+//   - solo el periodo MÁS NUEVO que se conozca de la asignatura: al cambiar de
+//     periodo, un plan que todavía no pidió el detalle seguía viendo —y
+//     sumando— los grupos del anterior;
+//   - un grupo cuyo último detalle llegó SIN "Cupos disponibles:" no aporta su
+//     número viejo (seats_checked_at se quedó atrás de fetched_at): el SIA dejó
+//     de reportarlo, y su sello viejo se volvía el "más viejo" de la asignatura,
+//     vencida para siempre sin que ninguna medición pudiera refrescarla.
 //
 // El orden lleva COLLATE explícito: la base corre en postgres:alpine, cuyo
 // locale por defecto ordena por bytes, y ahí "Álgebra Lineal" cae DESPUÉS de
@@ -117,6 +124,7 @@ func (s *Store) ProgramCourses(ctx context.Context, programID int64) ([]catalog.
 			WHERE sec.campus_code = cp.campus_code AND sec.code = cp.code
 			  AND sec.term = (SELECT max(s2.term) FROM section s2
 			                  WHERE s2.campus_code = sec.campus_code AND s2.code = sec.code)
+			  AND coalesce(sec.seats_checked_at, latest.measured_at) >= sec.fetched_at - interval '5 minutes'
 		) seats ON true
 		WHERE cp.program_id = $1 AND cp.disabled_at IS NULL
 		ORDER BY c.name COLLATE "es-x-icu"`,

@@ -398,3 +398,53 @@ func TestSections_OnlyTheNewestTermOfTheCourse(t *testing.T) {
 		t.Fatalf("got %+v, want the single 2027-1 group", got)
 	}
 }
+
+// A group whose latest detail came without "Cupos disponibles:" stops
+// contributing its last known number. Its old seats_checked_at used to be the
+// course's "oldest measurement": stale forever, since nothing refreshes it.
+func TestSeats_GroupTheSIAStoppedReportingDropsOut(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	resetProgram(t, s, "9992", "F1", "MUTE")
+	t.Cleanup(func() { resetProgram(t, s, "9992", "F1", "MUTE") })
+	p, err := s.UpsertProgram(ctx, catalog.Program{CampusCode: "9992", FacultyCode: "F1", Code: "MUTE", LevelSlug: "pregrado", Name: "Plan"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail := func(seatsB *catalog.SeatSnapshot) catalog.CourseOffering {
+		return catalog.CourseOffering{Course: catalog.Course{CampusCode: "9992", Code: "MUTED", Name: "Callada", Sections: []catalog.Section{
+			{CampusCode: "9992", Code: "MUTED", Term: "2026-2", Key: "A", Number: 1, Seats: &catalog.SeatSnapshot{Available: 7, MeasuredAt: time.Now()}},
+			{CampusCode: "9992", Code: "MUTED", Term: "2026-2", Key: "B", Number: 2, Seats: seatsB},
+		}}}
+	}
+	if err := s.UpsertCatalog(ctx, p, []catalog.CourseOffering{{Course: catalog.Course{CampusCode: "9992", Code: "MUTED", Name: "Callada"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertDetail(ctx, p.ID, "2026-2", detail(&catalog.SeatSnapshot{Available: 3, MeasuredAt: time.Now()})); err != nil {
+		t.Fatal(err)
+	}
+	// Two hours later the detail comes back with group B and no seats for it.
+	if _, err := s.pool.Exec(ctx, `UPDATE section SET seats_checked_at = now() - interval '2 hours'
+		WHERE campus_code = '9992' AND code = 'MUTED' AND key = 'B'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertDetail(ctx, p.ID, "2026-2", detail(nil)); err != nil {
+		t.Fatal(err)
+	}
+
+	sections, err := s.Sections(ctx, "9992", "MUTED", p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sections) != 2 || sections[0].Seats == nil || sections[1].Seats != nil {
+		t.Fatalf("want A with seats and B without, got %+v", sections)
+	}
+	courses, err := s.ProgramCourses(ctx, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seats := courses[0].Seats
+	if seats == nil || seats.Available != 7 || seats.Sections != 1 || time.Since(seats.MeasuredAt) > time.Minute {
+		t.Fatalf("aggregate = %+v, want 7 seats over 1 group, measured just now", seats)
+	}
+}

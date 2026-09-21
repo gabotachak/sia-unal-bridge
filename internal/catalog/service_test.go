@@ -1039,14 +1039,24 @@ func TestCourseDetail_SeatsMeasuredByAnotherProgramAreAHit(t *testing.T) {
 		t.Fatalf("got cache=%q with %d SIA calls, want a hit and still 1", res.Cache, sia.detailCalls.Load())
 	}
 
-	store.mu.Lock()
+	// A group the SIA reports WITHOUT seats counts by when it was last looked
+	// at: seen just now, there is still nothing to ask; seen long ago, fetch.
 	key := secKey("1101", code, program.ID)
-	store.sections[key] = append(store.sections[key], Section{CampusCode: "1101", Code: code, Term: "2026-2", Key: "2", Number: 2})
-	store.mu.Unlock()
+	addMute := func(fetchedAt time.Time) {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		store.sections[key] = append(store.sections[key][:1:1],
+			Section{CampusCode: "1101", Code: code, Term: "2026-2", Key: "2", Number: 2, FetchedAt: fetchedAt})
+	}
+	addMute(time.Now())
+	if _, res, err := svc.CourseDetail(ctx, program, code, time.Hour); err != nil || res.Cache != CacheHit {
+		t.Fatalf("mute group seen just now: cache=%q err=%v, want a hit", res.Cache, err)
+	}
+	addMute(twoHoursAgo)
 	if _, _, err := svc.CourseDetail(ctx, program, code, time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	if got := sia.detailCalls.Load(); got != 2 {
-		t.Fatalf("a group without a measurement must fetch: got %d SIA calls, want 2", got)
+		t.Fatalf("a mute group last seen two hours ago must fetch: got %d SIA calls, want 2", got)
 	}
 }

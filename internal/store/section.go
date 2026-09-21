@@ -295,6 +295,11 @@ func (s *Store) classSessionsBatch(ctx context.Context, sectionIDs []int64) (map
 	return out, rows.Err()
 }
 
+// A group whose latest detail came WITHOUT "Cupos disponibles:" reports no
+// seats at all, rather than its last known number: seats_checked_at only
+// moves when a number is parsed, fetched_at moves on every detail, so a gap
+// between them means the SIA stopped reporting it. Same rule as ProgramCourses.
+//
 // currentSeatsBatch mirrors ProgramCourses' fix: a LATERAL ... LIMIT 1 per
 // section, in one query, instead of joining current_seats (a DISTINCT ON
 // over all of seat_snapshot) which the planner can rescan broadly under a
@@ -310,7 +315,8 @@ func (s *Store) currentSeatsBatch(ctx context.Context, sectionIDs []int64) (map[
 			ORDER BY ss.measured_at DESC
 			LIMIT 1
 		) latest ON true
-		WHERE sec.id = ANY($1)`,
+		WHERE sec.id = ANY($1)
+		  AND coalesce(sec.seats_checked_at, latest.measured_at) >= sec.fetched_at - interval '5 minutes'`,
 		sectionIDs,
 	)
 	if err != nil {

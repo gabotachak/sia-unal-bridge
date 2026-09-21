@@ -516,16 +516,21 @@ func (s *Service) CourseDetail(ctx context.Context, program Program, code string
 	return cached, res, nil
 }
 
-// seatsFresh: every group the program sees carries a measurement within
-// maxAge. A course with no groups, or a group with no measurement, proves
-// nothing and falls through to the fetch.
+// seatsFresh: every group the program sees was looked at within maxAge. For a
+// group with seats that is its measurement; for one the SIA reports without
+// seats, it is the detail that brought it (FetchedAt) — we asked, there was no
+// number. A course with no groups proves nothing and falls through to the fetch.
 func seatsFresh(o CourseOffering, maxAge time.Duration) bool {
 	if len(o.Course.Sections) == 0 {
 		return false
 	}
 	now := time.Now()
 	for _, sec := range o.Course.Sections {
-		if sec.Seats == nil || !Fresh(&sec.Seats.MeasuredAt, maxAge, now) {
+		lookedAt := sec.FetchedAt
+		if sec.Seats != nil {
+			lookedAt = sec.Seats.MeasuredAt
+		}
+		if !Fresh(&lookedAt, maxAge, now) {
 			return false
 		}
 	}

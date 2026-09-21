@@ -270,6 +270,11 @@ type fakeSIA struct {
 	catalogRows  int
 	catalogEmpty bool
 
+	// detailErr, when set, is what FetchDetail answers instead of a course;
+	// lastRef is what it was asked with (the name is the it11 filter).
+	detailErr error
+	lastRef   atomic.Value
+
 	detailCalls    atomic.Int64
 	catalogCalls   atomic.Int64
 	electiveCalls  atomic.Int64
@@ -310,21 +315,21 @@ func (f *fakeSIA) FetchProgramDirectory(_ context.Context, _, campusIdx int) ([]
 	switch campusIdx {
 	case 2: // Bogotá
 		return []DropdownOption{
-				{Index: 8, Code: "2055", Name: "FACULTAD DE INGENIERÍA"},
-				{Index: 3, Code: "2054", Name: "FACULTAD DE CIENCIAS"},
-			}, map[int][]DropdownOption{
-				8: {{Index: 3, Code: "2A74", Name: "INGENIERÍA DE SISTEMAS Y COMPUTACIÓN"}},
-				3: {{Index: 1, Code: "2A11", Name: "MATEMÁTICAS"}},
-			}, nil
+			{Index: 8, Code: "2055", Name: "FACULTAD DE INGENIERÍA"},
+			{Index: 3, Code: "2054", Name: "FACULTAD DE CIENCIAS"},
+		}, map[int][]DropdownOption{
+			8: {{Index: 3, Code: "2A74", Name: "INGENIERÍA DE SISTEMAS Y COMPUTACIÓN"}},
+			3: {{Index: 1, Code: "2A11", Name: "MATEMÁTICAS"}},
+		}, nil
 	case 6: // Medellín
 		return []DropdownOption{
-				{Index: 4, Code: "3059", Name: "FACULTAD DE MINAS"},
-			}, map[int][]DropdownOption{
-				4: {
-					{Index: 2, Code: "3534", Name: "INGENIERÍA DE SISTEMAS E INFORMÁTICA"},
-					{Index: 5, Code: "2A74", Name: "INGENIERÍA DE SISTEMAS Y COMPUTACIÓN (PEAMA)"},
-				},
-			}, nil
+			{Index: 4, Code: "3059", Name: "FACULTAD DE MINAS"},
+		}, map[int][]DropdownOption{
+			4: {
+				{Index: 2, Code: "3534", Name: "INGENIERÍA DE SISTEMAS E INFORMÁTICA"},
+				{Index: 5, Code: "2A74", Name: "INGENIERÍA DE SISTEMAS Y COMPUTACIÓN (PEAMA)"},
+			},
+		}, nil
 	}
 	return nil, nil, ErrNotFound
 }
@@ -354,7 +359,11 @@ func (f *fakeSIA) FetchElectives(context.Context, ProgramKey) ([]CourseOffering,
 func (f *fakeSIA) FetchDetail(_ context.Context, _ ProgramKey, ref CourseRef, term string) (CourseOffering, error) {
 	code := ref.Code
 	f.detailCalls.Add(1)
+	f.lastRef.Store(ref)
 	time.Sleep(f.delay)
+	if f.detailErr != nil {
+		return CourseOffering{}, f.detailErr
+	}
 	return CourseOffering{
 		Course: Course{
 			CampusCode: "1101", Code: code, Name: "Cálculo diferencial", Credits: 4,
@@ -908,5 +917,136 @@ func TestReference_DefaultLevelSharesOneScope(t *testing.T) {
 	}
 	if _, ok := store.reference["programs:1101:"+DefaultLevelSlug]; !ok {
 		t.Fatalf("scopes are %v, want one keyed by the resolved slug", store.reference)
+	}
+}
+
+// A failed SIA fetch over an existing cache serves the cache, flagged stale,
+// instead of a 502 — unless the caller forced a measurement (max_age=0), where
+// an old number would be a lie.
+func TestCourseDetail_SIAFailureServesStoredCopyUnlessForced(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+	program, _ := store.UpsertProgram(ctx, testProgram(0))
+
+	if _, _, err := svc.CourseDetail(ctx, program, "1000004-B", DefaultFreshness); err != nil {
+		t.Fatal(err)
+	}
+	sia.detailErr = ErrSIANoop
+
+	// Any age > 0 that the (just written) cache already exceeds.
+	off, res, err := svc.CourseDetail(ctx, program, "1000004-B", time.Nanosecond)
+	if err != nil {
+		t.Fatalf("stale read: got error %v, want the stored copy", err)
+	}
+	if res.Cache != CacheStale || len(off.Course.Sections) != 1 {
+		t.Fatalf("stale read: cache=%q sections=%d, want stale with 1 section", res.Cache, len(off.Course.Sections))
+	}
+
+	if _, _, err := svc.CourseDetail(ctx, program, "1000004-B", 0); !errors.Is(err, ErrSIANoop) {
+		t.Fatalf("forced read: got %v, want ErrSIANoop", err)
+	}
+
+	sia.detailErr = ErrNotFound // the course left the plan: that IS the answer
+	if _, _, err := svc.CourseDetail(ctx, program, "1000004-B", time.Nanosecond); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("not found: got %v, want ErrNotFound", err)
+	}
+}
+
+// The API's detail fetch hands the stored name to the SIA source, which is
+// what turns a 241 KB listing into a 15–27 KB one (it11).
+func TestCourseDetail_PassesStoredNameToTheSource(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+	program, _ := store.UpsertProgram(ctx, testProgram(0))
+
+	if _, _, err := svc.CourseDetail(ctx, program, "1000004-B", DefaultFreshness); err != nil {
+		t.Fatal(err)
+	}
+	if ref := sia.lastRef.Load().(CourseRef); ref.Name != "" {
+		t.Fatalf("first fetch: name %q, want none (course unknown yet)", ref.Name)
+	}
+	if _, _, err := svc.CourseDetail(ctx, program, "1000004-B", 0); err != nil {
+		t.Fatal(err)
+	}
+	if ref := sia.lastRef.Load().(CourseRef); ref.Name != "Cálculo diferencial" {
+		t.Fatalf("second fetch: name %q, want the stored one", ref.Name)
+	}
+}
+
+// The first caller of a shared fetch hanging up must not fail the others.
+func TestCourseDetail_FirstCallerCancellingDoesNotFailTheRest(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{delay: 150 * time.Millisecond}
+	svc := NewService(store, sia, "2026-2")
+	program, _ := store.UpsertProgram(context.Background(), testProgram(0))
+
+	first, cancel := context.WithCancel(context.Background())
+	firstErr := make(chan error, 1)
+	go func() {
+		_, _, err := svc.CourseDetail(first, program, "1000004-B", DefaultFreshness)
+		firstErr <- err
+	}()
+	time.Sleep(30 * time.Millisecond) // let it become the singleflight leader
+
+	secondErr := make(chan error, 1)
+	go func() {
+		_, _, err := svc.CourseDetail(context.Background(), program, "1000004-B", DefaultFreshness)
+		secondErr <- err
+	}()
+	time.Sleep(30 * time.Millisecond)
+	cancel()
+
+	if err := <-firstErr; !errors.Is(err, context.Canceled) {
+		t.Fatalf("first caller: got %v, want context.Canceled", err)
+	}
+	if err := <-secondErr; err != nil {
+		t.Fatalf("second caller inherited the first one's cancellation: %v", err)
+	}
+	if got := sia.detailCalls.Load(); got != 1 {
+		t.Fatalf("got %d SIA calls, want 1 (still one shared fetch)", got)
+	}
+}
+
+// Seats are global: when this program still knows its groups (< 24 h) and all
+// of them were measured within max_age — by any program — there is nothing to
+// ask the SIA. A group with no measurement proves nothing and still fetches.
+func TestCourseDetail_SeatsMeasuredByAnotherProgramAreAHit(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+	program, _ := store.UpsertProgram(ctx, testProgram(0))
+	const code = "1000004-B"
+
+	if _, _, err := svc.CourseDetail(ctx, program, code, DefaultFreshness); err != nil {
+		t.Fatal(err)
+	}
+	// This program asked two hours ago; the seats were measured just now.
+	twoHoursAgo := time.Now().Add(-2 * time.Hour)
+	store.mu.Lock()
+	store.courseProg[cpKey(program.ID, code)] = courseProgRow{FetchedAt: &twoHoursAgo}
+	store.mu.Unlock()
+
+	_, res, err := svc.CourseDetail(ctx, program, code, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Cache != CacheHit || sia.detailCalls.Load() != 1 {
+		t.Fatalf("got cache=%q with %d SIA calls, want a hit and still 1", res.Cache, sia.detailCalls.Load())
+	}
+
+	store.mu.Lock()
+	key := secKey("1101", code, program.ID)
+	store.sections[key] = append(store.sections[key], Section{CampusCode: "1101", Code: code, Term: "2026-2", Key: "2", Number: 2})
+	store.mu.Unlock()
+	if _, _, err := svc.CourseDetail(ctx, program, code, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if got := sia.detailCalls.Load(); got != 2 {
+		t.Fatalf("a group without a measurement must fetch: got %d SIA calls, want 2", got)
 	}
 }

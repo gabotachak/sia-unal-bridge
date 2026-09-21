@@ -162,6 +162,12 @@ func (s *Store) UpsertDetail(ctx context.Context, programID int64, term string, 
 		// curso. Es lo correcto: el plan dejó de ver grupos. Y es seguro
 		// apagarlo porque A1 garantiza que un 0 que llega hasta acá es un 0
 		// de verdad y no un parseo roto.
+		//
+		// Los grupos de OTRO periodo también se apagan: el detalle de hoy no
+		// los trae, así que este plan ya no los ve. Sin esto, al cambiar de
+		// periodo los grupos viejos seguían sumando cupos y su
+		// seats_checked_at de meses atrás se volvía el "más viejo" de la
+		// asignatura — un dato vencido que ninguna medición podía refrescar.
 		keys := make([]string, len(c.Sections))
 		for i, sec := range c.Sections {
 			keys[i] = sec.Key
@@ -172,8 +178,8 @@ func (s *Store) UpsertDetail(ctx context.Context, programID int64, term string, 
 			  AND EXISTS (
 			      SELECT 1 FROM section sec
 			      WHERE sec.id = sp.section_id
-			        AND sec.campus_code = $2 AND sec.code = $3 AND sec.term = $4
-			        AND sec.key != ALL($5)
+			        AND sec.campus_code = $2 AND sec.code = $3
+			        AND (sec.term != $4 OR sec.key != ALL($5))
 			  )`,
 			programID, c.CampusCode, c.Code, term, keys,
 		); err != nil {
@@ -195,6 +201,10 @@ func isoWeekday(wd time.Weekday) int {
 
 // Sections lists a course's groups visible from programID, each with its
 // schedule and current seats.
+//
+// Only the NEWEST term known for the course: across a term rollover, a plan
+// that has not pulled the detail yet would otherwise keep serving last term's
+// groups — and last term's schedule would feed the clash detection.
 func (s *Store) Sections(ctx context.Context, campusCode, code string, programID int64) ([]catalog.Section, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT sec.id, sec.campus_code, sec.code, sec.term, sec.key, sec.number,
@@ -205,6 +215,8 @@ func (s *Store) Sections(ctx context.Context, campusCode, code string, programID
 		JOIN section_program sp ON sp.section_id = sec.id
 		WHERE sec.campus_code = $1 AND sec.code = $2 AND sp.program_id = $3
 		  AND sp.disabled_at IS NULL
+		  AND sec.term = (SELECT max(s2.term) FROM section s2
+		                  WHERE s2.campus_code = sec.campus_code AND s2.code = sec.code)
 		ORDER BY sec.number, sec.key`,
 		campusCode, code, programID,
 	)
@@ -283,6 +295,11 @@ func (s *Store) classSessionsBatch(ctx context.Context, sectionIDs []int64) (map
 	return out, rows.Err()
 }
 
+// A group whose latest detail came WITHOUT "Cupos disponibles:" reports no
+// seats at all, rather than its last known number: seats_checked_at only
+// moves when a number is parsed, fetched_at moves on every detail, so a gap
+// between them means the SIA stopped reporting it. Same rule as ProgramCourses.
+//
 // currentSeatsBatch mirrors ProgramCourses' fix: a LATERAL ... LIMIT 1 per
 // section, in one query, instead of joining current_seats (a DISTINCT ON
 // over all of seat_snapshot) which the planner can rescan broadly under a
@@ -298,7 +315,8 @@ func (s *Store) currentSeatsBatch(ctx context.Context, sectionIDs []int64) (map[
 			ORDER BY ss.measured_at DESC
 			LIMIT 1
 		) latest ON true
-		WHERE sec.id = ANY($1)`,
+		WHERE sec.id = ANY($1)
+		  AND coalesce(sec.seats_checked_at, latest.measured_at) >= sec.fetched_at - interval '5 minutes'`,
 		sectionIDs,
 	)
 	if err != nil {
@@ -351,6 +369,8 @@ func (s *Store) ProgramSchedules(ctx context.Context, programID int64) (map[stri
 		FROM course_program cp
 		LEFT JOIN section sec
 		       ON sec.campus_code = cp.campus_code AND sec.code = cp.code
+		      AND sec.term = (SELECT max(s2.term) FROM section s2
+		                      WHERE s2.campus_code = sec.campus_code AND s2.code = sec.code)
 		      AND EXISTS (
 		          SELECT 1 FROM section_program sp
 		          WHERE sp.section_id = sec.id AND sp.program_id = cp.program_id

@@ -54,11 +54,16 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("FETCH_COOLDOWN: must be >= 0, got %d", cooldown)
 	}
 
-	rateRPS, err := strconv.ParseFloat(getenv("RATE_LIMIT_RPS", "5"), 64)
+	// 60/80, what production has run since August. The old 5/20 was sized to
+	// shield the SIA pool from one client; the pool now shields itself (queue
+	// with a deadline, background lane capped at half), and 5 rps per IP was
+	// a campus-wide limit in practice — a whole campus leaves through a
+	// handful of NAT addresses. The bucket is now only a brake on abuse.
+	rateRPS, err := strconv.ParseFloat(getenv("RATE_LIMIT_RPS", "60"), 64)
 	if err != nil || rateRPS <= 0 {
 		return Config{}, fmt.Errorf("RATE_LIMIT_RPS: must be a positive number, got %q", os.Getenv("RATE_LIMIT_RPS"))
 	}
-	rateBurst, err := strconv.Atoi(getenv("RATE_LIMIT_BURST", "20"))
+	rateBurst, err := strconv.Atoi(getenv("RATE_LIMIT_BURST", "80"))
 	if err != nil || rateBurst <= 0 {
 		return Config{}, fmt.Errorf("RATE_LIMIT_BURST: must be a positive integer, got %q", os.Getenv("RATE_LIMIT_BURST"))
 	}

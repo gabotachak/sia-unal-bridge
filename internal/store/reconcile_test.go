@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
@@ -304,5 +305,146 @@ func TestReconcile_SectionProgram_DoesNotLeakAcrossPrograms(t *testing.T) {
 	}
 	if len(smallSections) != 1 {
 		t.Fatalf("small plan: got %d sections, want 1", len(smallSections))
+	}
+}
+
+// Term rollover: the first detail of the new term turns off this plan's view
+// of the OLD term's groups. Left visible, they kept adding to the seat total
+// and their months-old seats_checked_at became the course's "oldest"
+// measurement — stale forever, since no fetch would ever touch them again.
+func TestReconcile_SectionProgram_NewTermHidesTheOldTermsGroups(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	resetProgram(t, s, "9995", "F1", "ROLL")
+	t.Cleanup(func() { resetProgram(t, s, "9995", "F1", "ROLL") })
+
+	plan, err := s.UpsertProgram(ctx, catalog.Program{
+		CampusCode: "9995", FacultyCode: "F1", Code: "ROLL", LevelSlug: "pregrado", Name: "Plan",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	course := func(term string, keys ...string) catalog.CourseOffering {
+		secs := make([]catalog.Section, len(keys))
+		for i, k := range keys {
+			secs[i] = catalog.Section{CampusCode: "9995", Code: "ROLLOVER", Term: term, Key: k, Number: i + 1}
+		}
+		return catalog.CourseOffering{Course: catalog.Course{CampusCode: "9995", Code: "ROLLOVER", Name: "Cambio", Sections: secs}}
+	}
+
+	if err := s.UpsertDetail(ctx, plan.ID, "2026-2", course("2026-2", "1", "2")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertDetail(ctx, plan.ID, "2027-1", course("2027-1", "1")); err != nil {
+		t.Fatal(err)
+	}
+
+	sections, err := s.Sections(ctx, "9995", "ROLLOVER", plan.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sections) != 1 || sections[0].Term != "2027-1" {
+		t.Fatalf("got %d visible sections (%+v), want only the 2027-1 one", len(sections), sections)
+	}
+}
+
+// Before a plan pulls its first detail of the new term it still holds last
+// term's visibility. The reads serve only the newest term known for the
+// course, so that plan sees no groups (and gets measured) instead of last
+// term's seats and last term's schedule.
+func TestSections_OnlyTheNewestTermOfTheCourse(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	for _, code := range []string{"OLDT", "NEWT"} {
+		resetProgram(t, s, "9993", "F1", code)
+	}
+	t.Cleanup(func() {
+		resetProgram(t, s, "9993", "F1", "OLDT")
+		resetProgram(t, s, "9993", "F1", "NEWT")
+	})
+	mk := func(code string) catalog.Program {
+		p, err := s.UpsertProgram(ctx, catalog.Program{CampusCode: "9993", FacultyCode: "F1", Code: code, LevelSlug: "pregrado", Name: code})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	behind, ahead := mk("OLDT"), mk("NEWT")
+	course := func(term string) catalog.CourseOffering {
+		now := time.Now()
+		return catalog.CourseOffering{Course: catalog.Course{CampusCode: "9993", Code: "TERMS", Name: "Periodos", Sections: []catalog.Section{
+			{CampusCode: "9993", Code: "TERMS", Term: term, Key: "1", Number: 1, Seats: &catalog.SeatSnapshot{Available: 5, MeasuredAt: now}},
+		}}}
+	}
+	if err := s.UpsertDetail(ctx, behind.ID, "2026-2", course("2026-2")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertDetail(ctx, ahead.ID, "2027-1", course("2027-1")); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Sections(ctx, "9993", "TERMS", behind.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("the plan still on last term's visibility got %d groups (%+v), want none", len(got), got)
+	}
+	got, err = s.Sections(ctx, "9993", "TERMS", ahead.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Term != "2027-1" {
+		t.Fatalf("got %+v, want the single 2027-1 group", got)
+	}
+}
+
+// A group whose latest detail came without "Cupos disponibles:" stops
+// contributing its last known number. Its old seats_checked_at used to be the
+// course's "oldest measurement": stale forever, since nothing refreshes it.
+func TestSeats_GroupTheSIAStoppedReportingDropsOut(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	resetProgram(t, s, "9992", "F1", "MUTE")
+	t.Cleanup(func() { resetProgram(t, s, "9992", "F1", "MUTE") })
+	p, err := s.UpsertProgram(ctx, catalog.Program{CampusCode: "9992", FacultyCode: "F1", Code: "MUTE", LevelSlug: "pregrado", Name: "Plan"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail := func(seatsB *catalog.SeatSnapshot) catalog.CourseOffering {
+		return catalog.CourseOffering{Course: catalog.Course{CampusCode: "9992", Code: "MUTED", Name: "Callada", Sections: []catalog.Section{
+			{CampusCode: "9992", Code: "MUTED", Term: "2026-2", Key: "A", Number: 1, Seats: &catalog.SeatSnapshot{Available: 7, MeasuredAt: time.Now()}},
+			{CampusCode: "9992", Code: "MUTED", Term: "2026-2", Key: "B", Number: 2, Seats: seatsB},
+		}}}
+	}
+	if err := s.UpsertCatalog(ctx, p, []catalog.CourseOffering{{Course: catalog.Course{CampusCode: "9992", Code: "MUTED", Name: "Callada"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertDetail(ctx, p.ID, "2026-2", detail(&catalog.SeatSnapshot{Available: 3, MeasuredAt: time.Now()})); err != nil {
+		t.Fatal(err)
+	}
+	// Two hours later the detail comes back with group B and no seats for it.
+	if _, err := s.pool.Exec(ctx, `UPDATE section SET seats_checked_at = now() - interval '2 hours'
+		WHERE campus_code = '9992' AND code = 'MUTED' AND key = 'B'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertDetail(ctx, p.ID, "2026-2", detail(nil)); err != nil {
+		t.Fatal(err)
+	}
+
+	sections, err := s.Sections(ctx, "9992", "MUTED", p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sections) != 2 || sections[0].Seats == nil || sections[1].Seats != nil {
+		t.Fatalf("want A with seats and B without, got %+v", sections)
+	}
+	courses, err := s.ProgramCourses(ctx, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seats := courses[0].Seats
+	if seats == nil || seats.Available != 7 || seats.Sections != 1 || time.Since(seats.MeasuredAt) > time.Minute {
+		t.Fatalf("aggregate = %+v, want 7 seats over 1 group, measured just now", seats)
 	}
 }

@@ -51,5 +51,10 @@ func (a *api) status(c *gin.Context) {
 		refresh[r.Mode] = r
 	}
 	body["refresh"] = refresh
+	// Counters since this process started: a failed/ok ratio that climbs is
+	// the pool rotting, whatever healthz says.
+	if h, ok := a.svc.SIAHealth(); ok {
+		body["sia"] = h
+	}
 	c.JSON(http.StatusOK, body)
 }

@@ -1084,3 +1084,51 @@ clave real es numérica o tiene un dígito (`1`, `10`, `TUMA-01`, `2022615`);
 
 Fixture: `detalle_2022615_grupo_sin_palabra_grupo_2026-08-21.xml`. Test:
 `TestParseDetail_GroupLabelWithoutGrupoWord`.
+
+## 41. El cookie jar sobrevive al re-bootstrap, y el SIA pone ahí una cookie de un año
+
+Medido en producción el 2026-09-20. `Bootstrap()` reseteaba el ViewState, el formulario y
+toda la navegación, pero reutilizaba el `http.Client` — y con él el cookie jar. El SIA no
+pone solo la cookie de sesión (`PortalJSESSION`): pone también `cookiesession1`, con
+**un año** de vida.
+
+Síntoma: ~18 de 32 conexiones respondían **noop al primer POST de cada sesión nueva**,
+para siempre. El keepalive fallaba ~490 veces por hora, plano, incluso a las 03:00 sin
+tráfico; el reintento de `Pool.Do` (re-bootstrap + repetir) daba noop otra vez; el 85 % de
+los requests que iban al SIA salían `502 sia_noop`. Desde fuera parece que el SIA cambió.
+
+No cambió: Bruno 01→06 funcionaba **desde la misma IP**, un cliente nuevo con el cuerpo
+idéntico al de Go también, y reiniciar el proceso lo curó en el acto. Lo único propio de
+cada conexión que un reinicio resetea y un re-bootstrap no, es el jar.
+
+Regla: **un re-bootstrap tiene que valer lo mismo que un reinicio.** `Bootstrap()` arranca
+con `newClient()` — jar vacío — cada vez. Test: `TestDo_RebootstrapStartsFromAnEmptyCookieJar`.
+
+Qué marca el jar la primera vez no se sabe. Si "todo da `sia_noop` pero Bruno funciona",
+mirar `/v1/status` → `sia` (`noops`, `fetches_failed`, `last_ok`) y la tasa de
+`keepalive ping failed` en los logs antes de sospechar del protocolo.
+
+## 42. Repetir una búsqueda de electivas: o solo el botón, o la secuencia entera
+
+Medido en vivo el 2026-09-20. Una conexión que acaba de hacer la búsqueda de electivas de
+un plan (`soc4=7`, `soc5`, `soc10`, `soc6`, `cb1`) y vuelve a buscar en el mismo plan tiene
+dos caminos que funcionan y uno intermedio que no:
+
+| qué se repostea | resultado |
+|---|---|
+| todo, rebotando cada dropdown por otro valor (§30) | funciona — **8 POSTs**, 6 de ellos rebotes |
+| **nada: solo `cb1`** (con el `it11` nuevo) | funciona — **1 POST**. Sobrevive a un detalle + Volver en el medio |
+| solo `soc10` (rebotado) + `soc6` + `cb1`, saltándose `soc4`/`soc5` | **`soc6` da noop (1039 B)** |
+
+El tercero es la trampa. El §37 dice que el repost de `soc10` borra la selección de `soc6`
+y por eso `soc6` no necesita rebote; eso es cierto **solo cuando `soc4`/`soc5` también se
+repostearon**. Si no, `soc6` queda seleccionado, su repost es un valor sin cambio, y noop.
+
+`eachElectivesSearch` usa el camino corto cuando `SIAConn.electivesAt` dice que la búsqueda
+de ese plan sigue viva (un solo target: el comodín de sede), y cualquier cosa que mueva un
+dropdown lo invalida (`FetchCatalog` al volver `soc4` a 0, un `Bootstrap`, otro plan). Si el
+botón no trae la fila, corre la secuencia completa: el atajo puede costar un POST, nunca un
+dato — y `checkDetailCode` sigue comparando el código que pinta la página del detalle.
+
+Efecto medido en el detalle de una electiva: de 10 POSTs y ~210 KB a **3 POSTs y ~65 KB**.
+

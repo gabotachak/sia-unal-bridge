@@ -48,8 +48,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SIA_TERM: ${SIA_TERM:-2026-2}
       FETCH_COOLDOWN: ${FETCH_COOLDOWN:-300}
-      RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-5}
-      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-20}
+      RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-60}
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-80}
       SIA_ACQUIRE_TIMEOUT_SECONDS: ${SIA_ACQUIRE_TIMEOUT_SECONDS:-45}
       # Para que los logs cuadren con el reloj del host y con el cron. Necesita
       # tzdata en la imagen (ver Dockerfile), o Go se queda en UTC en silencio.

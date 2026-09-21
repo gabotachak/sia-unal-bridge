@@ -193,3 +193,49 @@ func TestPing_UnparkedConnectionStillPosts(t *testing.T) {
 		t.Fatalf("Ping sent %d POSTs on an un-parked conn, want 1", n)
 	}
 }
+
+// A re-bootstrap must not carry the old cookies along. The SIA hands out a
+// long-lived cookie next to the session one, and a connection whose jar
+// survived the re-bootstrap stayed poisoned forever: measured in production
+// 2026-09-20, cured only by restarting the process.
+func TestDo_RebootstrapStartsFromAnEmptyCookieJar(t *testing.T) {
+	var gets atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tracked, err := r.Cookie("cookiesession1")
+		if r.Method == http.MethodGet {
+			n := gets.Add(1)
+			if err != nil { // like the real one: set once, never replaced
+				http.SetCookie(w, &http.Cookie{Name: "cookiesession1", Value: fmt.Sprint(n), Path: "/"})
+			}
+			fmt.Fprintf(w, `<html><input name="javax.faces.ViewState" value="vs-%d"/>%s</html>`, n, strings.Repeat("x", 4096))
+			return
+		}
+		if err == nil && tracked.Value == "1" { // the first client is the poisoned one
+			fmt.Fprint(w, smallNoop())
+			return
+		}
+		fmt.Fprint(w, bigRender())
+	}))
+	t.Cleanup(srv.Close)
+
+	p := &Pool{baseURL: srv.URL, conns: make(chan *SIAConn, 1), size: 1}
+	c, err := NewConn(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Bootstrap(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	p.conns <- c
+
+	_, err = Do(context.Background(), p, func(c *SIAConn) (struct{}, error) {
+		body, err := c.DebugRawCB1(context.Background())
+		if err == nil && isNoop(body) {
+			err = newNoopError(body)
+		}
+		return struct{}{}, err
+	})
+	if err != nil {
+		t.Fatalf("Do: the re-bootstrap kept the poisoned cookie: %v", err)
+	}
+}

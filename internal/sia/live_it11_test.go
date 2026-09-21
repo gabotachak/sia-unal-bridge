@@ -155,7 +155,7 @@ func TestLive_FetchDetails_LocalityWins(t *testing.T) {
 			key catalog.ProgramKey
 			ref catalog.CourseRef
 		}{{sistemas, refsA[i]}, {industrial, refsB[i]}} {
-			o, err := singleSrc.FetchDetail(ctx, w.key, w.ref.Code, "2026-2")
+			o, err := singleSrc.FetchDetail(ctx, w.key, catalog.CourseRef{Code: w.ref.Code}, "2026-2")
 			if err != nil {
 				t.Fatalf("FetchDetail %s: %v", w.ref.Code, err)
 			}

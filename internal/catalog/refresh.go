@@ -15,6 +15,11 @@ type CourseRef struct {
 	Code      string
 	Name      string
 
+	// Elective: the course is libre elección from this program, so it can only
+	// be found through the electives search. A hint, like Name: a wrong value
+	// costs POSTs, never correctness — the regular listing is still checked.
+	Elective bool
+
 	// HadSections is whether the cache already holds groups for this course.
 	// It is what separates the two ways a sweep can see "0 grupos": a sede
 	// with nothing scheduled this term (legitimate, and it is what SEDE DE LA

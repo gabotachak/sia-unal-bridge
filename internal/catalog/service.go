@@ -2,7 +2,9 @@ package catalog
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -377,6 +379,9 @@ type CacheStatus string
 const (
 	CacheHit  CacheStatus = "hit"
 	CacheMiss CacheStatus = "miss"
+	// CacheStale: the SIA fetch failed and the Store's older copy was served
+	// instead of an error. Only ever on a non-forced read (see CourseDetail).
+	CacheStale CacheStatus = "stale"
 )
 
 // FetchResult carries the cache/timing metadata docs/API.md's headers need
@@ -385,6 +390,9 @@ type FetchResult struct {
 	Cache   CacheStatus
 	FetchMs int64 // only meaningful when Cache == CacheMiss
 }
+
+// electiveTypologyPrefix is the SIA's own literal, "LIBRE ELECCIÓN (L)".
+const electiveTypologyPrefix = "LIBRE"
 
 // DefaultFreshness tells Catalog/CourseDetail to use the resource's own
 // default TTL instead of a caller-supplied ?max_age=.
@@ -418,7 +426,7 @@ func (s *Service) Catalog(ctx context.Context, program Program, maxAge time.Dura
 
 	start := time.Now()
 	sfKey := fmt.Sprintf("%d", program.ID)
-	v, err, _ := s.sfCatalog.Do(sfKey, func() (any, error) {
+	v, err := shared(ctx, &s.sfCatalog, sfKey, func(ctx context.Context) (any, error) {
 		key := program.key()
 		regular, err := s.sia.FetchCatalog(ctx, key)
 		if err != nil {
@@ -474,7 +482,62 @@ func (s *Service) CourseDetail(ctx context.Context, program Program, code string
 		offering, err := s.readCourse(ctx, program, code)
 		return offering, FetchResult{Cache: CacheHit}, err
 	}
-	return s.refreshDetail(ctx, program, code)
+	// Seats are global, visibility is per program (DATA-MODEL.md decisión 6).
+	// So when THIS program's stamp is too old for maxAge but still knows which
+	// groups it sees (< FreshnessDetail), and every one of those groups was
+	// measured within maxAge — by whichever program — the answer is already
+	// in the Store. Measured 2026-09-20 on one Bogotá plan: 136 of 267 courses
+	// were in exactly this state, each one a full SIA round trip for a number
+	// another plan had just written.
+	if maxAge > 0 && ok && Fresh(fetchedAt, FreshnessDetail, time.Now()) {
+		if cached, rerr := s.readCourse(ctx, program, code); rerr == nil && seatsFresh(cached, maxAge) {
+			return cached, FetchResult{Cache: CacheHit}, nil
+		}
+	}
+
+	offering, res, err := s.refreshDetail(ctx, program, code)
+	if err == nil || maxAge == 0 || !ok || fetchedAt == nil {
+		return offering, res, err
+	}
+
+	// The fetch failed but the Store holds an older copy. Serving it beats a
+	// 502: every datum carries its own age, so nothing here is passed off as
+	// fresh. Three cases keep the error, each for its own reason:
+	//   - maxAge == 0: the caller asked for a MEASUREMENT, an old number would lie;
+	//   - ErrNotFound: the course left the plan, that IS the answer (D2);
+	//   - a caller that is gone has nobody to serve.
+	if errors.Is(err, ErrNotFound) || ctx.Err() != nil {
+		return offering, res, err
+	}
+	cached, rerr := s.readCourse(ctx, program, code)
+	if rerr != nil {
+		return offering, res, err
+	}
+	slog.Warn("catalog: SIA fetch failed, serving the stored detail",
+		"campus", program.CampusCode, "program", program.Code, "code", code, "err", err)
+	res.Cache = CacheStale
+	return cached, res, nil
+}
+
+// seatsFresh: every group the program sees was looked at within maxAge. For a
+// group with seats that is its measurement; for one the SIA reports without
+// seats, it is the detail that brought it (FetchedAt) — we asked, there was no
+// number. A course with no groups proves nothing and falls through to the fetch.
+func seatsFresh(o CourseOffering, maxAge time.Duration) bool {
+	if len(o.Course.Sections) == 0 {
+		return false
+	}
+	now := time.Now()
+	for _, sec := range o.Course.Sections {
+		lookedAt := sec.FetchedAt
+		if sec.Seats != nil {
+			lookedAt = sec.Seats.MeasuredAt
+		}
+		if !Fresh(&lookedAt, maxAge, now) {
+			return false
+		}
+	}
+	return true
 }
 
 // LastDetailFetch reports when the detail POST for this course last ran,
@@ -554,8 +617,19 @@ func (s *Service) cachedSection(ctx context.Context, program Program, code, key 
 func (s *Service) refreshDetail(ctx context.Context, program Program, code string) (CourseOffering, FetchResult, error) {
 	start := time.Now()
 	sfKey := fmt.Sprintf("%d:%s", program.ID, code)
-	v, err, _ := s.sfDetail.Do(sfKey, func() (any, error) {
-		offering, err := s.sia.FetchDetail(ctx, program.key(), code, s.term)
+	v, err := shared(ctx, &s.sfDetail, sfKey, func(ctx context.Context) (any, error) {
+		// The stored name narrows the SIA listing through it11. Best-effort:
+		// a course never seen before simply goes unfiltered.
+		ref := CourseRef{ProgramID: program.ID, Code: code}
+		if known, found, _ := s.store.Course(ctx, program.CampusCode, code); found {
+			ref.Name = known.Name
+		}
+		// Libre elección only ever shows up in the electives search (GOTCHAS
+		// §21): knowing that up front skips a listing that cannot have it.
+		if typology, _, _ := s.store.CourseProgramTypology(ctx, program.ID, code); strings.HasPrefix(typology, electiveTypologyPrefix) {
+			ref.Elective = true
+		}
+		offering, err := s.sia.FetchDetail(ctx, program.key(), ref, s.term)
 		if err != nil {
 			return nil, err
 		}
@@ -569,6 +643,36 @@ func (s *Service) refreshDetail(ctx context.Context, program Program, code strin
 		return CourseOffering{}, res, err
 	}
 	return v.(CourseOffering), res, nil
+}
+
+// shared runs fn once per key however many callers ask at the same time, and
+// — the part singleflight.Do gets wrong for this service — does not let the
+// FIRST caller's cancellation fail everybody else. fn gets a context that
+// keeps the first caller's deadline but not its cancel: a client navigating
+// away used to hand its "context canceled" to every other request waiting on
+// the same course, and to abandon the ADF connection mid-operation (235 of
+// those in one production hour, 2026-09-19). The fetch now finishes and is
+// persisted even if nobody is left to read it; each waiter still gives up on
+// its OWN context.
+func shared(ctx context.Context, g *singleflight.Group, key string, fn func(context.Context) (any, error)) (any, error) {
+	ch := g.DoChan(key, func() (any, error) {
+		fctx := context.WithoutCancel(ctx)
+		if deadline, ok := ctx.Deadline(); ok {
+			var cancel context.CancelFunc
+			fctx, cancel = context.WithDeadline(fctx, deadline)
+			defer cancel()
+		}
+		return fn(fctx)
+	})
+	select {
+	case r := <-ch:
+		return r.Val, r.Err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, ErrBusy // same answer Pool.Acquire gives when the wait runs out
+		}
+		return nil, ctx.Err()
+	}
 }
 
 func (s *Service) readCourse(ctx context.Context, program Program, code string) (CourseOffering, error) {
@@ -588,5 +692,31 @@ func (s *Service) readCourse(ctx context.Context, program Program, code string) 
 	if err != nil {
 		return CourseOffering{}, err
 	}
-	return CourseOffering{Course: course, Typology: typology}, nil
+	detailAt, _, err := s.store.CourseProgramFetchedAt(ctx, program.ID, code)
+	if err != nil {
+		return CourseOffering{}, err
+	}
+	return CourseOffering{Course: course, Typology: typology,
+		Seats: seatsOf(sections), DetailFetchedAt: detailAt}, nil
+}
+
+// seatsOf is the course-level seat aggregate over the groups a program sees:
+// the same sum/oldest/count Store.ProgramCourses computes in SQL for the
+// listing, so the detail and the listing can never disagree about it.
+func seatsOf(sections []Section) *CourseSeats {
+	var out *CourseSeats
+	for _, sec := range sections {
+		if sec.Seats == nil {
+			continue
+		}
+		if out == nil {
+			out = &CourseSeats{MeasuredAt: sec.Seats.MeasuredAt}
+		}
+		out.Available += sec.Seats.Available
+		out.Sections++
+		if sec.Seats.MeasuredAt.Before(out.MeasuredAt) {
+			out.MeasuredAt = sec.Seats.MeasuredAt
+		}
+	}
+	return out
 }

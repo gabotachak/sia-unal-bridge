@@ -3,6 +3,7 @@ package sia
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -132,5 +133,40 @@ func TestDoAt_BackgroundLaneLeavesRoomForInteractiveWork(t *testing.T) {
 	}
 	if _, err := DoAt(context.Background(), p, nil, noop); err != nil {
 		t.Fatalf("interactive op with the background lane full: %v", err)
+	}
+}
+
+// The scenario that took production down: two people open a catalog (a burst
+// of background measurements each) while a third opens one course. With every
+// connection up for grabs the third waited behind all of it; with the lane,
+// the interactive request gets a connection while the sweep is still running.
+func TestDoAt_APersonIsServedWhileCatalogSweepsRun(t *testing.T) {
+	const size = 4
+	p := &Pool{conns: make(chan *SIAConn, size), size: size, bg: make(chan struct{}, size/2)}
+	for range size {
+		p.conns <- &SIAConn{}
+	}
+	slow := func(*SIAConn) (struct{}, error) { time.Sleep(60 * time.Millisecond); return struct{}{}, nil }
+
+	var sweep sync.WaitGroup
+	bg := catalog.WithBackground(context.Background())
+	for range 40 { // two catalogs' worth of measurements
+		sweep.Add(1)
+		go func() { defer sweep.Done(); _, _ = DoAt(bg, p, nil, slow) }()
+	}
+	time.Sleep(20 * time.Millisecond) // the sweep owns its lane by now
+
+	start := time.Now()
+	if _, err := DoAt(context.Background(), p, nil, slow); err != nil {
+		t.Fatal(err)
+	}
+	// One operation is 60 ms. Queued behind the sweep (40 ops over 4 conns)
+	// it would be ~600 ms.
+	if waited := time.Since(start); waited > 200*time.Millisecond {
+		t.Fatalf("the interactive request took %v: it queued behind the background sweep", waited)
+	}
+	sweep.Wait()
+	if h := p.Health(); h.FetchesOK != 41 || h.FetchesFailed != 0 {
+		t.Fatalf("health = %+v, want 41 ok / 0 failed", h)
 	}
 }

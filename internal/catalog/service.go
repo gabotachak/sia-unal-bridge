@@ -475,7 +475,36 @@ func (s *Service) CourseDetail(ctx context.Context, program Program, code string
 		offering, err := s.readCourse(ctx, program, code)
 		return offering, FetchResult{Cache: CacheHit}, err
 	}
+	// Seats are global, visibility is per program (DATA-MODEL.md decisión 6).
+	// So when THIS program's stamp is too old for maxAge but still knows which
+	// groups it sees (< FreshnessDetail), and every one of those groups was
+	// measured within maxAge — by whichever program — the answer is already
+	// in the Store. Measured 2026-09-20 on one Bogotá plan: 136 of 267 courses
+	// were in exactly this state, each one a full SIA round trip for a number
+	// another plan had just written.
+	if maxAge > 0 && ok && Fresh(fetchedAt, FreshnessDetail, time.Now()) {
+		if cached, rerr := s.readCourse(ctx, program, code); rerr == nil && seatsFresh(cached, maxAge) {
+			return cached, FetchResult{Cache: CacheHit}, nil
+		}
+	}
+
 	return s.refreshDetail(ctx, program, code)
+}
+
+// seatsFresh: every group the program sees carries a measurement within
+// maxAge. A course with no groups, or a group with no measurement, proves
+// nothing and falls through to the fetch.
+func seatsFresh(o CourseOffering, maxAge time.Duration) bool {
+	if len(o.Course.Sections) == 0 {
+		return false
+	}
+	now := time.Now()
+	for _, sec := range o.Course.Sections {
+		if sec.Seats == nil || !Fresh(&sec.Seats.MeasuredAt, maxAge, now) {
+			return false
+		}
+	}
+	return true
 }
 
 // LastDetailFetch reports when the detail POST for this course last ran,

@@ -65,7 +65,12 @@ const newRow = (item: PlanItem): Row => {
 
 /** Cuándo vuelve a estar disponible una materia según lo que respondió la API. */
 function readyAtFrom(detail: CourseDetail): number {
-  const at = detail.fetched_at ? Date.parse(detail.fetched_at) : NaN;
+  // `detail_fetched_at` es el sello de ESTE plan, el mismo que mira el cooldown
+  // del back. `fetched_at` es de la fila global de la asignatura —lo mueve
+  // cualquier plan, y un refresco de catálogo— y queda solo como respaldo
+  // para una API que todavía no mande el otro.
+  const stamp = detail.detail_fetched_at ?? detail.fetched_at;
+  const at = stamp ? Date.parse(stamp) : NaN;
   return Number.isFinite(at) ? at + FETCH_COOLDOWN * 1000 : 0;
 }
 

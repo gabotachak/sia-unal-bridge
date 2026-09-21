@@ -98,7 +98,7 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
   // (`course_program.detail_fetched_at`, ver internal/httpapi/cooldown.go) — y
   // porque una asignatura sin grupos no tiene cupos de los que sacar una edad,
   // así que por ahí el botón se quedaba encendido y rebotaba con un 429.
-  const fetchedAt = data?.fetched_at;
+  const fetchedAt = data?.detail_fetched_at ?? data?.fetched_at;
   useEffect(() => {
     const at = fetchedAt ? Date.parse(fetchedAt) : NaN;
     if (!Number.isFinite(at)) return;

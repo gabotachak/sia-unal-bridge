@@ -201,6 +201,10 @@ func isoWeekday(wd time.Weekday) int {
 
 // Sections lists a course's groups visible from programID, each with its
 // schedule and current seats.
+//
+// Only the NEWEST term known for the course: across a term rollover, a plan
+// that has not pulled the detail yet would otherwise keep serving last term's
+// groups — and last term's schedule would feed the clash detection.
 func (s *Store) Sections(ctx context.Context, campusCode, code string, programID int64) ([]catalog.Section, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT sec.id, sec.campus_code, sec.code, sec.term, sec.key, sec.number,
@@ -211,6 +215,8 @@ func (s *Store) Sections(ctx context.Context, campusCode, code string, programID
 		JOIN section_program sp ON sp.section_id = sec.id
 		WHERE sec.campus_code = $1 AND sec.code = $2 AND sp.program_id = $3
 		  AND sp.disabled_at IS NULL
+		  AND sec.term = (SELECT max(s2.term) FROM section s2
+		                  WHERE s2.campus_code = sec.campus_code AND s2.code = sec.code)
 		ORDER BY sec.number, sec.key`,
 		campusCode, code, programID,
 	)
@@ -357,6 +363,8 @@ func (s *Store) ProgramSchedules(ctx context.Context, programID int64) (map[stri
 		FROM course_program cp
 		LEFT JOIN section sec
 		       ON sec.campus_code = cp.campus_code AND sec.code = cp.code
+		      AND sec.term = (SELECT max(s2.term) FROM section s2
+		                      WHERE s2.campus_code = sec.campus_code AND s2.code = sec.code)
 		      AND EXISTS (
 		          SELECT 1 FROM section_program sp
 		          WHERE sp.section_id = sec.id AND sp.program_id = cp.program_id

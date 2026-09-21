@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
@@ -344,5 +345,56 @@ func TestReconcile_SectionProgram_NewTermHidesTheOldTermsGroups(t *testing.T) {
 	}
 	if len(sections) != 1 || sections[0].Term != "2027-1" {
 		t.Fatalf("got %d visible sections (%+v), want only the 2027-1 one", len(sections), sections)
+	}
+}
+
+// Before a plan pulls its first detail of the new term it still holds last
+// term's visibility. The reads serve only the newest term known for the
+// course, so that plan sees no groups (and gets measured) instead of last
+// term's seats and last term's schedule.
+func TestSections_OnlyTheNewestTermOfTheCourse(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	for _, code := range []string{"OLDT", "NEWT"} {
+		resetProgram(t, s, "9993", "F1", code)
+	}
+	t.Cleanup(func() {
+		resetProgram(t, s, "9993", "F1", "OLDT")
+		resetProgram(t, s, "9993", "F1", "NEWT")
+	})
+	mk := func(code string) catalog.Program {
+		p, err := s.UpsertProgram(ctx, catalog.Program{CampusCode: "9993", FacultyCode: "F1", Code: code, LevelSlug: "pregrado", Name: code})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	behind, ahead := mk("OLDT"), mk("NEWT")
+	course := func(term string) catalog.CourseOffering {
+		now := time.Now()
+		return catalog.CourseOffering{Course: catalog.Course{CampusCode: "9993", Code: "TERMS", Name: "Periodos", Sections: []catalog.Section{
+			{CampusCode: "9993", Code: "TERMS", Term: term, Key: "1", Number: 1, Seats: &catalog.SeatSnapshot{Available: 5, MeasuredAt: now}},
+		}}}
+	}
+	if err := s.UpsertDetail(ctx, behind.ID, "2026-2", course("2026-2")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertDetail(ctx, ahead.ID, "2027-1", course("2027-1")); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Sections(ctx, "9993", "TERMS", behind.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("the plan still on last term's visibility got %d groups (%+v), want none", len(got), got)
+	}
+	got, err = s.Sections(ctx, "9993", "TERMS", ahead.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Term != "2027-1" {
+		t.Fatalf("got %+v, want the single 2027-1 group", got)
 	}
 }

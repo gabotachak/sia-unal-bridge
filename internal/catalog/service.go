@@ -391,6 +391,9 @@ type FetchResult struct {
 	FetchMs int64 // only meaningful when Cache == CacheMiss
 }
 
+// electiveTypologyPrefix is the SIA's own literal, "LIBRE ELECCIÓN (L)".
+const electiveTypologyPrefix = "LIBRE"
+
 // DefaultFreshness tells Catalog/CourseDetail to use the resource's own
 // default TTL instead of a caller-supplied ?max_age=.
 const DefaultFreshness time.Duration = -1
@@ -620,6 +623,11 @@ func (s *Service) refreshDetail(ctx context.Context, program Program, code strin
 		ref := CourseRef{ProgramID: program.ID, Code: code}
 		if known, found, _ := s.store.Course(ctx, program.CampusCode, code); found {
 			ref.Name = known.Name
+		}
+		// Libre elección only ever shows up in the electives search (GOTCHAS
+		// §21): knowing that up front skips a listing that cannot have it.
+		if typology, _, _ := s.store.CourseProgramTypology(ctx, program.ID, code); strings.HasPrefix(typology, electiveTypologyPrefix) {
+			ref.Elective = true
 		}
 		offering, err := s.sia.FetchDetail(ctx, program.key(), ref, s.term)
 		if err != nil {

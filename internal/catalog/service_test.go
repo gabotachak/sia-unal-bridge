@@ -1060,3 +1060,29 @@ func TestCourseDetail_SeatsMeasuredByAnotherProgramAreAHit(t *testing.T) {
 		t.Fatalf("a mute group last seen two hours ago must fetch: got %d SIA calls, want 2", got)
 	}
 }
+
+// Libre elección is only ever found through the electives search, and the
+// program's stored typology says so before the first POST.
+func TestCourseDetail_TellsTheSourceWhenTheCourseIsAnElective(t *testing.T) {
+	store := newFakeStore()
+	sia := &fakeSIA{}
+	svc := NewService(store, sia, "2026-2")
+	ctx := context.Background()
+	program, _ := store.UpsertProgram(ctx, testProgram(0))
+
+	for code, want := range map[string]bool{"ELECT-1": true, "OBLIG-1": false} {
+		typology := "FUND. OBLIGATORIA (B)"
+		if want {
+			typology = "LIBRE ELECCIÓN (L)"
+		}
+		store.mu.Lock()
+		store.courseProg[cpKey(program.ID, code)] = courseProgRow{Typology: typology}
+		store.mu.Unlock()
+		if _, _, err := svc.CourseDetail(ctx, program, code, DefaultFreshness); err != nil {
+			t.Fatal(err)
+		}
+		if got := sia.lastRef.Load().(CourseRef).Elective; got != want {
+			t.Fatalf("%s: Elective=%v, want %v", code, got, want)
+		}
+	}
+}

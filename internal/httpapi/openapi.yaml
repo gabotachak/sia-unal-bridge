@@ -606,8 +606,12 @@ components:
       description: "`max-age` efectivo del recurso."
       schema: { type: string, examples: ["max-age=300"] }
     XCache:
-      description: Si la respuesta salió de Postgres o costó una consulta al SIA.
-      schema: { type: string, enum: [hit, miss] }
+      description: |
+        Si la respuesta salió de Postgres (`hit`) o costó una consulta al SIA (`miss`).
+        `stale`: la consulta al SIA **falló** y se sirvió lo que Postgres ya tenía, aunque
+        esté vencido — solo en el detalle, y nunca con `max_age=0`. La edad de cada dato
+        sigue viajando con él, así que nada se hace pasar por fresco.
+      schema: { type: string, enum: [hit, miss, stale] }
     XSIAFetchMs:
       description: Solo en `miss`. Latencia de la consulta al SIA.
       schema: { type: integer }

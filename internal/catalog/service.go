@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -378,6 +379,9 @@ type CacheStatus string
 const (
 	CacheHit  CacheStatus = "hit"
 	CacheMiss CacheStatus = "miss"
+	// CacheStale: the SIA fetch failed and the Store's older copy was served
+	// instead of an error. Only ever on a non-forced read (see CourseDetail).
+	CacheStale CacheStatus = "stale"
 )
 
 // FetchResult carries the cache/timing metadata docs/API.md's headers need
@@ -488,7 +492,28 @@ func (s *Service) CourseDetail(ctx context.Context, program Program, code string
 		}
 	}
 
-	return s.refreshDetail(ctx, program, code)
+	offering, res, err := s.refreshDetail(ctx, program, code)
+	if err == nil || maxAge == 0 || !ok || fetchedAt == nil {
+		return offering, res, err
+	}
+
+	// The fetch failed but the Store holds an older copy. Serving it beats a
+	// 502: every datum carries its own age, so nothing here is passed off as
+	// fresh. Three cases keep the error, each for its own reason:
+	//   - maxAge == 0: the caller asked for a MEASUREMENT, an old number would lie;
+	//   - ErrNotFound: the course left the plan, that IS the answer (D2);
+	//   - a caller that is gone has nobody to serve.
+	if errors.Is(err, ErrNotFound) || ctx.Err() != nil {
+		return offering, res, err
+	}
+	cached, rerr := s.readCourse(ctx, program, code)
+	if rerr != nil {
+		return offering, res, err
+	}
+	slog.Warn("catalog: SIA fetch failed, serving the stored detail",
+		"campus", program.CampusCode, "program", program.Code, "code", code, "err", err)
+	res.Cache = CacheStale
+	return cached, res, nil
 }
 
 // seatsFresh: every group the program sees carries a measurement within

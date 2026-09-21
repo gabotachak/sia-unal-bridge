@@ -8,7 +8,8 @@ import type { Candidate } from './types';
 /** Lo que la API dice sobre la frescura de cada respuesta. */
 export type Freshness = {
   /** 'hit' = salió de Postgres. 'miss' = costó una consulta al SIA. */
-  cache: 'hit' | 'miss' | null;
+  /** 'stale' = el SIA falló y la API sirvió lo que ya tenía, aunque esté vencido. */
+  cache: 'hit' | 'miss' | 'stale' | null;
   /** Segundos desde que se midió el dato más viejo de la respuesta. */
   age: number;
   /** Cuántos segundos la API considera fresco este recurso. */
@@ -80,6 +81,8 @@ export class ApiError extends Error {
       case 'unknown_section':
         return 'Ese grupo no existe, o todavía no reporta cupos.';
       case 'rate_limit':
+        return 'Demasiadas peticiones seguidas. Espera unos segundos y vuelve a intentar.';
+      case 'refresh_cooldown':
         return this.retryAfter
           ? `Esta asignatura se midió hace un momento. Se puede volver a medir en ${this.retryAfter} s.`
           : 'Esta asignatura se midió hace un momento. Hay que esperar un poco para volver a medir.';

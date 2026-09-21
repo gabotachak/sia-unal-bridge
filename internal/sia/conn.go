@@ -80,24 +80,36 @@ var viewStateHTMLRe = regexp.MustCompile(`javax\.faces\.ViewState"\s+value="([^"
 // NewConn creates an SIAConn with its own cookie jar. It is not usable until
 // Bootstrap succeeds.
 func NewConn(baseURL string) (*SIAConn, error) {
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return nil, fmt.Errorf("sia: cookiejar: %w", err)
-	}
 	return &SIAConn{
 		baseURL:    baseURL,
-		client:     &http.Client{Jar: jar, Timeout: 30 * time.Second},
+		client:     newClient(),
 		navLevel:   -1,
 		navCampus:  -1,
 		navFaculty: -1,
 	}, nil
 }
 
+// newClient is an http.Client with an EMPTY cookie jar. cookiejar.New only
+// fails on bad Options, and nil is not one.
+func newClient() *http.Client {
+	jar, _ := cookiejar.New(nil)
+	return &http.Client{Jar: jar, Timeout: 30 * time.Second}
+}
+
 // Bootstrap performs the one-per-session GET. Cost is highly variable
 // (0.15s/52KB .. 7s/4.5MB) and does NOT depend on the User-Agent — GOTCHAS
 // §25. The returned page's table (if any) belongs to another session and
 // must never be parsed — GOTCHAS §22.
+//
+// It starts from an empty cookie jar, every time. The jar was the one piece
+// of per-connection state a re-bootstrap did not reset, and the SIA sets more
+// than the session cookie: `cookiesession1` lives a YEAR. Measured in
+// production 2026-09-20: ~18 of 32 connections answered noop to the first
+// POST of every fresh ViewState — keepalive, Do's retry and all — for days,
+// while a brand new client from the same IP worked, and restarting the
+// process cured it at once. A re-bootstrap has to be worth a restart.
 func (c *SIAConn) Bootstrap(ctx context.Context) ([]byte, error) {
+	c.client = newClient()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		c.baseURL+"?taskflowId=task-flow-AC_CatalogoAsignaturas", nil)
 	if err != nil {

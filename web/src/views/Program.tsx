@@ -34,7 +34,7 @@ import { abbreviateEngineering, fold, sentence } from '../lib/format';
 import { classifyConflict, type SectionLike } from '../lib/conflicts';
 import { putDetails, useDetailCache } from '../lib/detailCache';
 import { mergeCatalogs, seatsFromDetail, seatsUnknown, type MergedCourse } from '../lib/catalog';
-import { createQueue } from '../lib/pooled';
+import { createQueue, pickToMeasure } from '../lib/pooled';
 import { MAX_RETRIES, backoffMs, isTransient, sleep } from '../lib/retry';
 import {
   DEFAULT_AVAILABILITY,
@@ -533,17 +533,15 @@ export function Program({
     if (!list || unknownById.size === 0) return;
     const io = new IntersectionObserver(
       (entries) => {
-        const queued: string[] = [];
+        const visible: string[] = [];
         for (const e of entries) {
           if (!e.isIntersecting) continue;
           io.unobserve(e.target);
-          const id = (e.target as HTMLElement).dataset.cid ?? '';
-          const c = unknownById.get(id);
-          if (!c || attempted.current.has(id)) continue;
-          attempted.current.add(id);
-          queued.push(id);
-          measureQueue.push(c);
+          visible.push((e.target as HTMLElement).dataset.cid ?? '');
         }
+        const picked = pickToMeasure(visible, unknownById, attempted.current);
+        for (const c of picked) measureQueue.push(c);
+        const queued = picked.map(courseId);
         if (queued.length) setMeasuring((prev) => new Set([...prev, ...queued]));
       },
       { rootMargin: '400px 0px' },
@@ -553,7 +551,7 @@ export function Program({
       if (id && unknownById.has(id) && !attempted.current.has(id)) io.observe(li);
     }
     return () => io.disconnect();
-  }, [unknownById, measureQueue]);
+  }, [unknownById, measureQueue, courseId]);
 
   const total = courses.length;
   const facetCount =

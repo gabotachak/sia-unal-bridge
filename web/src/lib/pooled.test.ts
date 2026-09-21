@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createQueue } from './pooled';
+import { createQueue, pickToMeasure } from './pooled';
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 
@@ -55,5 +55,20 @@ describe('createQueue', () => {
     await tick();
     await tick();
     expect(ran).toEqual([1, 2]);
+  });
+});
+
+describe('pickToMeasure', () => {
+  it('mide lo visible que sigue en duda, una sola vez', () => {
+    const unknown = new Map([
+      ['a', 'A'],
+      ['b', 'B'],
+    ]);
+    const attempted = new Set<string>();
+    // 'c' está a la vista pero ya tiene cupos frescos: no está en `unknown`.
+    expect(pickToMeasure(['a', 'c', 'b'], unknown, attempted)).toEqual(['A', 'B']);
+    // Volver a pasar por la pantalla no la vuelve a pedir.
+    expect(pickToMeasure(['a', 'b'], unknown, attempted)).toEqual([]);
+    expect([...attempted]).toEqual(['a', 'b']);
   });
 });

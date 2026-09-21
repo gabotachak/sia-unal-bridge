@@ -63,3 +63,27 @@ export function createQueue<T>(limit: number, run: (item: T) => Promise<void>) {
     },
   };
 }
+
+/**
+ * De las filas que acaban de entrar a la pantalla, cuáles hay que medir: las
+ * que siguen en duda y no se intentaron todavía. Las marca como intentadas
+ * —una vez por visita, salga bien o mal— y las devuelve en el orden en que
+ * se vieron.
+ *
+ * Aparte del IntersectionObserver a propósito: el observer no se puede probar
+ * sin un DOM, y la decisión sí.
+ */
+export function pickToMeasure<T>(
+  visibleIds: readonly string[],
+  unknown: ReadonlyMap<string, T>,
+  attempted: Set<string>,
+): T[] {
+  const picked: T[] = [];
+  for (const id of visibleIds) {
+    const item = unknown.get(id);
+    if (item === undefined || attempted.has(id)) continue;
+    attempted.add(id);
+    picked.push(item);
+  }
+  return picked;
+}

@@ -208,11 +208,23 @@ func courseDetailJSON(o catalog.CourseOffering, now time.Time) gin.H {
 	for i, s := range o.Course.Sections {
 		sections[i] = sectionJSON(s, now)
 	}
-	return gin.H{
+	h := gin.H{
 		"campus_code": o.Course.CampusCode, "code": o.Course.Code, "name": o.Course.Name,
 		"credits": o.Course.Credits, "typology": o.Typology, "description": o.Course.Description,
 		"fetched_at": o.Course.FetchedAt, "sections": sections,
 	}
+	// Same two fields, same meaning, as the listing (courseSummaryJSON): a
+	// client that already knows how to read a catalog row can read this.
+	if o.DetailFetchedAt != nil {
+		h["detail_fetched_at"] = o.DetailFetchedAt
+	}
+	if o.Seats != nil {
+		h["seats"] = gin.H{
+			"available": o.Seats.Available, "measured_at": o.Seats.MeasuredAt,
+			"sections": o.Seats.Sections, "age_seconds": int(now.Sub(o.Seats.MeasuredAt).Seconds()),
+		}
+	}
+	return h
 }
 
 func sectionJSON(s catalog.Section, now time.Time) gin.H {

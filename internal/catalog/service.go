@@ -679,5 +679,31 @@ func (s *Service) readCourse(ctx context.Context, program Program, code string) 
 	if err != nil {
 		return CourseOffering{}, err
 	}
-	return CourseOffering{Course: course, Typology: typology}, nil
+	detailAt, _, err := s.store.CourseProgramFetchedAt(ctx, program.ID, code)
+	if err != nil {
+		return CourseOffering{}, err
+	}
+	return CourseOffering{Course: course, Typology: typology,
+		Seats: seatsOf(sections), DetailFetchedAt: detailAt}, nil
+}
+
+// seatsOf is the course-level seat aggregate over the groups a program sees:
+// the same sum/oldest/count Store.ProgramCourses computes in SQL for the
+// listing, so the detail and the listing can never disagree about it.
+func seatsOf(sections []Section) *CourseSeats {
+	var out *CourseSeats
+	for _, sec := range sections {
+		if sec.Seats == nil {
+			continue
+		}
+		if out == nil {
+			out = &CourseSeats{MeasuredAt: sec.Seats.MeasuredAt}
+		}
+		out.Available += sec.Seats.Available
+		out.Sections++
+		if sec.Seats.MeasuredAt.Before(out.MeasuredAt) {
+			out.MeasuredAt = sec.Seats.MeasuredAt
+		}
+	}
+	return out
 }

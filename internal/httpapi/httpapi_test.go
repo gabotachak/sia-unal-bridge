@@ -390,7 +390,10 @@ func TestCourseDetail_MissThenHit(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("json: %v", err)
 	}
-	for _, field := range []string{"campus_code", "code", "name", "credits", "typology", "description", "fetched_at", "sections"} {
+	// seats and detail_fetched_at: same two fields, same meaning, as a catalog
+	// row. The web client read them off the detail for weeks while the API
+	// did not send them, and painted "sin grupos" over freshly measured seats.
+	for _, field := range []string{"campus_code", "code", "name", "credits", "typology", "description", "fetched_at", "sections", "seats", "detail_fetched_at"} {
 		if _, ok := body[field]; !ok {
 			t.Errorf("missing field %q in response: %s", field, w.Body.String())
 		}

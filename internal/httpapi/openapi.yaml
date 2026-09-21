@@ -772,7 +772,27 @@ components:
         credits: { type: integer }
         typology: { type: string }
         description: { type: string }
-        fetched_at: { type: string, format: date-time }
+        fetched_at:
+          type: string
+          format: date-time
+          description: |
+            Sello de la fila de la asignatura, GLOBAL: lo mueve cualquier plan y también
+            un refresco de catálogo. No es "cuándo se midió desde este plan" — para eso
+            está `detail_fetched_at`, que es además el que mira el cooldown.
+        detail_fetched_at:
+          type: string
+          format: date-time
+          description: Igual que en el listado — cuándo pidió ESTE plan el detalle.
+        seats:
+          description: |
+            El mismo agregado del listado (suma de los grupos que este plan ve, con el
+            sello del más viejo). Ausente si ningún grupo tiene medición.
+          type: object
+          properties:
+            available: { type: integer }
+            sections: { type: integer }
+            measured_at: { type: string, format: date-time }
+            age_seconds: { type: integer }
         sections:
           type: array
           items: { $ref: "#/components/schemas/Section" }

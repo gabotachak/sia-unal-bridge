@@ -66,6 +66,12 @@ type SIAConn struct {
 	// soc6 post is a genuine change (GOTCHAS §37).
 	navTipologia, navModo, navSedeElect string
 
+	// electivesAt: the program whose single-wildcard electives search is the
+	// connection's live state (soc4=7, soc5, soc10 and soc6 all in place), or
+	// the zero value. Anything that reposts a dropdown clears it — see
+	// eachElectivesSearch's fast path.
+	electivesAt catalog.ProgramKey
+
 	// DetailRegion: 0 = in the search region; >0 = an open detail region.
 	// Back is pt1:r1:<DetailRegion>:cb4 and the number grows with every
 	// detail opened in the session. Never hardcode it. GOTCHAS §20.
@@ -148,6 +154,7 @@ func (c *SIAConn) Bootstrap(ctx context.Context) ([]byte, error) {
 	c.navLevel, c.navCampus, c.navFaculty = -1, -1, -1
 	c.navTipologia, c.navModo, c.navSedeElect = "", "", ""
 	c.DetailRegion = 0
+	c.electivesAt = catalog.ProgramKey{}
 	c.suspect = false
 	c.LastUsed = time.Now()
 	return body, nil

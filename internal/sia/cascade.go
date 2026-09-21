@@ -305,6 +305,7 @@ func (c *SIAConn) FetchCatalog(ctx context.Context, key catalog.ProgramKey) ([]b
 			return nil, newNoopError(body)
 		}
 		c.navTipologia = TypologyAll
+		c.electivesAt = catalog.ProgramKey{} // soc4 moved: the electives search is no longer live
 	}
 
 	c.form.Tipologia = TypologyAll
@@ -393,6 +394,31 @@ func (c *SIAConn) FetchElectives(ctx context.Context, key catalog.ProgramKey) ([
 func (c *SIAConn) eachElectivesSearch(ctx context.Context, key catalog.ProgramKey, visit func([]byte) (bool, error)) error {
 	// soc4=7 is a value CHANGE on top of an already-parked program: run the
 	// regular cascade first so soc1..soc3 are populated, then switch soc4.
+	//
+	// Fast path: the connection did not move since its previous electives
+	// search, and that search was the single "whole campus" wildcard. Then the
+	// server still holds soc4=7, soc5, soc10 AND the soc6 selection, and the
+	// only thing a new search needs is the button. Every dropdown repost would
+	// have to be bounced through another value to count as a change (GOTCHAS
+	// §30) — measured 2026-09-20, a repeat search cost 8 POSTs, 6 of them
+	// bounces of values that were already right.
+	//
+	// Partial shortcuts do NOT work, and that is measured too: skipping only
+	// soc4/soc5 and keeping the soc10 bounce leaves soc6 selected, so its repost
+	// is an unchanged value and no-ops. It is all or nothing.
+	//
+	// A search that does not find what visit wants falls through to the full
+	// sequence below, so the shortcut can cost a POST but never a wrong answer.
+	if c.parked && c.ParkedAt == key && c.DetailRegion == 0 && c.electivesAt == key {
+		body, _, err := c.postAction(ctx, "pt1:r1:0:cb1", "")
+		if err == nil && !isNoop(body) {
+			if stop, verr := visit(body); verr == nil && stop {
+				return nil
+			}
+		}
+	}
+	c.electivesAt = catalog.ProgramKey{}
+
 	if err := c.gotoProgram(ctx, key); err != nil {
 		return err
 	}
@@ -453,6 +479,9 @@ func (c *SIAConn) eachElectivesSearch(ctx context.Context, key catalog.ProgramKe
 			continue
 		}
 		visited++
+		if len(targets) == 1 {
+			c.electivesAt = key // the one search that covers the sede is live
+		}
 		stop, err := visit(body)
 		if err != nil {
 			return err

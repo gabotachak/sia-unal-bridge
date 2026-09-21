@@ -306,3 +306,43 @@ func TestReconcile_SectionProgram_DoesNotLeakAcrossPrograms(t *testing.T) {
 		t.Fatalf("small plan: got %d sections, want 1", len(smallSections))
 	}
 }
+
+// Term rollover: the first detail of the new term turns off this plan's view
+// of the OLD term's groups. Left visible, they kept adding to the seat total
+// and their months-old seats_checked_at became the course's "oldest"
+// measurement — stale forever, since no fetch would ever touch them again.
+func TestReconcile_SectionProgram_NewTermHidesTheOldTermsGroups(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	resetProgram(t, s, "9995", "F1", "ROLL")
+	t.Cleanup(func() { resetProgram(t, s, "9995", "F1", "ROLL") })
+
+	plan, err := s.UpsertProgram(ctx, catalog.Program{
+		CampusCode: "9995", FacultyCode: "F1", Code: "ROLL", LevelSlug: "pregrado", Name: "Plan",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	course := func(term string, keys ...string) catalog.CourseOffering {
+		secs := make([]catalog.Section, len(keys))
+		for i, k := range keys {
+			secs[i] = catalog.Section{CampusCode: "9995", Code: "ROLLOVER", Term: term, Key: k, Number: i + 1}
+		}
+		return catalog.CourseOffering{Course: catalog.Course{CampusCode: "9995", Code: "ROLLOVER", Name: "Cambio", Sections: secs}}
+	}
+
+	if err := s.UpsertDetail(ctx, plan.ID, "2026-2", course("2026-2", "1", "2")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertDetail(ctx, plan.ID, "2027-1", course("2027-1", "1")); err != nil {
+		t.Fatal(err)
+	}
+
+	sections, err := s.Sections(ctx, "9995", "ROLLOVER", plan.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sections) != 1 || sections[0].Term != "2027-1" {
+		t.Fatalf("got %d visible sections (%+v), want only the 2027-1 one", len(sections), sections)
+	}
+}

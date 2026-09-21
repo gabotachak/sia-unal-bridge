@@ -162,6 +162,12 @@ func (s *Store) UpsertDetail(ctx context.Context, programID int64, term string, 
 		// curso. Es lo correcto: el plan dejó de ver grupos. Y es seguro
 		// apagarlo porque A1 garantiza que un 0 que llega hasta acá es un 0
 		// de verdad y no un parseo roto.
+		//
+		// Los grupos de OTRO periodo también se apagan: el detalle de hoy no
+		// los trae, así que este plan ya no los ve. Sin esto, al cambiar de
+		// periodo los grupos viejos seguían sumando cupos y su
+		// seats_checked_at de meses atrás se volvía el "más viejo" de la
+		// asignatura — un dato vencido que ninguna medición podía refrescar.
 		keys := make([]string, len(c.Sections))
 		for i, sec := range c.Sections {
 			keys[i] = sec.Key
@@ -172,8 +178,8 @@ func (s *Store) UpsertDetail(ctx context.Context, programID int64, term string, 
 			  AND EXISTS (
 			      SELECT 1 FROM section sec
 			      WHERE sec.id = sp.section_id
-			        AND sec.campus_code = $2 AND sec.code = $3 AND sec.term = $4
-			        AND sec.key != ALL($5)
+			        AND sec.campus_code = $2 AND sec.code = $3
+			        AND (sec.term != $4 OR sec.key != ALL($5))
 			  )`,
 			programID, c.CampusCode, c.Code, term, keys,
 		); err != nil {

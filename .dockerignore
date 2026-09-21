@@ -5,3 +5,6 @@ docs/
 *.md
 internal/sia/testdata/
 testdata/live/
+# El bind mount de Postgres cuando PGDATA_DIR=./pgdata (el default de .env.example):
+# es de root y el build moría con "permission denied" al mandar el contexto.
+pgdata/

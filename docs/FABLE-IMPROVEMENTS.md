@@ -5,14 +5,10 @@
 > y una corrida de la colección Bruno contra el SIA. Lo que está **medido** lo dice; lo
 > que es **hipótesis** también.
 >
-> Límite del análisis: en la máquina local no hay toolchain de Go ni Docker corriendo. El
-> back se compiló y se probó en un contenedor `golang:1.27.0-alpine` desechable en el
-> server (`go build ./...`, `go vet`, `go test ./internal/... ./cmd/...`: todo verde), sobre
-> una copia en `/tmp`, sin tocar el repo de producción. El front: `vitest`, `tsc`, `oxlint`.
->
-> **Segunda pasada (misma noche), con acceso SSH al server de producción:** logs de `api`,
-> `.env`, cron, y reproducción del protocolo desde la IP del server. Cambia el diagnóstico
-> de §1 de "hipótesis" a "causa encontrada y corregida".
+> Se hizo en cinco pasadas la misma noche: lectura y medición desde fuera; diagnóstico
+> por SSH en el server de producción; arreglos probados en local con Go y Postgres en
+> espacio de usuario; lo mismo repetido sobre los contenedores Docker del repo; y una última
+> pasada sobre lo que había quedado pendiente. §9 dice qué quedó hecho y cómo se probó.
 
 ## Resumen ejecutivo
 
@@ -515,6 +511,46 @@ Y Docker destapó dos bugs que el Postgres suelto escondía, los dos corregidos 
   de root, entraba al contexto del build. `pgdata/` va ahora en `.dockerignore`. En el server
   no pasa porque `PGDATA_DIR` apunta fuera del repo. Por lo mismo `go vet ./...` y
   `make test` fallan con la base levantada desde el repo; usar `./internal/... ./cmd/...`.
+
+### Quinta pasada: lo que había quedado pendiente
+
+| Qué | Estado |
+|---|---|
+| Grupo que el SIA deja de reportar con cupos arrastraba el sello de toda la asignatura | **hecho + test** contra Postgres: no aporta su número viejo, y cuenta cuándo se lo miró |
+| Lecturas del Store sin filtro de periodo | **hecho + test**: solo el periodo más nuevo de cada asignatura |
+| Detalle de libre elección a ~10 POSTs | **hecho, medido en vivo**: electivas primero + repetir la búsqueda con solo el botón → **3 POSTs y ~65 KB** (antes 10 y ~210 KB). GOTCHAS §42 |
+| Edad congelada en las filas del catálogo | **hecho**: un reloj compartido (`useNow`), visto avanzar en Chromium |
+| `X-Cache: stale` sin aviso | **hecho**: la ficha dice que el SIA no respondió |
+| `go vet ./...` / `make test` con la base levantada | **hecho**: default `PGDATA_DIR=./.pgdata` |
+| Limitador por IP contra una red NAT | **hecho**: default 60/80 (lo que ya corre producción); el pool se protege solo |
+| Mi semestre con 32 en vuelo al abrir | **hecho**: 6 en la carga pasiva, 32 para el botón |
+| Test de la decisión del `IntersectionObserver` | **hecho**: `pickToMeasure`, pura y probada |
+| `Program.tsx` de 1400 líneas | **en parte**: fila y celda de cupos a `CatalogRow.tsx` (1176 + 310) |
+| Prueba de "dos usuarios abren un catálogo" | **hecho** a nivel de pool: `TestDoAt_APersonIsServedWhileCatalogSweepsRun` |
+| El jar envenenado, como trampa documentada | **hecho**: GOTCHAS §41 |
+
+Lo que **no** se hizo, y por qué:
+
+- **Bootstrap que llega con la tabla de otra sesión (~1.1 MB por POST de cascada).** No tiene
+  arreglo seguro de nuestro lado. La tabla la re-renderiza el SIA porque cuelga de los
+  dropdowns; la única forma de no bajarla es cortar la respuesta a mitad, y ADF guarda el
+  estado de la vista al final del render: cortar ahí arriesga que la cascada "no haya pasado"
+  y el siguiente POST devuelva datos de otro plan, en silencio. Se paga una vez por conexión,
+  y la afinidad por plan hace que se pague menos. Desde el server de producción el bootstrap
+  llega de 59 KB, así que hoy allá no duele.
+- **Medición en el servidor (§5.3).** Es un Job más contra el SIA, que es justo lo que se
+  decidió no tener corriendo ahora. Con visible-primero, el carril de fondo, cupos globales
+  y las electivas a 3 POSTs, el costo por catálogo abierto cayó lo suficiente como para no
+  necesitarlo todavía.
+- **Tipos del front generados desde OpenAPI.** El contrato no declara `required`, así que
+  todo saldría opcional y habría que tocar cada uso. Antes hay que endurecer el YAML.
+- **Invariantes `CONCURRENCY ≤ SIA_POOL_SIZE ≤ RATE_LIMIT_BURST` en código.** Con la medición
+  automática en 6 y el limitador en 60/80, la única que queda es la del botón de Mi semestre,
+  y sigue en un comentario.
+- **Avisos `set-state-in-effect` de oxlint** (7, todos de `main`): es el patrón que el front
+  usa a propósito para sincronizar estado; cambiarlo es tocar pantallas que no fallan.
+- **`/v1/status` no distingue Refresher pausado de cron roto**: la API no ve el crontab, y
+  mientras el Job esté pausado por decisión, no hay nada que avisar.
 
 No probado: comportamiento bajo carga real de varios usuarios, y el fix del jar contra
 el envenenamiento real — solo se reproduce con días de tráfico. `/v1/status` → `sia` es

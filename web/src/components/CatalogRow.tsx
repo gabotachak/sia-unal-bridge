@@ -30,6 +30,7 @@ export const CatalogRow = memo(function CatalogRow({
   attr,
   plans,
   measuring,
+  now,
 }: {
   c: MergedCourse;
   id: string;
@@ -37,6 +38,8 @@ export const CatalogRow = memo(function CatalogRow({
   attr: { primary: PlanAttribution; secondary?: PlanAttribution } | null;
   plans?: readonly Selection[];
   measuring: boolean;
+  /** El reloj compartido de la lista (useNow): de ahí sale la edad que se pinta. */
+  now: number;
 }) {
   const conflictText =
     conflict === 'active'
@@ -82,7 +85,7 @@ export const CatalogRow = memo(function CatalogRow({
         <span className="row__credits tnum col-cr">{c.credits}</span>
         {/* `c` ya viene de `withSeats`: si esta sesión midió esta materia, lo
             que se pinta es lo medido. */}
-        <SeatsCell seats={c.seats} askedAt={c.detail_fetched_at} measuring={measuring} />
+        <SeatsCell seats={c.seats} askedAt={c.detail_fetched_at} measuring={measuring} now={now} />
         <AddButton
           item={{
             level: c.plan.level,
@@ -159,11 +162,13 @@ function SeatsCell({
   seats,
   askedAt,
   measuring = false,
+  now,
 }: {
   seats?: MergedCourse['seats'];
   askedAt?: string | null;
   /** True mientras la medición automática de esta fila está en vuelo. */
   measuring?: boolean;
+  now: number;
 }) {
   // Manda sobre todo lo demás: con una petición en vuelo para esta fila, el
   // `?` sería mentira por unos segundos. Se va cuando llega el dato.
@@ -200,7 +205,7 @@ function SeatsCell({
     // "Sin grupos" tampoco es para siempre: la UNAL puede programar oferta
     // mañana. Así que lleva su edad igual que todo lo demás — la del sello del
     // detalle, calculada acá porque el reloj del servidor solo sella los cupos.
-    const ageSeconds = (Date.now() - Date.parse(askedAt)) / 1000;
+    const ageSeconds = (now - Date.parse(askedAt)) / 1000;
 
     if (ageSeconds > STALE_SEATS_SECONDS) {
       const staleTimeText =
@@ -248,7 +253,7 @@ function SeatsCell({
   }
   // La edad sale del sello y no de `age_seconds`: ese número se calculó cuando
   // respondió la API, y una pestaña abierta una hora lo seguiría mostrando igual.
-  const seatsAgeSeconds = (Date.now() - Date.parse(seats.measured_at)) / 1000;
+  const seatsAgeSeconds = (now - Date.parse(seats.measured_at)) / 1000;
   // Vencido NO es desconocido. Antes, pasado STALE_SEATS_SECONDS, la celda
   // tiraba el número y pintaba un `?`: la base sabía "12 cupos hace un día" y
   // la pantalla decía menos que eso. Fuera de inscripciones los cupos casi no

@@ -11,6 +11,7 @@ import {
 import { ApiError, get, routes, STALE_SEATS_SECONDS } from '../api/client';
 import type { CourseDetail, CoursesResponse } from '../api/types';
 import { useApi } from '../hooks/useApi';
+import { useNow } from '../hooks/useNow';
 import { useCatalogFilters } from '../hooks/useCatalogFilters';
 import { useCourseDetails } from '../hooks/useCourseDetails';
 import { usePlan } from '../hooks/usePlan';
@@ -213,6 +214,10 @@ export function Program({
    * ponytail: cada materia se intenta una vez por visita a esta pantalla. Sin
    * refresco periódico; para volver a medir se entra a la asignatura.
    */
+  // Un solo reloj para las edades de toda la lista: cada fila calculaba la suya
+  // con Date.now() al pintarse, y como van memoizadas se quedaba congelada
+  // ("0 s" diez minutos después de medir).
+  const now = useNow(30_000);
   const [measuring, setMeasuring] = useState<ReadonlySet<string>>(new Set());
   const attempted = useRef(new Set<string>());
   const measureQueue = useMemo(() => {
@@ -1081,6 +1086,7 @@ export function Program({
                       attr={mine.length > 1 ? attributionOf(c) : null}
                       plans={mine.length > 1 ? mine : undefined}
                       measuring={measuring.has(id)}
+                      now={now}
                     />
                   );
                 })}

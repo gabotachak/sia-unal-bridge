@@ -3,6 +3,7 @@ import { Clock, Trash2, TriangleAlert, User } from 'lucide-react';
 import type { ClassSession } from '../api/types';
 import type { Row } from '../hooks/useCourseDetails';
 import { usePlan } from '../hooks/usePlan';
+import { useNow } from '../hooks/useNow';
 import { CopyCode } from './CopyCode';
 import { PlanAttributionRow } from './PlanAttributionRow';
 import { formatAge, formatScheduleSummary, groupSchedule, titleCase } from '../lib/format';
@@ -46,6 +47,7 @@ export function CourseCard({
   linkFrom: 'semester' | 'schedule';
 }) {
   const { item, detail, status, error, errorCode } = row;
+  const now = useNow(30_000);
   const all = detail?.sections ?? [];
   const sections = all.filter((s) => !onlyOpen || (s.seats?.available ?? 0) > 0);
   const totalSeats = all.reduce((n, s) => n + (s.seats?.available ?? 0), 0);
@@ -87,7 +89,7 @@ export function CourseCard({
 
   // Para "sin grupos": edad desde la última consulta al SIA.
   const noGroupsAge =
-    noGroups && detail?.fetched_at ? (Date.now() - Date.parse(detail.fetched_at)) / 1000 : null;
+    noGroups && detail?.fetched_at ? (now - Date.parse(detail.fetched_at)) / 1000 : null;
 
   const nameLink = (
     // `from` es lo que le dice a la ficha adónde apunta la flecha de

@@ -551,8 +551,8 @@ func TestCooldown_BlocksSecondForcedRefresh(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body["error"] != "rate_limit" {
-		t.Errorf("got error=%v, want rate_limit", body["error"])
+	if body["error"] != "refresh_cooldown" {
+		t.Errorf("got error=%v, want refresh_cooldown", body["error"])
 	}
 	if body["retry_after_seconds"] == nil {
 		t.Error("expected retry_after_seconds in the body")

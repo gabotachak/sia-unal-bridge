@@ -608,9 +608,11 @@ components:
     XCache:
       description: |
         Si la respuesta salió de Postgres (`hit`) o costó una consulta al SIA (`miss`).
-        `stale`: la consulta al SIA **falló** y se sirvió lo que Postgres ya tenía, aunque
-        esté vencido — solo en el detalle, y nunca con `max_age=0`. La edad de cada dato
-        sigue viajando con él, así que nada se hace pasar por fresco.
+        `stale`: se sirvió lo que Postgres ya tenía, aunque esté vencido. En el catálogo y
+        la referencia es lo normal pasado el TTL — se responde al instante y el SIA se
+        consulta por detrás de quien preguntó. En el detalle significa que la consulta al
+        SIA **falló**. Nunca con `max_age=0`. La edad de cada dato sigue viajando con él,
+        así que nada se hace pasar por fresco.
       schema: { type: string, enum: [hit, miss, stale] }
     XSIAFetchMs:
       description: Solo en `miss`. Latencia de la consulta al SIA.

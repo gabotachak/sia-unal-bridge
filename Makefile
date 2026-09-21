@@ -16,8 +16,12 @@ check-env:
 run:
 	go run ./cmd/bridge
 
+# -p 1: los paquetes de store/ y cmd/refresher/ escriben en la MISMA base de test
+# (TEST_DATABASE_URL). Corriendo en paralelo, que es el default de `go test`, de
+# vez en cuando se pisan: `deadlock detected` en un DELETE de limpieza, ~1 de cada
+# 10 corridas con -race. Un paquete a la vez cuesta un par de segundos.
 test:
-	go test ./...
+	go test -p 1 ./...
 
 migrate: check-env
 	go run github.com/pressly/goose/v3/cmd/goose@latest -dir migrations postgres "$(DATABASE_URL)" up

@@ -42,7 +42,7 @@ Tres piezas, un solo repo y un solo `docker compose`:
 |---|---|---|
 | **API** | `cmd/bridge` + `internal/` | Traduce el ADF a JSON y lo cachea en Postgres. OpenAPI 3.1 servido en `/v1/docs` |
 | **Interfaz** | [`web/`](web/) | React + TypeScript sobre esa API. Arma el semestre: catálogo, horario, cupos |
-| **`Refresher`** | `cmd/refresher` | El Job por cron que llena la cache antes de que un cliente pague el miss |
+| **`Refresher`** | `cmd/refresher` | Barrido manual de la cache. Su cron se abandonó: la API sirve lo guardado y refresca detrás (ver `docs/FASE-2.md`) |
 
 La interfaz **nunca** toca Postgres ni importa nada de `internal/`: habla la misma API
 pública que cualquier otro cliente. Si algo se ve en pantalla, existe como endpoint.
@@ -93,9 +93,9 @@ docker compose --profile jobs run --rm refresher --mode=detail --scope=global \
 docker compose --profile jobs run --rm refresher --mode=seats --scope=hot         # calienta lo que la gente mira
 ```
 
-La cadencia va en [`deploy/cron.d/sia-refresher`](deploy/cron.d/sia-refresher);
-`REFRESH_ENABLED=false` lo apaga todo sin editar cron. `GET /v1/status` cuenta qué hizo la
-última corrida de cada modo. Detalles y números medidos: [`docs/FASE-2.md`](docs/FASE-2.md).
+Son corridas **manuales**: ya no hay cron ni cadencia (por qué, en
+[`docs/FASE-2.md`](docs/FASE-2.md)). `REFRESH_ENABLED=false` las bloquea todas.
+`GET /v1/status` cuenta qué hizo la última corrida de cada modo. Detalles y números medidos: [`docs/FASE-2.md`](docs/FASE-2.md).
 
 ## La interfaz
 

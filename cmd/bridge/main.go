@@ -67,6 +67,9 @@ func main() {
 
 	src := sia.NewSource(pool)
 	svc := catalog.NewService(st, src, cfg.Term)
+	// The API serves what it has and refreshes behind the caller; the
+	// Refresher, run by hand, keeps the blocking read-through (Service.ServeStale).
+	svc.ServeStale = true
 
 	router := httpapi.NewRouter(svc, cfg.FetchCooldown, cfg.RateLimitRPS, cfg.RateLimitBurst, int(cfg.SIAAcquireTimeout.Seconds()), version, commit)
 	srv := &http.Server{

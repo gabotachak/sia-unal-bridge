@@ -69,7 +69,7 @@ services:
   #
   # Está bajo el perfil `jobs`, así que `docker compose up -d` NO lo arranca.
   # Sin eso, levantar el stack dispararía un barrido, y `restart: unless-stopped`
-  # lo repetiría en bucle. Se invoca desde cron (ver deploy/cron.d/sia-refresher):
+  # lo repetiría en bucle. Se invoca A MANO (su cron se abandonó, docs/FASE-2.md):
   #
   #   docker compose run --rm refresher --mode=catalog --workers=2
   refresher:

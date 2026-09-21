@@ -115,9 +115,8 @@ DATABASE_URL=... go run ./cmd/refresher --mode=catalog --campus=1104 --max-durat
 ```
 
 `--campus` acota el barrido a una sede, que es la forma barata de probarlo: SEDE DE LA PAZ
-(9 planes) o Palmira (27) en vez de Bogotá (505). La cadencia de producción está en
-[`deploy/cron.d/sia-refresher`](../deploy/cron.d/sia-refresher) y `REFRESH_ENABLED=false`
-lo apaga todo. Ver [FASE-2.md](FASE-2.md).
+(9 planes) o Palmira (27) en vez de Bogotá (505). En producción ya no corre por cron: es
+una herramienta manual, y `REFRESH_ENABLED=false` la bloquea. Ver [FASE-2.md](FASE-2.md).
 
 ---
 

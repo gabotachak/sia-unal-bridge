@@ -14,8 +14,9 @@ proyecto traduce eso a JSON.
 - **API** (`cmd/bridge` + `internal/`) — read-through de referencia, catálogo, detalle
   y cupos sobre Postgres. Contrato en `internal/httpapi/openapi.yaml`, servido en
   `/v1/docs`.
-- **`Refresher`** (`cmd/refresher`) — el Job por cron de la fase 2, que llena la cache
-  antes de que un cliente pague el miss.
+- **`Refresher`** (`cmd/refresher`) — el barrido de la fase 2, hoy **herramienta manual**:
+  su cron se abandonó el 2026-09-21. La API sirve el catálogo guardado y lo refresca por
+  detrás (`Service.ServeStale`), así que nadie paga el miss que el Job evitaba.
 - **Interfaz** (`web/`) — React + TypeScript. Habla la misma API pública que cualquier
   otro cliente: **nunca** toca Postgres ni importa nada de `internal/`.
 
@@ -106,7 +107,9 @@ frescura, no un cursor: reanudar es volver a correr, y dos corridas seguidas no 
 un POST.
 
 Flujo principal: **read-through**. Si está en cache y fresco se sirve; si no, se
-consulta al SIA, se responde al cliente y se persiste.
+consulta al SIA, se responde al cliente y se persiste. Catálogo y referencia, que casi no
+cambian, son *stale-while-revalidate*: lo guardado se responde al instante aunque esté
+vencido y el SIA se consulta por detrás. El detalle y los cupos no: ahí se espera.
 
 Dos caches con granularidad distinta — esto es lo que más se malentiende:
 

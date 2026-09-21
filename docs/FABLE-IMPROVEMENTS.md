@@ -134,8 +134,10 @@ Es una decisión legítima, pero hay que saber lo que cuesta:
 Desde `/v1/status` "pausado a propósito" y "cron roto" se ven igual. Vale la pena que lo
 distinga (p. ej. un `refresh.enabled` y la edad de la última corrida).
 
-Recomendación: reactivar solo `catalog` (semanal, ~2760 POSTs, barato) y `reference`
-(mensual, 131 POSTs). Dejar `detail`/`seats` pausados hasta tener §5.2 y §5.3.
+Recomendación original: reactivar solo `catalog` y `reference`. **Lo que se hizo al final
+(2026-09-21): abandonar el cron entero.** El miss frío que esos dos modos evitaban lo evita
+ahora la API sirviendo lo guardado y refrescando por detrás, y solo para los planes que
+alguien abre. El porqué de cada modo está al inicio de [`FASE-2.md`](FASE-2.md).
 
 ## 2. Dolor 2 — la rueda no pasa a los cupos (corregido)
 
@@ -434,7 +436,7 @@ Tercera pasada: se atacó todo lo de arriba que cabía sin rediseñar, en la ram
 | 1.1 | Loguear el noop que sobrevive a un re-bootstrap; conexión "sospechosa" se re-bootstrapea antes del siguiente uso | **hecho** | `internal/sia/pool.go` |
 | 1.1 | Salud del camino al SIA en `/v1/status` (`sia`: ok/fallidos/noops/posts/bytes/last_ok) | **hecho**, probado en vivo | `pool.go`, `catalog/background.go`, `httpapi/status.go` |
 | 1.1 | `context canceled` → 499 sin `ERROR` | **hecho** | `httpapi/errors.go` |
-| 1.2 | Reactivar `catalog`/`reference` en el cron | **pendiente — decisión tuya**, está `#PAUSED` a propósito | server |
+| 1.2 | Reactivar `catalog`/`reference` en el cron | **resuelto de otra forma (2026-09-21)**: el cron se abandonó; la API sirve el catálogo y la referencia guardados y los refresca por detrás (`Service.ServeStale`). Ver el aviso al inicio de `FASE-2.md` | `catalog/service.go` |
 | 1.2 | `/v1/status` distingue "pausado" de "roto" | pendiente: la API no ve el crontab; `finished_at` ya deja calcular la edad | — |
 | 2 | Rueda → cupos (`seatsFromDetail`) | **hecho + test**, verificado en Chromium | `web/src/lib/catalog.ts`, `Program.tsx` |
 | 2 | El contrato ya no miente: el detalle trae `seats` y `detail_fetched_at` | **hecho + test**, probado en vivo | `catalog/service.go`, `httpapi/detail.go`, `openapi.yaml` |

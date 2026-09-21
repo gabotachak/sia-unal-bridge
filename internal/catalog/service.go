@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -30,6 +31,20 @@ type Service struct {
 	sfCatalog   singleflight.Group // key: program.ID
 	sfDetail    singleflight.Group // key: "programID:code" — docs/API.md "Singleflight por clave de fetch"
 	sfDirectory singleflight.Group // key: reference scope — the cascade is 15 POSTs; never run two at once
+
+	// ServeStale turns the slow, almost-never-changing read-throughs — the
+	// catalog of a program and the reference lists — into stale-while-
+	// revalidate: what the Store holds is answered at once, however old, and
+	// the SIA is asked behind the caller's back (see refreshBehind). It is what
+	// replaced the Refresher's cron: that job existed so that no user would pay
+	// a 3–10 s cold miss, and swept all 1380 programs weekly to spare the few
+	// dozen anybody opens. Off by default: a caller that NEEDS the fetch to
+	// have happened when the call returns — the Refresher itself, run by hand —
+	// keeps the blocking read-through. cmd/bridge turns it on.
+	ServeStale bool
+
+	kicksMu sync.Mutex
+	kicks   map[string]time.Time // last background refresh started, per key
 }
 
 func NewService(store Store, sia SIASource, term string) *Service {
@@ -69,7 +84,7 @@ func (s *Service) ensureDirectory(ctx context.Context, campusCode, levelSlug str
 		return nil
 	}
 
-	_, err, _ = s.sfDirectory.Do(scope, func() (any, error) {
+	refresh := func(ctx context.Context) (any, error) {
 		faculties, programsByFaculty, err := s.sia.FetchProgramDirectory(ctx, level.Index, campus.Index)
 		if err != nil {
 			return nil, err
@@ -85,7 +100,11 @@ func (s *Service) ensureDirectory(ctx context.Context, campusCode, levelSlug str
 			}
 		}
 		return nil, s.store.UpsertPrograms(ctx, scope, programs)
-	})
+	}
+	if s.refreshBehind(fetchedAt != nil, scope, &s.sfDirectory, refresh) {
+		return nil // a directory exists: serve it, the cascade runs behind
+	}
+	_, err = shared(ctx, &s.sfDirectory, scope, refresh)
 	return err
 }
 
@@ -143,7 +162,7 @@ func (s *Service) Levels(ctx context.Context) ([]Level, error) {
 		return nil, err
 	}
 	if !Fresh(fetchedAt, FreshnessReference, time.Now()) {
-		if _, err, _ := s.sfDirectory.Do(scope, func() (any, error) {
+		refresh := func(ctx context.Context) (any, error) {
 			opts, err := s.sia.FetchLevels(ctx)
 			if err != nil {
 				return nil, err
@@ -153,8 +172,11 @@ func (s *Service) Levels(ctx context.Context) ([]Level, error) {
 				levels[i] = Level{Slug: slugify(o.Label), Name: o.Label, Index: o.Index}
 			}
 			return nil, s.store.UpsertLevels(ctx, scope, levels)
-		}); err != nil {
-			return nil, err
+		}
+		if !s.refreshBehind(fetchedAt != nil, scope, &s.sfDirectory, refresh) {
+			if _, err := shared(ctx, &s.sfDirectory, scope, refresh); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return s.store.Levels(ctx)
@@ -212,7 +234,7 @@ func (s *Service) Campuses(ctx context.Context, levelSlug string) ([]Campus, err
 		if err != nil {
 			return nil, err
 		}
-		if _, err, _ := s.sfDirectory.Do(scope, func() (any, error) {
+		refresh := func(ctx context.Context) (any, error) {
 			opts, err := s.sia.FetchCampuses(ctx, level.Index)
 			if err != nil {
 				return nil, err
@@ -222,8 +244,11 @@ func (s *Service) Campuses(ctx context.Context, levelSlug string) ([]Campus, err
 				campuses[i] = Campus{LevelSlug: level.Slug, Code: o.Code, Name: o.Name, Index: o.Index}
 			}
 			return nil, s.store.UpsertCampuses(ctx, scope, campuses)
-		}); err != nil {
-			return nil, err
+		}
+		if !s.refreshBehind(fetchedAt != nil, scope, &s.sfDirectory, refresh) {
+			if _, err := shared(ctx, &s.sfDirectory, scope, refresh); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return s.store.Campuses(ctx, levelSlug)
@@ -426,7 +451,7 @@ func (s *Service) Catalog(ctx context.Context, program Program, maxAge time.Dura
 
 	start := time.Now()
 	sfKey := fmt.Sprintf("%d", program.ID)
-	v, err := shared(ctx, &s.sfCatalog, sfKey, func(ctx context.Context) (any, error) {
+	refresh := func(ctx context.Context) (any, error) {
 		key := program.key()
 		regular, err := s.sia.FetchCatalog(ctx, key)
 		if err != nil {
@@ -457,7 +482,20 @@ func (s *Service) Catalog(ctx context.Context, program Program, maxAge time.Dura
 		// tabla saldría con "—" aunque la base ya guarde mediciones de detalles
 		// anteriores. ProgramCourses reengancha current_seats.
 		return s.store.ProgramCourses(ctx, program.ID)
-	})
+	}
+
+	// A catalog that exists is answered NOW and refreshed behind: it barely
+	// changes within a term, and making somebody stare at a skeleton for 3–8 s
+	// to receive what Postgres already had was the whole reason for the
+	// Refresher's weekly sweep. maxAge == 0 still waits: whoever forces a
+	// fetch wants the fetch. A program nobody ever opened has nothing to
+	// serve and waits too — once, ever.
+	if maxAge > 0 && s.refreshBehind(program.CatalogFetchedAt != nil, "catalog:"+sfKey, &s.sfCatalog, refresh) {
+		offerings, err := s.store.ProgramCourses(ctx, program.ID)
+		return offerings, FetchResult{Cache: CacheStale}, err
+	}
+
+	v, err := shared(ctx, &s.sfCatalog, "catalog:"+sfKey, refresh)
 	res := FetchResult{Cache: CacheMiss, FetchMs: time.Since(start).Milliseconds()}
 	if err != nil {
 		return nil, res, err
@@ -644,6 +682,52 @@ func (s *Service) refreshDetail(ctx context.Context, program Program, code strin
 	}
 	return v.(CourseOffering), res, nil
 }
+
+// refreshBehind is the "revalidate" half of ServeStale. When there IS
+// something to serve (exists) it starts fn in the background and reports
+// true: the caller answers from the Store right away. It reports false when
+// the caller has to wait for the fetch itself — ServeStale off, or nothing
+// stored yet.
+//
+// The background fetch goes through the same singleflight as a blocking one,
+// so a user forcing the catalog while it refreshes joins it instead of
+// starting a second. It runs in the pool's background lane and on its own
+// deadline: nobody is waiting, and nobody's cancel should reach it.
+//
+// One start per key per behindRetry, fresh or failed: with the SIA down,
+// every request for a stale catalog would otherwise start another doomed
+// fetch. The stale copy keeps being served meanwhile, which is the point.
+func (s *Service) refreshBehind(exists bool, key string, g *singleflight.Group, fn func(context.Context) (any, error)) bool {
+	if !s.ServeStale || !exists {
+		return false
+	}
+	s.kicksMu.Lock()
+	if s.kicks == nil {
+		s.kicks = make(map[string]time.Time)
+	}
+	recently := time.Since(s.kicks[key]) < behindRetry
+	if !recently {
+		s.kicks[key] = time.Now()
+	}
+	s.kicksMu.Unlock()
+	if recently {
+		return true
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(WithBackground(context.Background()), behindTimeout)
+		defer cancel()
+		if _, err := shared(ctx, g, key, fn); err != nil {
+			slog.Warn("catalog: background refresh failed, the stored copy keeps being served", "key", key, "err", err)
+		}
+	}()
+	return true
+}
+
+const (
+	behindRetry   = time.Minute
+	behindTimeout = 3 * time.Minute // a directory cascade on a cold connection is ~15 POSTs
+)
 
 // shared runs fn once per key however many callers ask at the same time, and
 // — the part singleflight.Do gets wrong for this service — does not let the

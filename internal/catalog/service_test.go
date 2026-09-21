@@ -351,7 +351,8 @@ func (f *fakeSIA) FetchElectives(context.Context, ProgramKey) ([]CourseOffering,
 	return nil, nil
 }
 
-func (f *fakeSIA) FetchDetail(_ context.Context, _ ProgramKey, code, term string) (CourseOffering, error) {
+func (f *fakeSIA) FetchDetail(_ context.Context, _ ProgramKey, ref CourseRef, term string) (CourseOffering, error) {
+	code := ref.Code
 	f.detailCalls.Add(1)
 	time.Sleep(f.delay)
 	return CourseOffering{
@@ -371,7 +372,7 @@ func (f *fakeSIA) FetchDetail(_ context.Context, _ ProgramKey, code, term string
 func (f *fakeSIA) FetchDetails(ctx context.Context, key ProgramKey, refs []CourseRef, term string,
 	yield func(CourseOffering, error) error) error {
 	for _, ref := range refs {
-		o, err := f.FetchDetail(ctx, key, ref.Code, term)
+		o, err := f.FetchDetail(ctx, key, ref, term)
 		if yerr := yield(o, err); yerr != nil {
 			return yerr
 		}

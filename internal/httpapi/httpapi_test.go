@@ -325,7 +325,8 @@ func (f *fakeSIA) FetchCatalog(context.Context, catalog.ProgramKey) ([]catalog.C
 func (f *fakeSIA) FetchElectives(context.Context, catalog.ProgramKey) ([]catalog.CourseOffering, error) {
 	return nil, nil
 }
-func (f *fakeSIA) FetchDetail(_ context.Context, _ catalog.ProgramKey, code, term string) (catalog.CourseOffering, error) {
+func (f *fakeSIA) FetchDetail(_ context.Context, _ catalog.ProgramKey, ref catalog.CourseRef, term string) (catalog.CourseOffering, error) {
+	code := ref.Code
 	f.detailCalls++
 	return catalog.CourseOffering{
 		Course: catalog.Course{
@@ -344,7 +345,7 @@ func (f *fakeSIA) FetchDetail(_ context.Context, _ catalog.ProgramKey, code, ter
 func (f *fakeSIA) FetchDetails(ctx context.Context, key catalog.ProgramKey, refs []catalog.CourseRef, term string,
 	yield func(catalog.CourseOffering, error) error) error {
 	for _, ref := range refs {
-		o, err := f.FetchDetail(ctx, key, ref.Code, term)
+		o, err := f.FetchDetail(ctx, key, ref, term)
 		if yerr := yield(o, err); yerr != nil {
 			return yerr
 		}

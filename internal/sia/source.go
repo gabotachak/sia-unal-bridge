@@ -144,9 +144,9 @@ func electiveRows(bodies [][]byte) ([]Row, error) {
 	return rows, nil
 }
 
-func (s *Source) FetchDetail(ctx context.Context, key catalog.ProgramKey, code, term string) (catalog.CourseOffering, error) {
+func (s *Source) FetchDetail(ctx context.Context, key catalog.ProgramKey, ref catalog.CourseRef, term string) (catalog.CourseOffering, error) {
 	return DoAt(ctx, s.pool, &key, func(conn *SIAConn) (catalog.CourseOffering, error) {
-		return fetchDetail(ctx, conn, key, catalog.CourseRef{Code: code}, term)
+		return fetchDetail(ctx, conn, key, ref, term)
 	})
 }
 

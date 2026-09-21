@@ -556,7 +556,13 @@ func (s *Service) refreshDetail(ctx context.Context, program Program, code strin
 	start := time.Now()
 	sfKey := fmt.Sprintf("%d:%s", program.ID, code)
 	v, err := shared(ctx, &s.sfDetail, sfKey, func(ctx context.Context) (any, error) {
-		offering, err := s.sia.FetchDetail(ctx, program.key(), code, s.term)
+		// The stored name narrows the SIA listing through it11. Best-effort:
+		// a course never seen before simply goes unfiltered.
+		ref := CourseRef{ProgramID: program.ID, Code: code}
+		if known, found, _ := s.store.Course(ctx, program.CampusCode, code); found {
+			ref.Name = known.Name
+		}
+		offering, err := s.sia.FetchDetail(ctx, program.key(), ref, s.term)
 		if err != nil {
 			return nil, err
 		}

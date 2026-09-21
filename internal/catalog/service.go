@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -418,7 +419,7 @@ func (s *Service) Catalog(ctx context.Context, program Program, maxAge time.Dura
 
 	start := time.Now()
 	sfKey := fmt.Sprintf("%d", program.ID)
-	v, err, _ := s.sfCatalog.Do(sfKey, func() (any, error) {
+	v, err := shared(ctx, &s.sfCatalog, sfKey, func(ctx context.Context) (any, error) {
 		key := program.key()
 		regular, err := s.sia.FetchCatalog(ctx, key)
 		if err != nil {
@@ -554,7 +555,7 @@ func (s *Service) cachedSection(ctx context.Context, program Program, code, key 
 func (s *Service) refreshDetail(ctx context.Context, program Program, code string) (CourseOffering, FetchResult, error) {
 	start := time.Now()
 	sfKey := fmt.Sprintf("%d:%s", program.ID, code)
-	v, err, _ := s.sfDetail.Do(sfKey, func() (any, error) {
+	v, err := shared(ctx, &s.sfDetail, sfKey, func(ctx context.Context) (any, error) {
 		offering, err := s.sia.FetchDetail(ctx, program.key(), code, s.term)
 		if err != nil {
 			return nil, err
@@ -569,6 +570,36 @@ func (s *Service) refreshDetail(ctx context.Context, program Program, code strin
 		return CourseOffering{}, res, err
 	}
 	return v.(CourseOffering), res, nil
+}
+
+// shared runs fn once per key however many callers ask at the same time, and
+// — the part singleflight.Do gets wrong for this service — does not let the
+// FIRST caller's cancellation fail everybody else. fn gets a context that
+// keeps the first caller's deadline but not its cancel: a client navigating
+// away used to hand its "context canceled" to every other request waiting on
+// the same course, and to abandon the ADF connection mid-operation (235 of
+// those in one production hour, 2026-09-19). The fetch now finishes and is
+// persisted even if nobody is left to read it; each waiter still gives up on
+// its OWN context.
+func shared(ctx context.Context, g *singleflight.Group, key string, fn func(context.Context) (any, error)) (any, error) {
+	ch := g.DoChan(key, func() (any, error) {
+		fctx := context.WithoutCancel(ctx)
+		if deadline, ok := ctx.Deadline(); ok {
+			var cancel context.CancelFunc
+			fctx, cancel = context.WithDeadline(fctx, deadline)
+			defer cancel()
+		}
+		return fn(fctx)
+	})
+	select {
+	case r := <-ch:
+		return r.Val, r.Err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, ErrBusy // same answer Pool.Acquire gives when the wait runs out
+		}
+		return nil, ctx.Err()
+	}
 }
 
 func (s *Service) readCourse(ctx context.Context, program Program, code string) (CourseOffering, error) {

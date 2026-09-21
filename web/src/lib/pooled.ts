@@ -26,3 +26,40 @@ export async function pooled<T>(
 
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
 }
+
+/**
+ * Como `pooled`, pero abierta: se le puede seguir agregando trabajo mientras
+ * corre, y soltar lo que todavía no empezó.
+ *
+ * Es lo que necesita la medición del catálogo, que no conoce sus objetivos de
+ * entrada —son las filas que van ENTRANDO a la pantalla—, y que al salir de la
+ * pantalla tiene que dejar de pedir: `clear()` vacía la cola sin tocar lo que
+ * ya está en vuelo, que llega y se aprovecha igual.
+ */
+export function createQueue<T>(limit: number, run: (item: T) => Promise<void>) {
+  const waiting: T[] = [];
+  let inFlight = 0;
+
+  function pump() {
+    while (inFlight < limit && waiting.length > 0) {
+      const item = waiting.shift() as T;
+      inFlight++;
+      void run(item)
+        .catch(() => {})
+        .finally(() => {
+          inFlight--;
+          pump();
+        });
+    }
+  }
+
+  return {
+    push(item: T) {
+      waiting.push(item);
+      pump();
+    },
+    clear() {
+      waiting.length = 0;
+    },
+  };
+}

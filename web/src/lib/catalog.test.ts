@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CourseSummary } from '../api/types';
-import { mergeCatalogs, seatsUnknown } from './catalog';
+import { mergeCatalogs, seatsFromDetail, seatsUnknown } from './catalog';
 import { STALE_SEATS_SECONDS } from '../api/client';
 import type { Selection } from './storage';
 
@@ -171,5 +171,37 @@ describe('seatsUnknown', () => {
 
   it('una fecha ilegible es incógnita, no un dato fresco', () => {
     expect(seatsUnknown({ detail_fetched_at: 'ayer' })).toBe(true);
+  });
+});
+
+describe('seatsFromDetail', () => {
+  const section = (key: string, seats?: { available: number; measured_at: string; age_seconds: number }) => ({
+    term: '2026-2',
+    key,
+    number: 1,
+    fetched_at: '2026-09-20T12:00:00Z',
+    schedule: [],
+    seats,
+  });
+
+  it('suma los grupos medidos y se queda con el sello del más viejo', () => {
+    const seats = seatsFromDetail({
+      sections: [
+        section('1', { available: 5, measured_at: '2026-09-20T12:00:00Z', age_seconds: 10 }),
+        section('2', { available: 7, measured_at: '2026-09-20T11:00:00Z', age_seconds: 3610 }),
+        section('3'),
+      ],
+    });
+    expect(seats).toEqual({
+      available: 12,
+      measured_at: '2026-09-20T11:00:00Z',
+      sections: 2,
+      age_seconds: 3610,
+    });
+  });
+
+  it('sin grupos, o sin ninguno medido, no hay agregado: es "sin grupos", no un cero', () => {
+    expect(seatsFromDetail({ sections: [] })).toBeUndefined();
+    expect(seatsFromDetail({ sections: [section('1')] })).toBeUndefined();
   });
 });

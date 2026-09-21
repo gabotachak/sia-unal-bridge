@@ -1259,7 +1259,7 @@ function SeatsCell({
   // Sin `aria-label` en el contenedor: con el `sr-only` adentro serían dos
   // anuncios del mismo estado. El ícono va `aria-hidden` y el texto es el
   // que se lee.
-  if (measuring) {
+  if (measuring && !seats) {
     return (
       <span className="row__seats is-unknown col-seats">
         <Loader2 size={15} strokeWidth={2} className="skel--spin" aria-hidden="true" />
@@ -1334,29 +1334,16 @@ function SeatsCell({
       </Tooltip>
     );
   }
+  // La edad sale del sello y no de `age_seconds`: ese número se calculó cuando
+  // respondió la API, y una pestaña abierta una hora lo seguiría mostrando igual.
   const seatsAgeSeconds = (Date.now() - Date.parse(seats.measured_at)) / 1000;
-  if (seatsAgeSeconds > STALE_SEATS_SECONDS) {
-    const staleTimeText =
-      STALE_SEATS_SECONDS >= 3600
-        ? `${Math.floor(STALE_SEATS_SECONDS / 3600)} ${Math.floor(STALE_SEATS_SECONDS / 3600) === 1 ? 'hora' : 'horas'}`
-        : `${Math.floor(STALE_SEATS_SECONDS / 60)} ${Math.floor(STALE_SEATS_SECONDS / 60) === 1 ? 'minuto' : 'minutos'}`;
-
-    return (
-      <Tooltip
-        content={
-          <p className="tt-body">
-            Hace más de {staleTimeText} que se midieron los cupos. Ábrela para volver
-            a preguntar.
-          </p>
-        }
-      >
-        <span className="row__seats is-unknown col-seats">
-          <HelpCircle size={15} strokeWidth={2} aria-hidden="true" />
-          <span className="sr-only">Cupos desactualizados</span>
-        </span>
-      </Tooltip>
-    );
-  }
+  // Vencido NO es desconocido. Antes, pasado STALE_SEATS_SECONDS, la celda
+  // tiraba el número y pintaba un `?`: la base sabía "12 cupos hace un día" y
+  // la pantalla decía menos que eso. Fuera de inscripciones los cupos casi no
+  // se mueven, así que el número viejo suele ser el correcto. Se deja a la
+  // vista, atenuado y con su edad, y la rueda al lado mientras se remide — al
+  // llegar la medición el número se actualiza en el sitio, sin pasar por nada.
+  const stale = seatsAgeSeconds > STALE_SEATS_SECONDS;
 
   return (
     <Tooltip
@@ -1374,20 +1361,31 @@ function SeatsCell({
             <span>Medido</span>
             <b>{new Date(seats.measured_at).toLocaleString('es-CO')}</b>
           </li>
+          {stale && (
+            <li className="tt-row">
+              <span>{measuring ? 'Midiendo de nuevo…' : 'Dato viejo: ábrela para volver a medir'}</span>
+            </li>
+          )}
         </ul>
       }
     >
       <span
-        className={`row__seats col-seats ${seats.available === 0 ? 'is-zero' : 'is-open'}`}
+        className={`row__seats col-seats ${stale ? 'is-stale' : seats.available === 0 ? 'is-zero' : 'is-open'}`}
       >
-        {/* Sin animar: en el catálogo el número no cambia después de cargar, y
-            313 filas aleteando en la primera pintura serían ruido y trabajo por
-            nada. La forma y el color sí son los mismos que en la ficha. */}
+        {/* Sin animar: 313 filas aleteando en la primera pintura serían ruido
+            y trabajo por nada. La forma y el color sí son los de la ficha. */}
         <SeatsFigure
           available={seats.available}
-          tone={seats.available === 0 ? 'empty' : 'ok'}
+          tone={stale ? 'stale' : seats.available === 0 ? 'empty' : 'ok'}
         />
-        <small className="tnum">{formatAge(seats.age_seconds)}</small>
+        {measuring ? (
+          <small>
+            <Loader2 size={11} strokeWidth={2} className="skel--spin" aria-hidden="true" />
+            <span className="sr-only">Midiendo cupos…</span>
+          </small>
+        ) : (
+          <small className="tnum">{formatAge(seatsAgeSeconds)}</small>
+        )}
       </span>
     </Tooltip>
   );
@@ -1408,9 +1406,9 @@ function sortKeyOf(c: MergedCourse, col: TableCol): SortKey {
     case 'credits':
       return c.credits;
     case 'seats':
-      // Mismo criterio que el `?` de la celda (`seatsUnknown`, lib/catalog.ts):
-      // lo que se ve en duda cae junto al ordenar.
-      if (seatsUnknown(c)) return SEATS_RANK.unknown;
+      // Una fila que MUESTRA un número —aunque esté vencido— cae donde dice
+      // ese número; incógnita es solo la que pinta el signo de pregunta.
+      if (!c.seats && seatsUnknown(c)) return SEATS_RANK.unknown;
       // Sin cupos y con sello fresco: se preguntó y no hay grupos. El cero
       // es un dato, no una incógnita.
       if (!c.seats) return SEATS_RANK.noOffer;

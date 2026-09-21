@@ -84,6 +84,11 @@ func (s *Store) UpsertCatalog(ctx context.Context, program catalog.Program, offe
 //
 // Nunca dispara una consulta al SIA: una asignatura cuyo detalle nunca se
 // pidió sale con Seats nil, y esa ausencia es la respuesta honesta.
+//
+// El orden lleva COLLATE explícito: la base corre en postgres:alpine, cuyo
+// locale por defecto ordena por bytes, y ahí "Álgebra Lineal" cae DESPUÉS de
+// "Zoología" — medido en producción, era la 265 de 267 del plan 2879. El
+// cliente pinta el listado tal cual llega, "ya alfabético".
 func (s *Store) ProgramCourses(ctx context.Context, programID int64) ([]catalog.CourseOffering, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT c.campus_code, c.code, c.name, c.credits, c.description, c.fetched_at, cp.typology,
@@ -108,7 +113,7 @@ func (s *Store) ProgramCourses(ctx context.Context, programID int64) ([]catalog.
 			WHERE sec.campus_code = cp.campus_code AND sec.code = cp.code
 		) seats ON true
 		WHERE cp.program_id = $1 AND cp.disabled_at IS NULL
-		ORDER BY c.name`,
+		ORDER BY c.name COLLATE "es-x-icu"`,
 		programID,
 	)
 	if err != nil {
@@ -165,7 +170,7 @@ func (s *Store) SearchCourses(ctx context.Context, campusCode, q string) ([]cata
 		  AND EXISTS (SELECT 1 FROM course_program cp
 		              WHERE cp.campus_code = course.campus_code AND cp.code = course.code
 		                AND cp.disabled_at IS NULL)
-		ORDER BY name LIMIT 100`,
+		ORDER BY name COLLATE "es-x-icu" LIMIT 100`,
 		campusCode, q,
 	)
 	if err != nil {

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -321,5 +322,44 @@ func TestProgramSchedules(t *testing.T) {
 	}
 	if _, ok := got["9999999"]; ok {
 		t.Error("una asignatura que nadie pidió no puede aparecer")
+	}
+}
+
+// The catalog comes back in Spanish alphabetical order, accents included. On
+// postgres:alpine the default collation is byte order, which sends "Álgebra"
+// after "Zoología" — and the web client renders the list exactly as served.
+func TestProgramCourses_AccentedNamesSortAlphabetically(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	resetProgram(t, s, "9994", "F1", "ORDEN")
+	t.Cleanup(func() { resetProgram(t, s, "9994", "F1", "ORDEN") })
+
+	p, err := s.UpsertProgram(ctx, catalog.Program{
+		CampusCode: "9994", FacultyCode: "F1", Code: "ORDEN", LevelSlug: "pregrado", Name: "Plan",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var offerings []catalog.CourseOffering
+	for i, name := range []string{"Zoología", "Algoritmos", "Álgebra lineal", "Ética"} {
+		offerings = append(offerings, catalog.CourseOffering{Course: catalog.Course{
+			CampusCode: "9994", Code: fmt.Sprintf("ORD-%d", i), Name: name, Credits: 3,
+		}})
+	}
+	if err := s.UpsertCatalog(ctx, p, offerings); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.ProgramCourses(ctx, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, o := range got {
+		names = append(names, o.Course.Name)
+	}
+	want := []string{"Álgebra lineal", "Algoritmos", "Ética", "Zoología"}
+	if fmt.Sprint(names) != fmt.Sprint(want) {
+		t.Fatalf("got %v, want %v", names, want)
 	}
 }

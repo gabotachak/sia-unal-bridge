@@ -1,4 +1,10 @@
 version: 2
+
+# Cada ecosistema abre UN solo PR semanal con todo lo menor/patch agrupado.
+# Antes era un PR por paquete, y como todos tocan el mismo lockfile
+# (web/package-lock.json, go.sum), mergear uno dejaba a los demás en conflicto.
+# Los major siguen yendo en PR aparte: son los que pueden romper algo y se
+# revisan de a uno.
 updates:
   # go.mod, raíz del módulo.
   - package-ecosystem: gomod
@@ -7,6 +13,9 @@ updates:
       interval: weekly
     commit-message:
       prefix: "chore"
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
 
   # web/package.json — el frontend React.
   - package-ecosystem: npm
@@ -15,6 +24,9 @@ updates:
       interval: weekly
     commit-message:
       prefix: "chore"
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
 
   # Imágenes base del Dockerfile (golang:*-alpine, alpine).
   - package-ecosystem: docker
@@ -23,6 +35,9 @@ updates:
       interval: weekly
     commit-message:
       prefix: "chore"
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
 
   # Versiones de las Actions en .github/workflows/*.yml — esto hubiera
   # avisado de actions/checkout@v4 etc. antes de que apareciera como warning
@@ -33,3 +48,6 @@ updates:
       interval: weekly
     commit-message:
       prefix: "chore"
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]

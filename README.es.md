@@ -32,9 +32,9 @@
 </div>
 
 Los números son reales, medidos contra producción el 2026-08-15. La primera llamada
-recorre una cascada ADF de 15 POSTs; la segunda sale de Postgres. **Ir al SIA solo pasa
-si el dato falta o caducó** — salvo los cupos, que tienen su propio TTL corto y al
-refrescarse guardan el grupo completo.
+recorre una cascada ADF de 15 POSTs; la segunda sale de Postgres. **Solo un miss espera
+al SIA.** El catálogo y la referencia vencidos se sirven al instante y se refrescan por
+detrás; el detalle y los cupos, que sí cambian, se vuelven a consultar cuando caducan.
 
 ## Qué es esto
 
@@ -128,11 +128,12 @@ Son corridas **manuales**: ya no hay cron ni cadencia (por qué, en
 
 ## La interfaz
 
-React + TypeScript, cuatro dependencias directas, sin librería de estado ni de
-componentes — en [`web/`](web/). Arma el semestre: catálogo por plan, ficha de
-asignatura con horario y grupos, "Mi semestre" para juntar hasta diez materias y medir
-sus cupos con un solo botón, y "Mi horario" con detección de choques y exportación a
-calendario.
+React + TypeScript, tres dependencias de runtime (React, React DOM y un set de
+íconos), sin librería de estado ni de componentes — en [`web/`](web/). Arma el semestre:
+catálogo por plan, ficha de asignatura con horario y grupos, "Mi semestre" para juntar
+hasta veinte materias y medir sus cupos con un solo botón, y "Mi horario" con detección
+de choques y exportación a calendario. Con doble titulación se eligen dos planes y se
+arman en un solo horario.
 
 Su tesis visual es la misma que la de la API: **todo dato declara su edad**. Los cupos
 se muestran en un contador de tablero de estación, con su antigüedad envejeciendo a la
@@ -154,7 +155,7 @@ el mismo plan. No hay default de sede, y no existe una URL que signifique "cualq
 
 | Método | Ruta | |
 |---|---|---|
-| `GET` | `/v1/levels` | niveles (`soc1`) |
+| `GET` | `/v1/levels` | niveles: pregrado, posgrado, doctorado (`soc1`) |
 | `GET` | `/v1/campuses` | sedes (`soc9`) |
 | `GET` | `/v1/campuses/{campus}/faculties` | |
 | `GET` | `/v1/campuses/{campus}/programs?faculty=` | `faculty` es filtro opcional |
@@ -218,11 +219,15 @@ sequenceDiagram
 
     C->>A: GET /v1/campuses/1101/programs/2A74/courses
     A->>S: Catalog(program, max_age)
-    S->>P: ¿catalog_fetched_at fresco?
-    alt fresco
+    S->>P: ¿guardado? ¿catalog_fetched_at fresco?
+    alt guardado y fresco
         P-->>S: asignaturas
         S-->>C: 200 · X-Cache: hit · ~1 ms
-    else falta o caducó
+    else guardado pero vencido
+        P-->>S: asignaturas
+        S-->>C: 200 · X-Cache: stale · ~1 ms
+        S-)X: refresca por detrás (la misma consulta de abajo)
+    else nunca consultado
         S->>X: cascada + listado regular
         S->>X: cascada + buscador de electivas
         Note over S,X: son DOS consultas, no una:<br/>soc4=0 excluye libre elección
@@ -248,6 +253,18 @@ porque el tráfico real no pide más, no porque el servidor imponga un techo baj
 número medido y cómo se midió están en [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) §5.
 
 ## Lo que no es obvio
+
+Primero, el vocabulario del SIA que se cuela en la API:
+
+- **Plan**: un programa de pregrado o posgrado, p. ej. `2A74` Ingeniería de Sistemas y
+  Computación. En la API, `program`.
+- **Grupo**: una oferta de una asignatura, con su horario, profesor y cupos. En la API,
+  `section`.
+- **Tipología**: cómo cuenta la asignatura para el plan: obligatoria, optativa, libre
+  elección, etc.
+- **PEAMA**: programa especial de admisión en el que el estudiante empieza en una sede
+  de presencia nacional y termina en una sede andina. El SIA muestra sus planes y grupos
+  junto a los regulares, y por eso los códigos chocan.
 
 Estas cinco salen de medir contra el servidor, no de suponer:
 

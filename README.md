@@ -59,8 +59,9 @@ makes it queryable like any modern service.*
 
 The numbers in the animation above are real, measured against production on
 2026-08-15. The first call walks a 15-POST ADF cascade; the second is served from
-Postgres. **The bridge only goes to the SIA when data is missing or stale**, except for
-seat counts, which have their own short TTL.
+Postgres. **Only a cache miss waits for the SIA.** Stale catalog and reference data is
+served instantly and refreshed in the background; course details and seat counts, which
+actually change, are re-fetched when they expire.
 
 ## What makes it interesting
 
@@ -147,10 +148,12 @@ These runs are **manual**: there is no cron and no cadence anymore (the reasonin
 
 ## The web app
 
-React + TypeScript, four direct dependencies, no state or component library, in
-[`web/`](web/). It plans the semester: a program's catalog, a course page with schedule
-and sections, "Mi semestre" to collect up to ten courses and measure all their seats with
-one button, and "Mi horario" with clash detection and calendar export.
+React + TypeScript, three runtime dependencies (React, React DOM and an icon set), no
+state or component library, in [`web/`](web/). It plans the semester: a program's
+catalog, a course page with schedule and sections, "Mi semestre" to collect up to twenty
+courses and measure all their seats with one button, and "Mi horario" with clash
+detection and calendar export. Students pursuing a double degree can pick two programs
+and plan both in a single timetable.
 
 Its visual thesis is the same as the API's: **every piece of data states its age**. Seat
 counts are shown on a split-flap style counter whose age visibly ticks up, and a cold
@@ -172,7 +175,7 @@ URL that means "any campus".
 
 | Method | Path | |
 |---|---|---|
-| `GET` | `/v1/levels` | academic levels (undergraduate, graduate, …) |
+| `GET` | `/v1/levels` | academic levels (undergraduate, master's, doctorate) |
 | `GET` | `/v1/campuses` | campuses |
 | `GET` | `/v1/campuses/{campus}/faculties` | |
 | `GET` | `/v1/campuses/{campus}/programs?faculty=` | `faculty` is an optional filter |
@@ -236,11 +239,15 @@ sequenceDiagram
 
     C->>A: GET /v1/campuses/1101/programs/2A74/courses
     A->>S: Catalog(program, max_age)
-    S->>P: catalog_fetched_at fresh?
-    alt fresh
+    S->>P: stored? catalog_fetched_at fresh?
+    alt stored and fresh
         P-->>S: courses
         S-->>C: 200 · X-Cache: hit · ~1 ms
-    else missing or stale
+    else stored but stale
+        P-->>S: courses
+        S-->>C: 200 · X-Cache: stale · ~1 ms
+        S-)X: refresh in the background (same fetch as below)
+    else never fetched
         S->>X: cascade + regular listing
         S->>X: cascade + electives search
         Note over S,X: TWO queries, not one:<br/>soc4=0 excludes free electives
@@ -267,6 +274,17 @@ measured number and how it was measured are in
 [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) §5.
 
 ## What isn't obvious
+
+A few terms first, since the SIA's vocabulary leaks into the API:
+
+- **Program** (*plan*): a degree program, e.g. `2A74` Systems and Computing Engineering.
+- **Section** (*grupo*): one offering of a course, with its own schedule, instructor and
+  seats.
+- **Typology** (*tipología*): how a course counts toward a degree: required, elective,
+  free elective, etc.
+- **PEAMA**: a special admission program in which students start at a remote campus and
+  finish at a larger one. The SIA shows its programs and sections next to the regular
+  ones, which is why codes collide.
 
 These five come from measuring against the server, not from assuming:
 

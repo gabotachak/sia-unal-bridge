@@ -66,7 +66,7 @@ producto.
 chat y abre ahí. Nada de estado de navegación escondido en memoria.
 
 **Sin librería de estado ni de datos.** No hace falta: cada pantalla pide lo suyo y la
-caché de verdad vive en Postgres. Las dependencias directas son cuatro, y es deliberado.
+caché de verdad vive en Postgres. Las dependencias de runtime son tres, y es deliberado.
 
 **Un botón de medir por MATERIA, no por grupo.** El POST del detalle trae todos los
 grupos con sus cupos en la misma respuesta — medir uno solo no es más barato. Verificado:

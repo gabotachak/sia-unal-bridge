@@ -26,7 +26,7 @@ enlace.
 >   solo se refresca lo que alguien abre.
 > - Todo ese tráfico salía de la misma IP que la API. Si el SIA la limita, caen los dos.
 >
-> Diagnóstico completo: [`FABLE-IMPROVEMENTS.md`](FABLE-IMPROVEMENTS.md).
+> Diagnóstico completo: [`internal/FABLE-IMPROVEMENTS.md`](internal/FABLE-IMPROVEMENTS.md).
 >
 > **Estado original: implementada y verificada contra producción el 2026-08-17.**
 > `internal/refresher` + `cmd/refresher`, migración `00002`, los cuatro modos, `/v1/status`

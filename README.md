@@ -4,54 +4,103 @@
   <img src="docs/assets/wordmark.png" alt="SIA Bridge" width="300">
 </h1>
 
-**El catálogo de asignaturas de la Universidad Nacional de Colombia — como API y como
-interfaz para armar el semestre.**
+**A JSON API and a web app on top of a university system that never had an API.**
 
-El SIA solo lo expone a través de una app Oracle ADF con estado de sesión en servidor,
-navegación por POSTs de formulario encadenados y respuestas en XML con HTML incrustado.
-No hay API pública. Esto la construye — y encima, la interfaz que se apoya en ella.
+**English** · [Español](README.es.md)
 
-[![Go](https://img.shields.io/badge/Go-1.26.6-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
+**[sia.gabotachak.dev](https://sia.gabotachak.dev)** · API:
+[sia-api.gabotachak.dev/v1/docs](https://sia-api.gabotachak.dev/v1/docs)
+
+[![CI](https://img.shields.io/github/actions/workflow/status/gabotachak/sia-unal-bridge/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/gabotachak/sia-unal-bridge/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/github/go-mod/go-version/gabotachak/sia-unal-bridge?style=flat-square&logo=go&logoColor=white)](go.mod)
 [![React](https://img.shields.io/badge/React-TypeScript-149ECA?style=flat-square&logo=react&logoColor=white)](web/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18.6-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![Gin](https://img.shields.io/badge/Gin-HTTP-00ACD7?style=flat-square&logo=go&logoColor=white)](https://gin-gonic.com)
 [![pgx](https://img.shields.io/badge/pgx-v5-336791?style=flat-square&logo=postgresql&logoColor=white)](https://github.com/jackc/pgx)
 [![Docker](https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.1-6BA539?style=flat-square&logo=openapiinitiative&logoColor=white)](internal/httpapi/openapi.yaml)
-[![Arquitectura](https://img.shields.io/badge/arquitectura-hexagonal-8A2BE2?style=flat-square)](docs/ARCH.md)
-[![Trampas](https://img.shields.io/badge/gotchas-verificadas-orange?style=flat-square)](docs/GOTCHAS.md)
+[![Architecture](https://img.shields.io/badge/architecture-hexagonal-8A2BE2?style=flat-square)](docs/ARCH.md)
+[![Gotchas](https://img.shields.io/badge/gotchas-verified-orange?style=flat-square)](docs/GOTCHAS.md)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
 </div>
 
 ---
 
 <div align="center">
-  <img src="docs/assets/demo.svg" alt="Primera llamada: 7.95 s contra el SIA. Segunda: 1.2 ms desde Postgres." width="760">
+  <img src="docs/assets/demo.svg" alt="First call: about 8 s against the SIA. Second call: about 1 ms from Postgres." width="760">
 </div>
 
-Los números son reales, medidos contra producción el 2026-08-15. La primera llamada
-recorre una cascada ADF de 15 POSTs; la segunda sale de Postgres. **Ir al SIA solo pasa
-si el dato falta o caducó** — salvo los cupos, que tienen su propio TTL corto y al
-refrescarse guardan el grupo completo.
+## What this is
 
-## Qué hay acá
+The [Universidad Nacional de Colombia](https://unal.edu.co) (UNAL) is Colombia's largest
+public university: nine campuses and tens of thousands of students. Every semester, all
+of them go to the same website to find out which courses are offered, when they meet,
+who teaches them and how many seats are left. That website is the **SIA** (*Sistema de
+Información Académica*, the university's student information system).
 
-Tres piezas, un solo repo y un solo `docker compose`:
+The SIA is an aging Oracle ADF web application, and it has no API. To see the sections of
+a single course you pick a level, a campus, a faculty and a degree program from four
+chained dropdowns, run a search, open the course detail and navigate back. Every step is
+a form POST against a session that lives on the server and dies after about four minutes
+of inactivity. Planning a timetable with it means dozens of browser tabs and a notepad.
+
+**SIA Bridge does two things:**
+
+1. **A REST API** that reverse-engineers the ADF protocol and turns it into clean JSON,
+   with a Postgres cache so most answers take milliseconds instead of seconds.
+2. **A web app** on top of that API for planning a semester: browse a program's
+   catalog, collect courses, check live seat counts, detect schedule clashes and export
+   the result to your calendar.
+
+If you have never heard of UNAL, think of it this way: *a legacy, stateful web app with
+no API, hammered by thousands of people at once during enrollment week, and a layer that
+makes it queryable like any modern service.*
+
+The numbers in the animation above are real, measured against production on
+2026-08-15. The first call walks a 15-POST ADF cascade; the second is served from
+Postgres. **Only a cache miss waits for the SIA.** Stale catalog and reference data is
+served instantly and refreshed in the background; course details and seat counts, which
+actually change, are re-fetched when they expire.
+
+## What makes it interesting
+
+- **Reverse engineering a stateful protocol.** Oracle ADF keeps all UI state on the
+  server. The bridge replays the exact sequence of partial-page POSTs a browser would
+  send, parses XML envelopes with embedded HTML, and knows which responses are silent
+  no-ops rather than errors. Every quirk is written down and verified against the live
+  server in [`docs/GOTCHAS.md`](docs/GOTCHAS.md) (in Spanish).
+- **A pool of live sessions, not an HTTP client.** Each upstream connection is a
+  long-lived, strictly sequential ADF session "parked" on a specific program. The pool
+  keeps them alive, reuses the ones already positioned where a request needs them (2
+  POSTs instead of 6), and was load-tested against production to find the concurrency
+  ceiling.
+- **Caching tuned to how the data changes.** A program's catalog barely changes and
+  costs one upstream request for ~100 courses, so it is served stale-while-revalidate.
+  Seat counts change by the minute and are fetched one course at a time, so every seat
+  count in the API says how old it is.
+- **Hexagonal architecture.** The domain imports neither the HTTP framework, nor the
+  database driver, nor the HTML parser. The API and the batch refresher go through the
+  same use cases, so there is a single write path to Postgres.
+
+## What's in here
+
+Three pieces, one repo, one `docker compose`:
 
 | | | |
 |---|---|---|
-| **API** | `cmd/bridge` + `internal/` | Traduce el ADF a JSON y lo cachea en Postgres. OpenAPI 3.1 servido en `/v1/docs` |
-| **Interfaz** | [`web/`](web/) | React + TypeScript sobre esa API. Arma el semestre: catálogo, horario, cupos |
-| **`Refresher`** | `cmd/refresher` | Barrido manual de la cache. Su cron se abandonó: la API sirve lo guardado y refresca detrás (ver `docs/FASE-2.md`) |
+| **API** | `cmd/bridge` + `internal/` | Translates ADF into JSON and caches it in Postgres. OpenAPI 3.1 served at `/v1/docs` |
+| **Web app** | [`web/`](web/) | React + TypeScript on top of that API. Plans the semester: catalog, timetable, seats |
+| **`Refresher`** | `cmd/refresher` | Manual cache sweep. No longer on a cron: the API serves what it has and refreshes in the background (see `docs/FASE-2.md`) |
 
-La interfaz **nunca** toca Postgres ni importa nada de `internal/`: habla la misma API
-pública que cualquier otro cliente. Si algo se ve en pantalla, existe como endpoint.
+The web app **never** touches Postgres or imports anything from `internal/`: it talks to
+the same public API as any other client. If something is on screen, it exists as an
+endpoint.
 
-## Arrancar
+## Getting started
 
-Los puertos del host salen del `.env` — `API_PORT`, `WEB_PORT`, `VITE_DEV_PORT`. Los
-valores de abajo son los que trae [`.env.example`](.env.example); si los cambiás, ese
-archivo manda.
+Host ports come from `.env` (`API_PORT`, `WEB_PORT`, `VITE_DEV_PORT`). The values below
+are the defaults in [`.env.example`](.env.example); if you change them, that file wins.
 
 ```bash
 cp .env.example .env
@@ -60,128 +109,129 @@ make migrate
 docker compose up -d --build api
 
 curl localhost:18080/v1/campuses
-open  localhost:18080/v1/docs      # Swagger UI sobre el contrato embebido
+open  localhost:18080/v1/docs      # Swagger UI over the embedded contract
 ```
 
-Con la interfaz, en modo desarrollo (Vite recarga en caliente y proxea `/v1` a la API):
+The web app in development mode (Vite hot reload, proxying `/v1` to the API):
 
 ```bash
 docker compose up -d              # db + api
 cd web && npm install && npm run dev   # → localhost:3000
 ```
 
-O la interfaz como la sirve producción — nginx sobre los estáticos ya compilados:
+Or the web app as production serves it, nginx over the compiled static files:
 
 ```bash
 docker compose up -d --build web  # → localhost:13000
 ```
 
-El día a día —deploy, migraciones, qué versión corre dónde, cómo tirar todo abajo— está
-en [`docs/COMMANDS.md`](docs/COMMANDS.md).
+Day-to-day operations (deploys, migrations, which version runs where, tearing everything
+down) are in [`docs/COMMANDS.md`](docs/COMMANDS.md).
 
-### Llenar la cache sin esperar a un cliente
+### Warming the cache without waiting for a client
 
-El `Refresher` es la misma imagen con otro entrypoint: un modo por corrida, y sale. Su
-checkpoint son los marcadores de frescura, así que **reanudar es volver a correr** y dos
-corridas seguidas no hacen ni un POST.
+The `Refresher` is the same image with another entrypoint: one mode per run, then it
+exits. Its checkpoint is the freshness markers themselves, so **resuming means running
+it again**, and two back-to-back runs make zero upstream requests.
 
 ```bash
-docker compose --profile jobs run --rm refresher --mode=reference                 # niveles, sedes, planes: 131 POSTs, 72 s
-docker compose --profile jobs run --rm refresher --mode=catalog --workers=2       # la lista de asignaturas de cada plan
+docker compose --profile jobs run --rm refresher --mode=reference                 # levels, campuses, programs: 131 POSTs, 72 s
+docker compose --profile jobs run --rm refresher --mode=catalog --workers=2       # every program's course list
 docker compose --profile jobs run --rm refresher --mode=detail --scope=global \
-                                  --workers=2 --max-duration=4h    # grupos, horarios y cupos
-docker compose --profile jobs run --rm refresher --mode=seats --scope=hot         # calienta lo que la gente mira
+                                  --workers=2 --max-duration=4h    # sections, schedules and seats
+docker compose --profile jobs run --rm refresher --mode=seats --scope=hot         # warms what people look at
 ```
 
-Son corridas **manuales**: ya no hay cron ni cadencia (por qué, en
-[`docs/FASE-2.md`](docs/FASE-2.md)). `REFRESH_ENABLED=false` las bloquea todas.
-`GET /v1/status` cuenta qué hizo la última corrida de cada modo. Detalles y números medidos: [`docs/FASE-2.md`](docs/FASE-2.md).
+These runs are **manual**: there is no cron and no cadence anymore (the reasoning is in
+[`docs/FASE-2.md`](docs/FASE-2.md)). `REFRESH_ENABLED=false` blocks all of them.
+`GET /v1/status` reports what the last run of each mode did.
 
-## La interfaz
+## The web app
 
-React + TypeScript, cuatro dependencias directas, sin librería de estado ni de
-componentes — en [`web/`](web/). Arma el semestre: catálogo por plan, ficha de
-asignatura con horario y grupos, "Mi semestre" para juntar hasta diez materias y medir
-sus cupos con un solo botón, y "Mi horario" con detección de choques y exportación a
-calendario.
+React + TypeScript, three runtime dependencies (React, React DOM and an icon set), no
+state or component library, in [`web/`](web/). It plans the semester: a program's
+catalog, a course page with schedule and sections, "Mi semestre" to collect up to twenty
+courses and measure all their seats with one button, and "Mi horario" with clash
+detection and calendar export. Students pursuing a double degree can pick two programs
+and plan both in a single timetable.
 
-Su tesis visual es la misma que la de la API: **todo dato declara su edad**. Los cupos
-se muestran en un contador de tablero de estación, con su antigüedad envejeciendo a la
-vista, y un miss frío no se esconde tras un spinner — se explica, con cronómetro.
+Its visual thesis is the same as the API's: **every piece of data states its age**. Seat
+counts are shown on a split-flap style counter whose age visibly ticks up, and a cold
+cache miss is not hidden behind a spinner: it is explained, with a stopwatch.
 
 <div align="center">
-  <img src="docs/assets/catalog.png" alt="Catálogo del plan 2A74 en la interfaz: 313 asignaturas, cupos con cuenta atrás y estado de selección." width="900">
+  <img src="docs/assets/catalog.png" alt="Catalog of program 2A74 in the web app: some 300 courses, seat counts with countdown and selection state." width="900">
 </div>
 
-Cómo correrla, qué dependencia hace qué y por qué no hay más: [`web/README.md`](web/README.md).
-El plan, con el curso mínimo de front para leerlo todo:
+How to run it, and what each dependency does: [`web/README.md`](web/README.md). The
+plan, including a crash course in frontend for reading it:
 [`docs/PLAN-FRONTEND.md`](docs/PLAN-FRONTEND.md).
 
-## La API
+## The API
 
-La **sede es un segmento obligatorio de la ruta**. No es un capricho: `program.code` no
-identifica por sí solo — 136 de 852 códigos se repiten entre sedes porque PEAMA reexpone
-el mismo plan. No hay default de sede, y no existe una URL que signifique "cualquiera".
+**The campus is a mandatory path segment.** A program code does not identify a program
+on its own: 136 of 852 codes repeat across campuses. There is no default campus and no
+URL that means "any campus".
 
-| Método | Ruta | |
+| Method | Path | |
 |---|---|---|
-| `GET` | `/v1/levels` | niveles (`soc1`) |
-| `GET` | `/v1/campuses` | sedes (`soc9`) |
+| `GET` | `/v1/levels` | academic levels (undergraduate, master's, doctorate) |
+| `GET` | `/v1/campuses` | campuses |
 | `GET` | `/v1/campuses/{campus}/faculties` | |
-| `GET` | `/v1/campuses/{campus}/programs?faculty=` | `faculty` es filtro opcional |
+| `GET` | `/v1/campuses/{campus}/programs?faculty=` | `faculty` is an optional filter |
 | `GET` | `/v1/campuses/{campus}/programs/{program}` | |
-| `GET` | `…/programs/{program}/courses` | catálogo del plan; `?include=schedules` agrega los horarios |
-| `GET` | `…/courses/{code}` | detalle con grupos |
+| `GET` | `…/programs/{program}/courses` | the program's catalog; `?include=schedules` adds timetables |
+| `GET` | `…/courses/{code}` | course detail with sections |
 | `GET` | `…/courses/{code}/sections` | |
-| `GET` | `…/courses/{code}/sections/{key}` | `key`, no `number` |
-| `GET` | `…/courses/{code}/sections/{key}/seats` | **cupos**, con su edad |
-| `GET` | `/v1/campuses/{campus}/courses/{code}` | atajo; `300` si varios planes lo ofrecen |
-| `GET` | `/v1/campuses/{campus}/courses?q=` | búsqueda; nunca consulta al SIA |
-| `GET` | `/v1/healthz` · `/v1/status` · `/v1/version` | salud, cobertura de cache y build |
-| `GET` | `/v1/docs` · `/v1/openapi.yaml` | Swagger UI y el contrato |
+| `GET` | `…/courses/{code}/sections/{key}` | `key`, not `number` |
+| `GET` | `…/courses/{code}/sections/{key}/seats` | **seats**, with their age |
+| `GET` | `/v1/campuses/{campus}/courses/{code}` | shortcut; `300` if several programs offer it |
+| `GET` | `/v1/campuses/{campus}/courses?q=` | search; never hits the SIA |
+| `GET` | `/v1/healthz` · `/v1/status` · `/v1/version` | health, cache coverage and build |
+| `GET` | `/v1/docs` · `/v1/openapi.yaml` | Swagger UI and the contract |
 
-Esta tabla es para navegar. **El contrato que manda es**
-[`internal/httpapi/openapi.yaml`](internal/httpapi/openapi.yaml) — OpenAPI 3.1, embebido
-en el binario y servido en `/v1/docs`, así que la instancia que corre siempre describe su
-propia versión. El *porqué* de cada decisión (IDs públicos, errores, frescura) está en
+This table is for orientation. **The contract that rules is**
+[`internal/httpapi/openapi.yaml`](internal/httpapi/openapi.yaml): OpenAPI 3.1, embedded
+in the binary and served at `/v1/docs`, so a running instance always describes its own
+version. The *why* behind each decision (public IDs, errors, freshness) is in
 [`docs/API.md`](docs/API.md).
 
-### Frescura
+### Freshness
 
-Un solo concepto: `?max_age=<segundos>`. `?max_age=0` fuerza la consulta al SIA.
+One concept: `?max_age=<seconds>`. `?max_age=0` forces a trip to the SIA.
 
-| Recurso | Gobernado por |
+| Resource | Governed by |
 |---|---|
-| referencia — niveles, sedes, facultades, planes | `reference_fetch.fetched_at` |
-| catálogo | `program.catalog_fetched_at` |
-| detalle — grupos, horario, profesor | `course_program.detail_fetched_at` |
-| **cupos** | `section.seats_checked_at` |
+| reference data: levels, campuses, faculties, programs | `reference_fetch.fetched_at` |
+| catalog | `program.catalog_fetched_at` |
+| detail: sections, schedule, instructor | `course_program.detail_fetched_at` |
+| **seats** | `section.seats_checked_at` |
 
-Los TTL por defecto viven en un solo sitio, [`internal/catalog/freshness.go`](internal/catalog/freshness.go),
-y de ahí salen los de [`docs/API.md`](docs/API.md).
+Default TTLs live in one place,
+[`internal/catalog/freshness.go`](internal/catalog/freshness.go).
 
-Cada respuesta lleva `Age`, `Cache-Control`, `X-Cache` y, en un miss, `X-SIA-Fetch-Ms`.
-Los cupos además llevan `age_seconds` **en el body**: nunca se sirve un cupo sin decir de
-cuándo es — y `changed_at`, que es cuándo el número cambió por última vez. Son dos
-preguntas distintas: medido, 0 cambios en 347 grupos a lo largo de 35 min, así que el
-historial solo crece cuando el cupo se mueve mientras la frescura se actualiza en cada
-medición.
+Every response carries `Age`, `Cache-Control`, `X-Cache` and, on a miss,
+`X-SIA-Fetch-Ms`. Seat counts also carry `age_seconds` **in the body**: a seat count is
+never served without saying when it was taken. They also carry `changed_at`, the last
+time the number actually moved. Those are two different questions: measured, 347
+sections showed zero changes over 35 minutes, so history only grows when seats move,
+while freshness updates on every measurement.
 
-## Arquitectura
+## Architecture
 
 <div align="center">
-  <img src="docs/assets/architecture.svg" alt="Arquitectura hexagonal: httpapi como puerto driving; Store (Postgres) y SIASource (ADF) como puertos driven." width="860">
+  <img src="docs/assets/architecture.svg" alt="Hexagonal architecture: httpapi as the driving port; Store (Postgres) and SIASource (ADF) as driven ports." width="860">
 </div>
 
-Hexagonal. Dos puertos driving (`httpapi` y el `Refresher`), dos driven (`Store` sobre
-Postgres, `SIASource` sobre ADF). El dominio no importa gin, ni pgx, ni goquery — y el
-`Refresher` tampoco: entra por los mismos casos de uso que la API, así que hay un solo
-camino de escritura a Postgres.
+Hexagonal. Two driving ports (`httpapi` and the `Refresher`), two driven ports (`Store`
+over Postgres, `SIASource` over ADF). The domain imports neither gin, nor pgx, nor
+goquery, and neither does the `Refresher`: it enters through the same use cases as the
+API, so there is a single write path to Postgres.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant C as Cliente
+    participant C as Client
     participant A as httpapi
     participant S as catalog.Service
     participant P as Postgres
@@ -189,127 +239,158 @@ sequenceDiagram
 
     C->>A: GET /v1/campuses/1101/programs/2A74/courses
     A->>S: Catalog(program, max_age)
-    S->>P: ¿catalog_fetched_at fresco?
-    alt fresco
-        P-->>S: asignaturas
+    S->>P: stored? catalog_fetched_at fresh?
+    alt stored and fresh
+        P-->>S: courses
         S-->>C: 200 · X-Cache: hit · ~1 ms
-    else falta o caducó
-        S->>X: cascada + listado regular
-        S->>X: cascada + buscador de electivas
-        Note over S,X: son DOS consultas, no una:<br/>soc4=0 excluye libre elección
-        S->>P: persiste ambas mitades y sella la fecha
+    else stored but stale
+        P-->>S: courses
+        S-->>C: 200 · X-Cache: stale · ~1 ms
+        S-)X: refresh in the background (same fetch as below)
+    else never fetched
+        S->>X: cascade + regular listing
+        S->>X: cascade + electives search
+        Note over S,X: TWO queries, not one:<br/>soc4=0 excludes free electives
+        S->>P: persist both halves and stamp the date
         S-->>C: 200 · X-Cache: miss · X-SIA-Fetch-Ms
     end
 ```
 
-El árbol de paquetes y qué hace cada uno:
-[`docs/LAYOUT.md`](docs/LAYOUT.md).
+The package tree and what each package does: [`docs/LAYOUT.md`](docs/LAYOUT.md).
 
-### `SIASource` no es un cliente HTTP
+### `SIASource` is not an HTTP client
 
-Es un **pool de sesiones ADF vivas**. Cada conexión:
+It is a **pool of live ADF sessions**. Each connection:
 
-- muere a los **~4.2 min** de inactividad — con ping ≤3 min vive indefinidamente
-- es **estrictamente secuencial**: una petición en vuelo a la vez
-- está parqueada en un `(nivel, sede, facultad, plan)`; moverla cuesta 2 POSTs
-- está en el buscador **o** en una región de detalle **numerada**, cuyo número **sube**
+- dies after **~4.2 min** of inactivity; pinged every ≤3 min it lives indefinitely
+- is **strictly sequential**: one request in flight at a time
+- is parked on a `(level, campus, faculty, program)`; moving it costs 2 POSTs
+- is either on the search page **or** on a **numbered** detail region, whose number
+  **keeps increasing**
 
-El SIA aguanta bastante más paralelismo del que el pool usa; el pool se queda corto
-porque el tráfico real no pide más, no porque el servidor imponga un techo bajo. El
-número medido y cómo se midió están en [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) §5.
+The SIA tolerates much more parallelism than the pool uses; the pool stays small because
+real traffic doesn't need more, not because the server imposes a low ceiling. The
+measured number and how it was measured are in
+[`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) §5.
 
-## Lo que no es obvio
+## What isn't obvious
 
-Estas cinco salen de medir contra el servidor, no de suponer:
+A few terms first, since the SIA's vocabulary leaks into the API:
 
-| | |
-|---|---|
-| **El listado devuelve ofertas, no asignaturas** | Los códigos se repiten hasta ×131. Clave natural `(code, term, key)`, donde `key` es el token entre paréntesis — `Grupo N` se repite entre regulares y PEAMA |
-| **Los grupos visibles dependen del plan** | Relación de subconjunto estricto. Pero **los cupos son globales**: una medición sirve para todos los planes |
-| **La tipología depende del plan** | Probado: 8 códigos divergen entre planes de Bogotá. Vive en `course_program` |
-| **El catálogo de un plan son dos consultas** | `soc4=0` significa literalmente *todas menos libre elección*. Las libres salen del buscador de electivas, que es por sede |
-| **Una respuesta de ~900 B no es un error HTTP** | Es un no-op: falta un paso de la cascada, o caducó la sesión. Se trata como error explícito en vez de devolver datos incompletos |
+- **Program** (*plan*): a degree program, e.g. `2A74` Systems and Computing Engineering.
+- **Section** (*grupo*): one offering of a course, with its own schedule, instructor and
+  seats.
+- **Typology** (*tipología*): how a course counts toward a degree: required, elective,
+  free elective, etc.
+- **PEAMA**: a special admission program in which students start at a remote campus and
+  finish at a larger one. The SIA shows its programs and sections next to the regular
+  ones, which is why codes collide.
 
-Están todas, cada una verificada contra producción, en
-[`docs/GOTCHAS.md`](docs/GOTCHAS.md). Varias fallan **en silencio**: devuelven datos
-plausibles y equivocados.
-
-## Documentación
-
-**Antes de escribir código**
+These five come from measuring against the server, not from assuming:
 
 | | |
 |---|---|
-| [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **Las trampas verificadas. Léelo antes de tocar el código.** |
-| [`docs/ARCH.md`](docs/ARCH.md) | Puertos, read-through, pool de sesiones, concurrencia |
-| [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Esquema Postgres y las nueve decisiones no obvias |
-| [`docs/LAYOUT.md`](docs/LAYOUT.md) | Árbol de paquetes Go y qué vive en cada uno |
-| [`docs/COMMIT-CONVENTION.md`](docs/COMMIT-CONVENTION.md) | Formato de commits — `semantic-release` lo lee |
+| **The listing returns offerings, not courses** | Codes repeat up to ×131. Natural key `(code, term, key)`, where `key` is the token in parentheses: `Grupo N` repeats between regular and PEAMA sections |
+| **Visible sections depend on the program** | A strict subset relation. But **seats are global**: one measurement serves every program |
+| **Course type depends on the program** | Proven: 8 codes differ between Bogotá programs. It lives in `course_program` |
+| **A program's catalog is two queries** | `soc4=0` literally means *everything except free electives*. Free electives come from the electives search, which is per campus |
+| **A ~900 B response is not an HTTP error** | It is a no-op: a cascade step is missing, or the session expired. It is treated as an explicit error instead of returning incomplete data |
 
-**El protocolo**
+All of them, each verified against production, are in
+[`docs/GOTCHAS.md`](docs/GOTCHAS.md). Several fail **silently**: they return plausible
+but wrong data.
 
-| | |
-|---|---|
-| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | Handshake ADF completo, con cuerpos reales |
-| [`docs/FIELDS.md`](docs/FIELDS.md) | Componentes ADF y opciones de cada dropdown |
-| [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | Qué está probado y qué no |
-| [`bruno/sia-catalogo/`](bruno/sia-catalogo/) | El flujo ADF crudo, a mano contra el SIA |
+## Documentation
 
-**El contrato y la interfaz**
+The rest of the documentation is in **Spanish**.
 
-| | |
-|---|---|
-| [`docs/API.md`](docs/API.md) | Contrato HTTP: IDs públicos, frescura, errores |
-| [`bruno/bridge-api/`](bruno/bridge-api/) | La colección de esta API, endpoint por endpoint |
-| [`web/README.md`](web/README.md) | La interfaz: cómo correrla y qué dependencia hace qué |
-| [`docs/PLAN-FRONTEND.md`](docs/PLAN-FRONTEND.md) | Plan de la interfaz **+ curso mínimo de front** |
-
-**Operación**
+**Before writing code**
 
 | | |
 |---|---|
-| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Entorno local, fixtures, cómo replicar el flujo |
-| [`docs/COMMANDS.md`](docs/COMMANDS.md) | Chuleta: deploy, migraciones, qué versión corre dónde |
-| [`docs/PLAN-CI-CD.md`](docs/PLAN-CI-CD.md) | Deploy automático al mergear a `main`, versionado semver |
-| [`docs/PLAN-PRODUCTION.md`](docs/PLAN-PRODUCTION.md) | Cómo esto pasa de localhost al server |
+| [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **The verified traps. Read it before touching the code.** |
+| [`docs/ARCH.md`](docs/ARCH.md) | Ports, read-through, session pool, concurrency |
+| [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Postgres schema and the nine non-obvious decisions |
+| [`docs/LAYOUT.md`](docs/LAYOUT.md) | Go package tree and what lives in each package |
+| [`docs/COMMIT-CONVENTION.md`](docs/COMMIT-CONVENTION.md) | Commit format: `semantic-release` reads it |
 
-**Los planes**
+**The protocol**
 
 | | |
 |---|---|
-| [`docs/PLAN.md`](docs/PLAN.md) | Fase 1: la API. Pasos y criterios de aceptación |
-| [`docs/FASE-2.md`](docs/FASE-2.md) | Fase 2: el `Refresher`, concurrencia del crawl y cadencia |
-| [`docs/PLAN-SIACHANGES.md`](docs/PLAN-SIACHANGES.md) | Reconciliar lo que el SIA deja de ofrecer |
-| [`docs/PLAN-DOUBLE-TITULATION.md`](docs/PLAN-DOUBLE-TITULATION.md) | Doble titulación: dos planes en un solo horario (solo front) |
+| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | Full ADF handshake, with real request bodies |
+| [`docs/FIELDS.md`](docs/FIELDS.md) | ADF components and the options of each dropdown |
+| [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | What is proven and what isn't |
+| [`bruno/sia-catalogo/`](bruno/sia-catalogo/) | The raw ADF flow, by hand against the SIA |
 
-## Verificar contra el servidor
+**The contract and the web app**
 
-Los IDs de componente ADF (`pt1:r1:0:soc1`, …) son frágiles por diseño y cambian si la
-UNAL repinta la página. La colección [`bruno/sia-catalogo/`](bruno/sia-catalogo/) ejecuta
-el flujo completo a mano:
+| | |
+|---|---|
+| [`docs/API.md`](docs/API.md) | HTTP contract: public IDs, freshness, errors |
+| [`bruno/bridge-api/`](bruno/bridge-api/) | This API's collection, endpoint by endpoint |
+| [`web/README.md`](web/README.md) | The web app: how to run it and what each dependency does |
+| [`docs/PLAN-FRONTEND.md`](docs/PLAN-FRONTEND.md) | Web app plan **+ a frontend crash course** |
 
-- si la colección funciona y tu código no, el problema es tuyo
-- si la colección tampoco, el SIA cambió y toca re-mapear con
+**Operations**
+
+| | |
+|---|---|
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Local environment, fixtures, reproducing the flow |
+| [`docs/COMMANDS.md`](docs/COMMANDS.md) | Cheat sheet: deploys, migrations, which version runs where |
+| [`docs/internal/PLAN-CI-CD.md`](docs/internal/PLAN-CI-CD.md) | Automatic deploy on merge to `main`, semver versioning |
+| [`docs/internal/PLAN-PRODUCTION.md`](docs/internal/PLAN-PRODUCTION.md) | How this went from localhost to a server |
+
+**The plans**
+
+| | |
+|---|---|
+| [`docs/PLAN.md`](docs/PLAN.md) | Phase 1: the API. Steps and acceptance criteria |
+| [`docs/FASE-2.md`](docs/FASE-2.md) | Phase 2: the `Refresher`, crawl concurrency and cadence |
+| [`docs/PLAN-SIACHANGES.md`](docs/PLAN-SIACHANGES.md) | Reconciling what the SIA stops offering |
+| [`docs/PLAN-DOUBLE-TITULATION.md`](docs/PLAN-DOUBLE-TITULATION.md) | Double degree: two programs in one timetable (frontend only) |
+
+## Verifying against the server
+
+ADF component IDs (`pt1:r1:0:soc1`, …) are fragile by design and change if the
+university redesigns the page. The [`bruno/sia-catalogo/`](bruno/sia-catalogo/)
+collection runs the full flow by hand:
+
+- if the collection works and your code doesn't, the problem is yours
+- if the collection fails too, the SIA changed and it's time to re-map with
   [`docs/FIELDS.md`](docs/FIELDS.md)
 
-Las pruebas contra el servidor real están detrás de una variable, nunca en `go test ./...`:
+Tests against the real server sit behind an environment variable, never in
+`go test ./...`:
 
 ```bash
 SIA_LIVE=1 go test ./internal/sia/ -run TestLive -v
 ```
 
-## Convención de idioma
+## Language convention
 
-**Código en inglés** — identificadores, tipos, columnas, endpoints, comentarios.
-**Documentación en español.** Los literales que vienen del SIA se conservan tal cual
-(`Cupos disponibles:`, `LIBRE ELECCIÓN (L)`, `MIÉRCOLES de 09:00 a 11:00.`): son datos,
-no texto nuestro.
+**Code in English**: identifiers, types, columns, endpoints, comments. **Documentation
+in Spanish**, except this README, which is in English for readers arriving without
+context; [`README.es.md`](README.es.md) is its Spanish version. Literals coming from the
+SIA are kept verbatim (`Cupos disponibles:`, `LIBRE ELECCIÓN (L)`,
+`MIÉRCOLES de 09:00 a 11:00.`): they are data, not our text.
 
-## Fuente
+## Source
 
 ```
 https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf
     ?taskflowId=task-flow-AC_CatalogoAsignaturas
 ```
 
-Catálogo público, sin autenticación. No hay `robots.txt` (404).
+Public catalog, no authentication. There is no `robots.txt` (404).
+
+## Disclaimer
+
+Independent project. **Not affiliated with or endorsed by the Universidad Nacional de
+Colombia.** It only reads the SIA's public catalog, without authentication, and caches
+what it returns to avoid putting extra load on it. The SIA remains the source of truth:
+if anything differs, the SIA is right.
+
+## License
+
+[MIT](LICENSE).

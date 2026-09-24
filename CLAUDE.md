@@ -31,7 +31,7 @@ cachean como cualquier otra referencia.
 ## Convención de idioma
 
 - **Código en inglés**: identificadores, tipos, columnas SQL, endpoints, comentarios.
-- **Documentación en español.**
+- **Documentación en español**, salvo `README.md`, que va en inglés (vitrina para quien llega sin contexto); `README.es.md` es su versión en español. Mantener los dos sincronizados.
 - Los literales del SIA se conservan tal cual (`Cupos disponibles:`,
   `LIBRE ELECCIÓN (L)`, `MIÉRCOLES de 09:00 a 11:00.`) — son datos, no texto nuestro.
 
@@ -68,12 +68,12 @@ niveles que la API nunca había recorrido, y §40, encontrada en vivo el 2026-08
 
 | Ruta | Qué hay |
 |---|---|
-| `docs/PLAN-CI-CD.md` | **Plan de deploy automático y versionado semver** |
+| `docs/internal/PLAN-CI-CD.md` | **Plan de deploy automático y versionado semver** |
 | `docs/COMMANDS.md` | **Chuleta: deploy, migraciones, qué versión corre dónde, cómo borrar todo** |
 | `docs/COMMIT-CONVENTION.md` | **Formato de commits — leer antes de hacer commit** |
 | `docs/PLAN.md` | **Plan de implementación: pasos, criterios de aceptación, fixtures** |
 | `docs/FASE-2.md` | **La fase 2: el Job, su concurrencia, su cadencia y lo medido al implementarla** |
-| `docs/FABLE-IMPROVEMENTS.md` | Diagnóstico del 2026-09-20 (pool envenenado, tormenta de mediciones), qué se corrigió y qué queda |
+| `docs/internal/FABLE-IMPROVEMENTS.md` | Diagnóstico del 2026-09-20 (pool envenenado, tormenta de mediciones), qué se corrigió y qué queda |
 | `docs/ARCH.md` | Arquitectura: puertos, read-through, pool de sesiones, concurrencia |
 | `docs/API.md` | Contrato HTTP: endpoints, IDs públicos, frescura, errores |
 | `docs/LAYOUT.md` | Árbol de paquetes Go: qué vive en cada uno y por qué |
@@ -83,7 +83,7 @@ niveles que la API nunca había recorrido, y §40, encontrada en vivo el 2026-08
 | `docs/DATA-MODEL.md` | Esquema Postgres + structs de Go |
 | `docs/OPEN-QUESTIONS.md` | Qué está verificado y qué no. Léelo antes de asumir |
 | `docs/DEVELOPMENT.md` | Entorno: Docker, Postgres, cómo replicar el flujo |
-| `docs/PLAN-PRODUCTION.md` | Cómo esto pasa de localhost al server |
+| `docs/internal/PLAN-PRODUCTION.md` | Cómo esto pasa de localhost al server |
 | `docs/PLAN-SIACHANGES.md` | Reconciliar lo que el SIA deja de ofrecer |
 | `web/README.md`, `docs/PLAN-FRONTEND.md` | La interfaz: cómo correrla, y su plan |
 | `internal/httpapi/openapi.yaml` | **El contrato que manda.** `docs/API.md` explica el porqué, no la forma |

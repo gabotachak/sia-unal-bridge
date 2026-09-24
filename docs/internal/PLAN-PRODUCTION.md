@@ -3,7 +3,7 @@
 Cómo `sia-unal-bridge` pasa de correr en localhost a vivir en `gabotachak.dev`, en el
 servidor de un tercero (el "amigo dueño del server") detrás de su Caddy compartido.
 
-Mismo formato que [`PLAN.md`](PLAN.md): pasos con criterio de aceptación. Cada paso
+Mismo formato que [`PLAN.md`](../PLAN.md): pasos con criterio de aceptación. Cada paso
 está marcado con quién lo ejecuta:
 
 - **[YO]** — lo hago en este repo, ya aplicado o listo para revisar en el diff.

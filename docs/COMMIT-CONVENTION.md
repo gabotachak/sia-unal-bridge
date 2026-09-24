@@ -1,14 +1,14 @@
 # Convención de commits y PRs
 
 **Toda IA que haga commits o abra PRs en este repo debe leer esto antes de escribir
-el mensaje.** No es estilo — `semantic-release` (ver [`PLAN-CI-CD.md`](PLAN-CI-CD.md),
+el mensaje.** No es estilo — `semantic-release` (ver [`internal/PLAN-CI-CD.md`](internal/PLAN-CI-CD.md),
 Fase 2) lee el mensaje que queda en `main` para decidir la versión (`vX.Y.Z`). Un
 mensaje fuera de formato no rompe el build, simplemente **no genera Release**: el
 deploy corre igual, pero queda sin versión ni changelog asociado.
 
 El cuerpo del PR tiene plantilla: [`.github/pull_request_template.md`](../.github/pull_request_template.md),
 que GitHub rellena solo al abrirlo. Su sección de **Verificación** no es burocracia:
-el CI de este repo solo lintea el título y los commits —no corre tests ni build— y
+el CI corre tests y build, pero no las pruebas contra el SIA real ni mira la interfaz, y
 mergear a `main` despliega, así que el PR es el único sitio donde queda constancia de
 qué se probó.
 

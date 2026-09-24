@@ -201,7 +201,7 @@ export function Program({
    * montar, y como nada mantiene los cupos a menos de STALE_SEATS_SECONDS eso
    * eran TODAS las filas — 267 detalles por abrir un plan de Bogotá, ~1000
    * POSTs al SIA, con 32 en vuelo: el pool entero de la API para una persona
-   * (docs/FABLE-IMPROVEMENTS.md §3). Ahora una fila se mide cuando entra a la
+   * (docs/internal/FABLE-IMPROVEMENTS.md §3). Ahora una fila se mide cuando entra a la
    * pantalla (el `IntersectionObserver` de más abajo), de a
    * AUTO_MEASURE_CONCURRENCY, por el carril de fondo de la API
    * (`background`), y salir del catálogo suelta lo que no había empezado.

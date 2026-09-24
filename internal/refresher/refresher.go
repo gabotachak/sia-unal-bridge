@@ -113,8 +113,8 @@ type refresher struct {
 	mu       sync.Mutex
 	rep      *Report
 	lastProg time.Time // throttle for the progress log in record()
-	fails  int  // consecutive program failures
-	broken bool // circuit breaker tripped
+	fails    int       // consecutive program failures
+	broken   bool      // circuit breaker tripped
 }
 
 // Run executes one sweep and returns its Report. The returned error is

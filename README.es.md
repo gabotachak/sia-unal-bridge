@@ -28,7 +28,7 @@
 ---
 
 <div align="center">
-  <img src="docs/assets/demo.svg" alt="Primera llamada: 7.95 s contra el SIA. Segunda: 1.2 ms desde Postgres." width="760">
+  <img src="docs/assets/demo.svg" alt="Primera llamada: unos 8 s contra el SIA. Segunda: alrededor de 1 ms desde Postgres." width="760">
 </div>
 
 Los números son reales, medidos contra producción el 2026-08-15. La primera llamada
@@ -140,7 +140,7 @@ se muestran en un contador de tablero de estación, con su antigüedad envejecie
 vista, y un miss frío no se esconde tras un spinner — se explica, con cronómetro.
 
 <div align="center">
-  <img src="docs/assets/catalog.png" alt="Catálogo del plan 2A74 en la interfaz: 313 asignaturas, cupos con cuenta atrás y estado de selección." width="900">
+  <img src="docs/assets/catalog.png" alt="Catálogo del plan 2A74 en la interfaz: unas 300 asignaturas, cupos con cuenta atrás y estado de selección." width="900">
 </div>
 
 Cómo correrla, qué dependencia hace qué y por qué no hay más: [`web/README.md`](web/README.md).

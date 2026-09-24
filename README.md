@@ -28,7 +28,7 @@
 ---
 
 <div align="center">
-  <img src="docs/assets/demo.svg" alt="First call: 7.95 s against the SIA. Second call: 1.2 ms from Postgres." width="760">
+  <img src="docs/assets/demo.svg" alt="First call: about 8 s against the SIA. Second call: about 1 ms from Postgres." width="760">
 </div>
 
 ## What this is
@@ -160,7 +160,7 @@ counts are shown on a split-flap style counter whose age visibly ticks up, and a
 cache miss is not hidden behind a spinner: it is explained, with a stopwatch.
 
 <div align="center">
-  <img src="docs/assets/catalog.png" alt="Catalog of program 2A74 in the web app: 313 courses, seat counts with countdown and selection state." width="900">
+  <img src="docs/assets/catalog.png" alt="Catalog of program 2A74 in the web app: some 300 courses, seat counts with countdown and selection state." width="900">
 </div>
 
 How to run it, and what each dependency does: [`web/README.md`](web/README.md). The

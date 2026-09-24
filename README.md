@@ -1,7 +1,10 @@
 <div align="center">
 
 <h1>
-  <img src="docs/assets/wordmark.png" alt="SIA Bridge" width="300">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wordmark-dark.svg">
+    <img src="docs/assets/wordmark-light.svg" alt="SIA Bridge" width="320">
+  </picture>
 </h1>
 
 **A JSON API and a web app on top of a university system that never had an API.**

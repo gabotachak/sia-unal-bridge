@@ -1,7 +1,10 @@
 <div align="center">
 
 <h1>
-  <img src="docs/assets/wordmark.png" alt="SIA Bridge" width="300">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wordmark-dark.svg">
+    <img src="docs/assets/wordmark-light.svg" alt="SIA Bridge" width="320">
+  </picture>
 </h1>
 
 **Una API JSON y una app web sobre un sistema universitario que nunca tuvo API.**
@@ -143,7 +146,7 @@ vista, y un miss frío no se esconde tras un spinner — se explica, con cronóm
   <img src="docs/assets/catalog.png" alt="Catálogo del plan 2A74 en la interfaz: unas 300 asignaturas, cupos con cuenta atrás y estado de selección." width="900">
 </div>
 
-Cómo correrla, qué dependencia hace qué y por qué no hay más: [`web/README.md`](web/README.md).
+Cómo correrla, qué dependencia hace qué y por qué no hay más: [`web/README.es.md`](web/README.es.md).
 El plan, con el curso mínimo de front para leerlo todo:
 [`docs/PLAN-FRONTEND.md`](docs/PLAN-FRONTEND.md).
 
@@ -307,7 +310,7 @@ plausibles y equivocados.
 |---|---|
 | [`docs/API.md`](docs/API.md) | Contrato HTTP: IDs públicos, frescura, errores |
 | [`bruno/bridge-api/`](bruno/bridge-api/) | La colección de esta API, endpoint por endpoint |
-| [`web/README.md`](web/README.md) | La interfaz: cómo correrla y qué dependencia hace qué |
+| [`web/README.es.md`](web/README.es.md) | La interfaz: cómo correrla y qué dependencia hace qué |
 | [`docs/PLAN-FRONTEND.md`](docs/PLAN-FRONTEND.md) | Plan de la interfaz **+ curso mínimo de front** |
 
 **Operación**

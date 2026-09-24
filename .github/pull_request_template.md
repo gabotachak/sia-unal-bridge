@@ -14,9 +14,10 @@ commits del PR desaparecen. Ver docs/COMMIT-CONVENTION.md.
 ## Verificación
 
 <!--
-El CI de este repo NO corre tests ni build: solo lintea el título del PR y los
-commits. Y mergear a `main` despliega. Así que esto de acá abajo es el único
-registro de que algo se probó — marca solo lo que corriste de verdad, y si algo
+El CI (.github/workflows/ci.yml) corre gofmt, vet, tests con Postgres, y lint,
+tests y build del front. Pero no corre las pruebas contra el SIA real (SIA_LIVE=1)
+ni mira la interfaz, y mergear a `main` despliega. Así que esto de acá abajo es el
+registro de qué se probó — marca solo lo que corriste de verdad, y si algo
 quedó sin probar, dilo en vez de dejarlo en blanco.
 -->
 

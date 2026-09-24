@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    services:
+      # Base de test real: store/ y cmd/refresher/ se saltan sin TEST_DATABASE_URL.
+      db:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_USER: sia
+          POSTGRES_PASSWORD: sia
+          POSTGRES_DB: sia_bridge_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sia"
+          --health-interval 2s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://sia:sia@localhost:5432/sia_bridge_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - run: go run github.com/pressly/goose/v3/cmd/goose@latest -dir migrations postgres "$TEST_DATABASE_URL" up
+      # -p 1: ver Makefile, los paquetes comparten la base de test.
+      - run: go test -p 1 ./...
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

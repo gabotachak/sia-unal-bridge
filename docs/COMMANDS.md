@@ -2,7 +2,7 @@
 
 Chuleta de comandos del día a día — deploy, migraciones, ver qué versión corre
 dónde, y cómo tirar todo abajo si hace falta. Para el *por qué* de cada pieza ver
-[`PLAN-CI-CD.md`](PLAN-CI-CD.md) (deploy) y [`ARCH.md`](ARCH.md) (arquitectura).
+[`internal/PLAN-CI-CD.md`](internal/PLAN-CI-CD.md) (deploy) y [`ARCH.md`](ARCH.md) (arquitectura).
 Todo asume que estás parado en la raíz del repo, en el server (o en local con
 `docker compose` — es el mismo compose para los dos).
 
@@ -44,7 +44,7 @@ implementar). Cuando lo esté, va a llevar el mismo `LABEL` que `api` — mismo
 comando, cambiando el nombre del contenedor.
 
 Ojo: como el deploy reconstruye servicios por separado (`--no-deps`, ver
-`PLAN-CI-CD.md`), `api` y `web` pueden estar en versiones distintas entre sí en
+`internal/PLAN-CI-CD.md`), `api` y `web` pueden estar en versiones distintas entre sí en
 cualquier momento — es normal, no un bug.
 
 ---
@@ -65,7 +65,7 @@ docker compose build api && docker compose up -d --no-deps api
 ```
 
 `--no-deps` es a propósito — sin eso, compose reinicia también `db` si detecta
-que su config "cambió" (`PLAN-CI-CD.md`, sección Riesgos).
+que su config "cambió" (`internal/PLAN-CI-CD.md`, sección Riesgos).
 
 ## Logs
 

@@ -137,7 +137,7 @@ distinga (p. ej. un `refresh.enabled` y la edad de la última corrida).
 Recomendación original: reactivar solo `catalog` y `reference`. **Lo que se hizo al final
 (2026-09-21): abandonar el cron entero.** El miss frío que esos dos modos evitaban lo evita
 ahora la API sirviendo lo guardado y refrescando por detrás, y solo para los planes que
-alguien abre. El porqué de cada modo está al inicio de [`FASE-2.md`](FASE-2.md).
+alguien abre. El porqué de cada modo está al inicio de [`FASE-2.md`](../FASE-2.md).
 
 ## 2. Dolor 2 — la rueda no pasa a los cupos (corregido)
 

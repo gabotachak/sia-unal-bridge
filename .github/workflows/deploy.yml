@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0 # semantic-release necesita el historial completo, no solo el último commit
 
-      # Fase 2 del plan (docs/PLAN-CI-CD.md): versión semver automática,
+      # Fase 2 del plan (docs/internal/PLAN-CI-CD.md): versión semver automática,
       # antes del deploy. Requiere Conventional Commits — ver docs/COMMIT-CONVENTION.md.
       - name: Release semver
         uses: cycjimmy/semantic-release-action@v6.0.0

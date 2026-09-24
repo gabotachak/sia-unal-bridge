@@ -671,7 +671,7 @@ Costo de dejarla: una clave muerta de ~200 bytes. **Se borra en un commit aparte
 
 No cambia el contrato, así que **no hay que coordinar el orden de los despliegues**: un
 cliente viejo y uno nuevo le hablan igual al mismo servidor, y `web` y `api` son imágenes
-separadas (`docs/PLAN-CI-CD.md`). Es la ventaja de que la feature sea 100% de front.
+separadas (`docs/internal/PLAN-CI-CD.md`). Es la ventaja de que la feature sea 100% de front.
 
 ---
 

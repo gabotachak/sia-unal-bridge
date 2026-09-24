@@ -314,22 +314,26 @@ func (f *fakeSIA) FetchProgramDirectory(_ context.Context, _, campusIdx int) ([]
 
 	switch campusIdx {
 	case 2: // Bogotá
-		return []DropdownOption{
+		faculties := []DropdownOption{
 			{Index: 8, Code: "2055", Name: "FACULTAD DE INGENIERÍA"},
 			{Index: 3, Code: "2054", Name: "FACULTAD DE CIENCIAS"},
-		}, map[int][]DropdownOption{
+		}
+		programs := map[int][]DropdownOption{
 			8: {{Index: 3, Code: "2A74", Name: "INGENIERÍA DE SISTEMAS Y COMPUTACIÓN"}},
 			3: {{Index: 1, Code: "2A11", Name: "MATEMÁTICAS"}},
-		}, nil
+		}
+		return faculties, programs, nil
 	case 6: // Medellín
-		return []DropdownOption{
+		faculties := []DropdownOption{
 			{Index: 4, Code: "3059", Name: "FACULTAD DE MINAS"},
-		}, map[int][]DropdownOption{
+		}
+		programs := map[int][]DropdownOption{
 			4: {
 				{Index: 2, Code: "3534", Name: "INGENIERÍA DE SISTEMAS E INFORMÁTICA"},
 				{Index: 5, Code: "2A74", Name: "INGENIERÍA DE SISTEMAS Y COMPUTACIÓN (PEAMA)"},
 			},
-		}, nil
+		}
+		return faculties, programs, nil
 	}
 	return nil, nil, ErrNotFound
 }

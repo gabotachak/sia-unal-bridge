@@ -66,7 +66,7 @@ func main() {
 	go pool.Keepalive(ctx)
 
 	src := sia.NewSource(pool)
-	svc := catalog.NewService(st, src, cfg.Term)
+	svc := catalog.NewService(store.NewCached(st), src, cfg.Term)
 	// The API serves what it has and refreshes behind the caller; the
 	// Refresher, run by hand, keeps the blocking read-through (Service.ServeStale).
 	svc.ServeStale = true

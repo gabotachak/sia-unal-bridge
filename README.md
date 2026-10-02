@@ -31,7 +31,7 @@
 ---
 
 <div align="center">
-  <img src="docs/assets/demo.svg" alt="First call: about 8 s against the SIA. Second call: about 1 ms from Postgres." width="760">
+  <img src="docs/assets/demo.svg" alt="First call goes to the SIA and takes seconds. The same call again is served from Postgres in milliseconds." width="760">
 </div>
 
 ## What this is

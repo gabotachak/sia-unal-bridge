@@ -9,7 +9,7 @@ Tres tipos:
 - **Medidas**: el comportamiento del SIA. No las controlamos; la evidencia está en
   [GOTCHAS.md](GOTCHAS.md).
 - **En el código**: las decide este proyecto. `internal/config/constants_doc_test.go`
-  compara cada fila de Go con su fuente y falla si no coinciden.
+  compara cada fila con su fuente (`.go` o `.ts`) y falla si no coinciden.
 - **De entorno**: su valor por defecto está solo en [`.env.example`](../.env.example).
 
 ---

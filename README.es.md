@@ -31,7 +31,7 @@
 ---
 
 <div align="center">
-  <img src="docs/assets/demo.svg" alt="Primera llamada: unos 8 s contra el SIA. Segunda: alrededor de 1 ms desde Postgres." width="760">
+  <img src="docs/assets/demo.svg" alt="La primera llamada va al SIA y tarda segundos. La misma llamada otra vez sale de Postgres en milisegundos." width="760">
 </div>
 
 Los números son reales, medidos contra producción el 2026-08-15. La primera llamada

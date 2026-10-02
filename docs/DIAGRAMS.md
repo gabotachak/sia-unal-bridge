@@ -498,6 +498,8 @@ conexión del pool, ejecuta la **operación lógica entera** con ella y la devue
 **utilizable**. El canal con buffer **es** el mutex: mientras una conexión está fuera del
 canal, nadie más la toca.
 
+### Tomar una conexión
+
 ```mermaid
 flowchart TD
     call["Source.FetchDetail / FetchCatalog / ..."] --> doat["DoAt(ctx, pool, key, fn)"]
@@ -510,11 +512,18 @@ flowchart TD
     blk -- "ctx vence" --> busy["ErrBusy → 503 busy"]
     blk --> got
     got --> sus{"¿conn.suspect?"}
-    sus -- sí --> boot0["Bootstrap antes de usarla"] --> run
-    sus -- no --> run["fn(conn)"]
-    run --> res{"resultado"}
+    sus -- sí --> boot0["Bootstrap antes de usarla"] --> run["fn(conn)"]
+    sus -- no --> run
+```
+
+### Ejecutar y devolverla utilizable
+
+```mermaid
+flowchart TD
+    run["fn(conn)"] --> res{"resultado"}
     res -- ok --> rel["release: vuelve al canal"]
-    res -- "error no recuperable" --> rep["repair: Volver o Bootstrap"] --> rel
+    res -- "página de error del SIA" --> boot1["Bootstrap, sin reintentar<br/>→ 502 sia_error_page"] --> rel
+    res -- "otro error no recuperable" --> rep["repair: Volver o Bootstrap"] --> rel
     res -- "noop o región vieja" --> boot["Bootstrap (contexto propio,<br/>rebootstrapTimeout)"]
     boot --> retry["fn(conn) una vez más"]
     retry -- ok --> rel
@@ -669,34 +678,36 @@ un barrido periódico cubría. Levanta su **propio pool** y entra por el mismo
 `catalog.Service`, con `ServeStale` apagado: él sí quiere esperar el fetch. Reglas en
 [ARCH.md](ARCH.md#refresher).
 
+### Arranque
+
 ```mermaid
 flowchart TD
-    start["refresher --mode=…<br/>--scope, --campus opcionales"] --> en{"REFRESH_ENABLED"}
+    start["refresher<br/>--mode, --scope, --campus"] --> en{"REFRESH_ENABLED"}
     en -- false --> bye["exit 0, ni una conexión al SIA"]
-    en -- true --> st["store.New"]
-    st --> lock{"pg_try_advisory_lock<br/>'refresh:mode'"}
+    en -- true --> lock{"pg_try_advisory_lock<br/>'refresh:mode'"}
     lock -- "ocupado" --> skip["exit 0: ya hay una corrida"]
-    lock -- ok --> pool["sia.NewPool PROPIO<br/>aviso si api + job supera<br/>el límite del SIA"]
+    lock -- ok --> pool["sia.NewPool PROPIO<br/>aviso si api + job supera<br/>maxTotalConnections"]
     pool --> svc["catalog.NewService<br/>(ServeStale = false)"]
-    svc --> run["refresher.Run: StartRun en refresh_run"]
-    run --> mode{"modo"}
+    svc --> run["refresher.Run<br/>StartRun en refresh_run"]
+```
 
-    mode -- reference --> mr["Levels → Campuses → ProgramsInFaculty<br/>por cada sede y nivel"]
+### Barrido por modo
+
+```mermaid
+flowchart TD
+    mode{"modo"} -- reference --> mr["Levels → Campuses → ProgramsInFaculty<br/>por cada sede y nivel"]
     mode -- catalog --> mc["por programa con catálogo viejo:<br/>Service.Catalog"]
-    mode -- "detail --scope=global" --> md["CoursesNeedingDetail:<br/>detalle global viejo"]
-    mode -- "detail --scope=plan" --> mp["CoursesNeedingVisibility:<br/>visibilidad por plan"]
-    mode -- "seats --scope=hot" --> ms["SeatsHotSet: lo más pedido<br/>(course_demand)"]
-
-    md --> fd["RefreshDetails → FetchDetails:<br/>varias asignaturas por UNA conexión"]
+    mode -- "detail --scope=global" --> md["CoursesNeedingDetail"]
+    mode -- "detail --scope=plan" --> mp["CoursesNeedingVisibility"]
+    mode -- "seats --scope=hot" --> ms["SeatsHotSet<br/>(course_demand)"]
+    md --> fd["FetchDetails: varias asignaturas<br/>por UNA conexión"]
     mp --> fd
     ms --> fd
-
-    mc --> eg
-    fd --> eg["errgroup.SetLimit(workers)<br/>una goroutine por PROGRAMA<br/>+ limitador de POSTs/s"]
-    eg --> cb{"¿muchas fallas seguidas?"}
-    cb -- sí --> brk["circuit breaker: corta"]
-    cb -- no --> fin["FinishRun + Report"]
-    brk --> fin
+    mc --> eg["errgroup.SetLimit(workers)<br/>una goroutine por PROGRAMA"]
+    fd --> eg
+    eg --> cb{"¿circuit breaker?"}
+    cb -- sí --> brk["corta"] --> fin["FinishRun + Report"]
+    cb -- no --> fin
 ```
 
 El checkpoint son los **marcadores de frescura**, no un cursor. Reanudar es volver a

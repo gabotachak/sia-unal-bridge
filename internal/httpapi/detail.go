@@ -56,14 +56,9 @@ func (a *api) courseDetail(c *gin.Context) {
 		return
 	}
 
-	// ?background=1 also puts the fetch in the pool's background lane, so a
-	// catalog-wide seats sweep can never hold every SIA connection while a
-	// person waits for the page they actually opened (sia.Pool).
-	ctx := c.Request.Context()
-	if c.Query("background") == "1" {
-		ctx = catalog.WithBackground(ctx)
-	}
-	offering, res, err := a.svc.CourseDetail(ctx, program, code, maxAge)
+	// ?background=1 already put this request in the pool's background lane
+	// (laneByIP).
+	offering, res, err := a.svc.CourseDetail(c.Request.Context(), program, code, maxAge)
 	if err != nil {
 		writeError(c, err, "unknown_course")
 		return

@@ -46,7 +46,7 @@ func NewRouter(svc *catalog.Service, cooldown int, rateRPS float64, rateBurst, a
 	_ = r.SetTrustedProxies([]string{"127.0.0.1", "::1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"})
 	limiter := newRateLimiter(rate.Limit(rateRPS), rateBurst)
 	r.Use(gin.Recovery(), requestID(), requestLogger(), secureHeaders(), limiter.middleware(),
-		requestTimeout(time.Duration(acquireTimeoutSeconds)*time.Second))
+		requestTimeout(time.Duration(acquireTimeoutSeconds)*time.Second), laneByIP())
 
 	v1 := r.Group("/v1")
 	{

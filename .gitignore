@@ -6,9 +6,10 @@
 *.out
 vendor/
 
-# entorno
+# entorno: cualquier .env local, salvo la plantilla versionada
 .env
-.env.local
+.env.*
+!.env.example
 
 # datos de Postgres del bind mount local (PGDATA_DIR en .env, default ./.pgdata)
 /.pgdata/

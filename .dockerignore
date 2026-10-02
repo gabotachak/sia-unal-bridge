@@ -9,3 +9,13 @@ testdata/live/
 # root y el build moría con "permission denied" al mandar el contexto.
 .pgdata/
 pgdata/
+# La interfaz tiene su propio contexto (./web): acá solo sumaba node_modules
+# al contexto de la API.
+web/
+# Secretos locales: el build no los necesita y no deben quedar en una capa.
+.env
+.env.*
+# Tooling local y de CI, ajeno al binario.
+.github/
+.vscode/
+graphify-out/

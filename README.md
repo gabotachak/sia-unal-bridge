@@ -214,15 +214,33 @@ Default TTLs live in one place,
 Every response carries `Age`, `Cache-Control`, `X-Cache` and, on a miss,
 `X-SIA-Fetch-Ms`. Seat counts also carry `age_seconds` **in the body**: a seat count is
 never served without saying when it was taken. They also carry `changed_at`, the last
-time the number actually moved. Those are two different questions: measured, 347
-sections showed zero changes over 35 minutes, so history only grows when seats move,
-while freshness updates on every measurement.
+time the number actually moved. Those are two different questions: seats rarely move, so history only grows when they
+do, while freshness updates on every measurement.
 
 ## Architecture
 
-<div align="center">
-  <img src="docs/assets/architecture.svg" alt="Hexagonal architecture: httpapi as the driving port; Store (Postgres) and SIASource (ADF) as driven ports." width="860">
-</div>
+```mermaid
+flowchart LR
+    subgraph driving["Driving: who asks"]
+        http["httpapi<br/>gin, /v1"]
+        ref["refresher<br/>manual sweep"]
+    end
+    subgraph core["Domain: internal/catalog"]
+        svc["catalog.Service<br/>read-through, singleflight"]
+        ports{{"Ports<br/>Store<br/>SIASource"}}
+        svc --> ports
+    end
+    subgraph driven["Driven: who is asked"]
+        store["store<br/>pgx"]
+        sia["sia<br/>ADF session pool"]
+    end
+    http --> svc
+    ref --> svc
+    ports -. implements .- store
+    ports -. implements .- sia
+    store --> pg[("Postgres")]
+    sia --> adf[["SIA · Oracle ADF"]]
+```
 
 Hexagonal. Two driving ports (`httpapi` and the `Refresher`), two driven ports (`Store`
 over Postgres, `SIASource` over ADF). The domain imports neither gin, nor pgx, nor

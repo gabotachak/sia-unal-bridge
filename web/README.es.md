@@ -130,22 +130,20 @@ path SVG embebido.
 
 ## Mapa
 
-```
-src/
-├── main.tsx          punto de entrada: engancha React a index.html
-├── App.tsx           elige qué pantalla pintar
-├── api/
-│   ├── client.ts     ÚNICA puerta a la API; nadie más hace fetch
-│   └── types.ts      lo que devuelve la API, como tipos
-├── views/            una pantalla por archivo: elegir plan, catálogo, ficha,
-│                     mi semestre, mi horario, donar
-├── components/       piezas reutilizables (contador de cupos, calendario, tabla, …)
-├── hooks/            pedir datos, ordenar tablas, tema, ajuste al viewport, …
-├── state/            estado compartido: planes elegidos, materias apartadas,
-│                     filtros, navegación
-├── lib/              funciones puras: choques, exportar .ics, storage, formato;
-│                     las que tienen lógica llevan su *.test.ts al lado
-└── styles/           tokens.css es la identidad visual entera
+```mermaid
+mindmap
+  root((src/))
+    main["main.tsx<br/>punto de entrada: engancha React a index.html"]
+    app["App.tsx<br/>elige qué pantalla pintar"]
+    api["api/"]
+      client["client.ts<br/>ÚNICA puerta a la API;<br/>nadie más hace fetch"]
+      types["types.ts<br/>lo que devuelve la API, como tipos"]
+    views["views/<br/>una pantalla por archivo: elegir plan, catálogo,<br/>ficha, mi semestre, mi horario, donar"]
+    comp["components/<br/>piezas reutilizables: contador de cupos,<br/>calendario, tabla, …"]
+    hooks["hooks/<br/>pedir datos, ordenar tablas,<br/>tema, ajuste al viewport, …"]
+    state["state/<br/>estado compartido: planes elegidos,<br/>materias apartadas, filtros, navegación"]
+    lib["lib/<br/>funciones puras: choques, exportar .ics,<br/>storage, formato; *.test.ts al lado de las que tienen lógica"]
+    styles["styles/<br/>tokens.css es la identidad visual entera"]
 ```
 
 ## Más

@@ -30,15 +30,21 @@ misma respuesta.
 
 ## Hexágono
 
-```
-              driving                                driven
-   ┌──────────────────────┐                    ┌──────────────────┐
-   │ internal/httpapi     │──┐              ┌─>│ internal/store   │──> Postgres
-   └──────────────────────┘  │  ┌────────┐  │  └──────────────────┘
-                             ├─>│catalog │──┤
-   ┌──────────────────────┐  │  │Service │  │  ┌──────────────────┐
-   │ internal/refresher   │──┘  └────────┘  └─>│ internal/sia     │──> SIA (ADF)
-   └──────────────────────┘                    └──────────────────┘
+```mermaid
+flowchart LR
+    subgraph driving["driving"]
+        http["internal/httpapi"]
+        ref["internal/refresher"]
+    end
+    svc["catalog.Service"]
+    subgraph driven["driven"]
+        store["internal/store"]
+        sia["internal/sia"]
+    end
+    http --> svc
+    ref --> svc
+    svc --> store --> pg[("Postgres")]
+    svc --> sia --> adf[["SIA (ADF)"]]
 ```
 
 | Paquete | Rol | Responsabilidad |
@@ -84,9 +90,10 @@ Lo activa `Service.ServeStale`, que `cmd/bridge` enciende. El `Refresher` lo dej
 
 ### Dos caches con granularidad distinta
 
-```
-catálogo   → por PROGRAMA     1 POST trae todo el plan      casi inmutable
-detalle    → por ASIGNATURA   1 POST trae 1 asignatura      volátil (cupos)
+```mermaid
+flowchart LR
+    cat["Catálogo<br/>por PROGRAMA"] -- "1 POST" --> catr["el plan entero<br/>casi inmutable"]
+    det["Detalle<br/>por ASIGNATURA"] -- "1 POST" --> detr["1 asignatura<br/>volátil: cupos"]
 ```
 
 - Un miss de catálogo llena el plan entero. El catálogo de un plan son **dos** consultas:

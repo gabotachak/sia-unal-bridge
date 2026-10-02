@@ -286,47 +286,28 @@ grises nunca llaman al SIA: leen solo Postgres.
 
 ```mermaid
 flowchart LR
-    subgraph rutas["/v1"]
-        r0["/healthz /status /version<br/>/openapi.yaml /docs"]
-        r1["/levels"]
-        r2["/campuses"]
-        r3["/campuses/:campus/faculties"]
-        r4["/campuses/:campus/programs"]
-        r5["…/programs/:program"]
-        r6["…/programs/:program/courses"]
-        r7["…/courses/:code"]
-        r8["…/courses/:code/sections<br/>…/sections/:key"]
-        r9["…/sections/:key/seats"]
-        r10["/campuses/:campus/courses?q="]
-        r11["/campuses/:campus/courses/:code"]
+    subgraph sc["Atajos: solo Postgres"]
+        r10["/campuses/:campus/courses?q="] --> s10["SearchCourses"]
+        r11["/campuses/:campus/courses/:code"] --> s11["ProgramsOfferingCourse"]
     end
-
-    subgraph svc["catalog.Service"]
-        s1["Levels"]
-        s2["Campuses"]
-        s3["Faculties"]
-        s4["ProgramsInFaculty"]
-        s5["ResolveProgram"]
-        s6["Catalog (+ Schedules)"]
-        s7["CourseDetail"]
-        s9["SectionSeats"]
-        s10["SearchCourses"]
-        s11["ProgramsOfferingCourse"]
-        sh["SIAHealth, LastRuns"]
+    subgraph det["Detalle: un solo POST al SIA"]
+        r7["…/courses/:code"] --> s7["ResolveProgram → CourseDetail"]
+        r8["…/courses/:code/sections<br/>…/sections/:key"] --> s7
+        r9["…/sections/:key/seats"] --> s9["ResolveProgram → SectionSeats"]
     end
-
-    r0 --> sh
-    r1 --> s1
-    r2 --> s2
-    r3 --> s3
-    r4 --> s4
-    r5 --> s5
-    r6 --> s5 --> s6
-    r7 --> s7
-    r8 --> s7
-    r9 --> s9
-    r10 --> s10
-    r11 --> s11
+    subgraph prog["Programa y catálogo"]
+        r5["…/programs/:program"] --> s5["ResolveProgram"]
+        r6["…/programs/:program/courses"] --> s5b["ResolveProgram"] --> s6["Catalog (+ Schedules)"]
+    end
+    subgraph ref["Referencia"]
+        r1["/levels"] --> s1["Levels"]
+        r2["/campuses"] --> s2["Campuses"]
+        r3["/campuses/:campus/faculties"] --> s3["Faculties"]
+        r4["/campuses/:campus/programs"] --> s4["ProgramsInFaculty"]
+    end
+    subgraph op["Operación"]
+        r0["/healthz /status /version<br/>/openapi.yaml /docs"] --> sh["SIAHealth, LastRuns"]
+    end
 
     classDef storeOnly fill:#eee,stroke:#999,color:#333
     class r10,r11,s10,s11 storeOnly
@@ -688,7 +669,7 @@ un barrido periódico cubría. Levanta su **propio pool** y entra por el mismo
 
 ```mermaid
 flowchart TD
-    start["refresher --mode=... [--scope] [--campus]"] --> en{"REFRESH_ENABLED"}
+    start["refresher --mode=…<br/>--scope, --campus opcionales"] --> en{"REFRESH_ENABLED"}
     en -- false --> bye["exit 0, ni una conexión al SIA"]
     en -- true --> st["store.New"]
     st --> lock{"pg_try_advisory_lock<br/>'refresh:mode'"}

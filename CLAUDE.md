@@ -109,9 +109,10 @@ detrás. El detalle y los cupos no: ahí se espera.
 
 Dos caches con granularidad distinta — esto es lo que más se malentiende:
 
-```
-catálogo   → por PROGRAMA    1 POST trae el plan entero    casi inmutable
-detalle    → por ASIGNATURA  1 POST trae 1 asignatura      volátil (cupos)
+```mermaid
+flowchart LR
+    cat["Catálogo<br/>por PROGRAMA"] -- "1 POST" --> catr["el plan entero<br/>casi inmutable"]
+    det["Detalle<br/>por ASIGNATURA"] -- "1 POST" --> detr["1 asignatura<br/>volátil: cupos"]
 ```
 
 Ese POST de catálogo trae **todas menos las de libre elección** (`soc4=0` significa eso

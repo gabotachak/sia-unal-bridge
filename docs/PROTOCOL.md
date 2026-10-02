@@ -20,11 +20,12 @@ https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf
 ADF guarda el estado de la vista **en el servidor** (`STATE_SAVING_METHOD=server`).
 El `javax.faces.ViewState` que viaja en cada POST no es el estado: es un **puntero**.
 
-```
-Cookie PortalJSESSION  →  sesión WebLogic
-                            └─ mapa de vistas
-                                 └─ "!8hb1r2yc0" → { opciones de cada dropdown,
-                                                     fila seleccionada, región activa }
+```mermaid
+flowchart LR
+    cookie["Cookie PortalJSESSION"] --> ses["sesión WebLogic"]
+    ses --> mapa["mapa de vistas"]
+    vs["ViewState !8hb1r2yc0"] --> estado
+    mapa --> estado["estado de la vista:<br/>opciones de cada dropdown,<br/>fila seleccionada, región activa"]
 ```
 
 Consecuencias:
@@ -224,9 +225,13 @@ la posición ([GOTCHAS §4](GOTCHAS.md)).
 
 ## 7. Las dos regiones y el botón Volver
 
-```
-pt1:r1:0     buscador + tabla de resultados   ← operan cb1 y los cl2
-pt1:r1:<N>   detalle de una asignatura        ← opera cb4 (Volver)
+```mermaid
+stateDiagram-v2
+    direction LR
+    Buscador: pt1:r1:0 · buscador + tabla<br/>operan cb1 y los cl2
+    Detalle: pt1:r1:N · detalle de una asignatura<br/>opera cb4 (Volver)
+    Buscador --> Detalle: click cl2 en una fila
+    Detalle --> Buscador: Volver pt1:r1:N:cb4
 ```
 
 Tras abrir un detalle, la sesión queda en la región de detalle. **Cualquier** acción de la
@@ -235,8 +240,9 @@ región 0 (otra búsqueda, otro detalle) es un no-op hasta salir con Volver
 
 ### `<N>` no es 1: crece con cada detalle
 
-```
-1.er detalle → pt1:r1:1     2.º detalle → pt1:r1:2     98.º detalle → pt1:r1:98
+```mermaid
+flowchart LR
+    d1["1.er detalle<br/>pt1:r1:1"] --> d2["2.º detalle<br/>pt1:r1:2"] --> dn["…"] --> d98["98.º detalle<br/>pt1:r1:98"]
 ```
 
 Con `pt1:r1:1:cb4` fijo, el segundo Volver es un no-op y todo lo posterior también, así

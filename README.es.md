@@ -194,15 +194,33 @@ y de ahí salen los de [`docs/API.md`](docs/API.md).
 Cada respuesta lleva `Age`, `Cache-Control`, `X-Cache` y, en un miss, `X-SIA-Fetch-Ms`.
 Los cupos además llevan `age_seconds` **en el body**: nunca se sirve un cupo sin decir de
 cuándo es — y `changed_at`, que es cuándo el número cambió por última vez. Son dos
-preguntas distintas: medido, 0 cambios en 347 grupos a lo largo de 35 min, así que el
-historial solo crece cuando el cupo se mueve mientras la frescura se actualiza en cada
-medición.
+preguntas distintas: los cupos casi nunca se mueven, así que el historial solo crece
+cuando cambian, mientras la frescura se actualiza en cada medición.
 
 ## Arquitectura
 
-<div align="center">
-  <img src="docs/assets/architecture.svg" alt="Arquitectura hexagonal: httpapi como puerto driving; Store (Postgres) y SIASource (ADF) como puertos driven." width="860">
-</div>
+```mermaid
+flowchart LR
+    subgraph driving["Driving: quién pide"]
+        http["httpapi<br/>gin, /v1"]
+        ref["refresher<br/>barrido manual"]
+    end
+    subgraph core["Dominio: internal/catalog"]
+        svc["catalog.Service<br/>read-through, singleflight"]
+        ports{{"Puertos<br/>Store<br/>SIASource"}}
+        svc --> ports
+    end
+    subgraph driven["Driven: a quién se le pide"]
+        store["store<br/>pgx"]
+        sia["sia<br/>pool de sesiones ADF"]
+    end
+    http --> svc
+    ref --> svc
+    ports -. implementa .- store
+    ports -. implementa .- sia
+    store --> pg[("Postgres")]
+    sia --> adf[["SIA · Oracle ADF"]]
+```
 
 Hexagonal. Dos puertos driving (`httpapi` y el `Refresher`), dos driven (`Store` sobre
 Postgres, `SIASource` sobre ADF). El dominio no importa gin, ni pgx, ni goquery — y el

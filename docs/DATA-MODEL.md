@@ -5,16 +5,23 @@ structs están en `internal/catalog`. Este documento no los transcribe: explica 
 decisiones que no son obvias leyendo el DDL. Cada una sale de algo verificado contra el
 servidor ([GOTCHAS.md](GOTCHAS.md)).
 
+```mermaid
+flowchart LR
+    level --- campus
+    level --- program
+    program --- cp["course_program<br/>tipología por plan"] --- course
+    program --- sp["section_program<br/>visibilidad"] --- section
+    section --- class_session
+    section --- seat["seat_snapshot<br/>historial de cupos"]
 ```
-level ── campus
-level ── program ─┬─ course_program ── course          (tipología por plan)
-                  └─ section_program ── section ─┬─ class_session
-                                                  └─ seat_snapshot   (historial de cupos)
 
-reference_fetch   sello de TTL de cada lista de referencia
-course_demand     cuántas veces pidió un cliente cada asignatura
-refresh_run       bitácora del Refresher
-```
+Tablas de apoyo, sin relaciones de dominio:
+
+| Tabla | Qué guarda |
+|---|---|
+| `reference_fetch` | el sello de TTL de cada lista de referencia |
+| `course_demand` | cuántas veces pidió un cliente cada asignatura |
+| `refresh_run` | la bitácora del `Refresher` |
 
 El diagrama entidad-relación con las columnas clave está en
 [diagram.md](diagram.md#19-modelo-de-datos).
@@ -84,9 +91,11 @@ eso un plan nuevo paga el POST.
 otra sin error ([GOTCHAS §26](GOTCHAS.md)). Cada etiqueta trae el código delante, y ese sí
 es estable:
 
-```
-1101 SEDE BOGOTÁ      2055 FACULTAD DE INGENIERÍA      2A74 INGENIERÍA DE SIST...
-└──┘                  └──┘                             └──┘
+```mermaid
+flowchart LR
+    l1["1101 SEDE BOGOTÁ"] --> c1["código: 1101"]
+    l2["2055 FACULTAD DE INGENIERÍA"] --> c2["código: 2055"]
+    l3["2A74 INGENIERÍA DE SIST..."] --> c3["código: 2A74"]
 ```
 
 | Entidad | Identidad |

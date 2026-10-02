@@ -193,12 +193,12 @@ El orden engaña: `it10` no es el nombre.
 
 El formato `0-2-8-3` que usaba el proyecto anterior es simplemente:
 
-```
-soc1 - soc9 - soc2 - soc3
- │      │      │      └── carrera   (3 = Ing. Sistemas y Computación)
- │      │      └───────── facultad  (8 = Ingeniería)
- │      └──────────────── sede      (2 = Bogotá)
- └─────────────────────── nivel     (0 = Pregrado)
+```mermaid
+flowchart LR
+    id["0-2-8-3"] --> a["soc1 · nivel<br/>0 = Pregrado"]
+    id --> b["soc9 · sede<br/>2 = Bogotá"]
+    id --> c["soc2 · facultad<br/>8 = Ingeniería"]
+    id --> d["soc3 · carrera<br/>3 = Ing. Sistemas y Computación"]
 ```
 
 Son **índices posicionales** dentro de cada dropdown, no códigos institucionales.

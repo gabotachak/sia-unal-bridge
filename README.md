@@ -313,6 +313,7 @@ The rest of the documentation is in **Spanish**.
 |---|---|
 | [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **The verified traps. Read it before touching the code.** |
 | [`docs/ARCH.md`](docs/ARCH.md) | Ports, read-through, session pool, concurrency |
+| [`docs/diagram.md`](docs/diagram.md) | The whole project in Mermaid diagrams: hexagon, request flows, pool, Refresher, schema |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Postgres schema and the nine non-obvious decisions |
 | [`docs/LAYOUT.md`](docs/LAYOUT.md) | Go package tree and what lives in each package |
 | [`docs/COMMIT-CONVENTION.md`](docs/COMMIT-CONVENTION.md) | Commit format: `semantic-release` reads it |

@@ -291,6 +291,7 @@ plausibles y equivocados.
 |---|---|
 | [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **Las trampas verificadas. Léelo antes de tocar el código.** |
 | [`docs/ARCH.md`](docs/ARCH.md) | Puertos, read-through, pool de sesiones, concurrencia |
+| [`docs/diagram.md`](docs/diagram.md) | Todo el proyecto en diagramas Mermaid: hexágono, flujos, pool, Refresher, esquema |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Esquema Postgres y las nueve decisiones no obvias |
 | [`docs/LAYOUT.md`](docs/LAYOUT.md) | Árbol de paquetes Go y qué vive en cada uno |
 | [`docs/COMMIT-CONVENTION.md`](docs/COMMIT-CONVENTION.md) | Formato de commits — `semantic-release` lo lee |

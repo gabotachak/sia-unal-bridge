@@ -75,6 +75,7 @@ niveles que la API nunca había recorrido, y §40, encontrada en vivo el 2026-08
 | `docs/FASE-2.md` | **La fase 2: el Job, su concurrencia, su cadencia y lo medido al implementarla** |
 | `docs/internal/FABLE-IMPROVEMENTS.md` | Diagnóstico del 2026-09-20 (pool envenenado, tormenta de mediciones), qué se corrigió y qué queda |
 | `docs/ARCH.md` | Arquitectura: puertos, read-through, pool de sesiones, concurrencia |
+| `docs/diagram.md` | Diagramas Mermaid de todo el proyecto: hexágono, flujos de cada petición, pool, Refresher, esquema |
 | `docs/API.md` | Contrato HTTP: endpoints, IDs públicos, frescura, errores |
 | `docs/LAYOUT.md` | Árbol de paquetes Go: qué vive en cada uno y por qué |
 | `docs/PROTOCOL.md` | Handshake ADF completo con cuerpos de petición reales |

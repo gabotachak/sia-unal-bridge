@@ -176,11 +176,13 @@ func (s *Store) Course(ctx context.Context, campusCode, code string) (catalog.Co
 // SearchCourses serves /v1/campuses/{campus}/courses?q= from the Store only
 // — it never triggers a SIA fetch (docs/API.md "Por qué la búsqueda global
 // no dispara al SIA"). An empty campusCode searches every cached campus.
+// Matching ignores accents both ways (f_unaccent, migration 00005): students
+// type "calculo" and the SIA writes "Cálculo".
 func (s *Store) SearchCourses(ctx context.Context, campusCode, q string) ([]catalog.Course, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT campus_code, code, name, credits, description, fetched_at
 		FROM course
-		WHERE name ILIKE '%' || $2 || '%' AND ($1 = '' OR campus_code = $1)
+		WHERE f_unaccent(name) ILIKE '%' || f_unaccent($2) || '%' AND ($1 = '' OR campus_code = $1)
 		  AND EXISTS (SELECT 1 FROM course_program cp
 		              WHERE cp.campus_code = course.campus_code AND cp.code = course.code
 		                AND cp.disabled_at IS NULL)

@@ -363,3 +363,33 @@ func TestProgramCourses_AccentedNamesSortAlphabetically(t *testing.T) {
 		t.Fatalf("got %v, want %v", names, want)
 	}
 }
+
+func TestSearchCourses_IgnoresAccents(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	resetProgram(t, s, "9993", "F1", "BUSCA")
+	t.Cleanup(func() { resetProgram(t, s, "9993", "F1", "BUSCA") })
+
+	p, err := s.UpsertProgram(ctx, catalog.Program{
+		CampusCode: "9993", FacultyCode: "F1", Code: "BUSCA", LevelSlug: "pregrado", Name: "Plan",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertCatalog(ctx, p, []catalog.CourseOffering{
+		{Course: catalog.Course{CampusCode: "9993", Code: "BUS-1", Name: "Cálculo diferencial", Credits: 4}},
+		{Course: catalog.Course{CampusCode: "9993", Code: "BUS-2", Name: "Programación de computadores", Credits: 3}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	for q, want := range map[string]string{"calculo": "BUS-1", "CÁLCULO": "BUS-1", "programacion": "BUS-2"} {
+		got, err := s.SearchCourses(ctx, "9993", q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0].Code != want {
+			t.Errorf("q=%q: got %v, want %s", q, got, want)
+		}
+	}
+}

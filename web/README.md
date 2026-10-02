@@ -129,20 +129,22 @@ path.
 
 ## Map
 
-```mermaid
-mindmap
-  root((src/))
-    main["main.tsx<br/>entry point: mounts React on index.html"]
-    app["App.tsx<br/>picks the screen to render"]
-    api["api/"]
-      client["client.ts<br/>the ONLY door to the API;<br/>nobody else calls fetch"]
-      types["types.ts<br/>what the API returns, as types"]
-    views["views/<br/>one screen per file: plan picker, catalog,<br/>course, my semester, my timetable, donate"]
-    comp["components/<br/>reusable pieces: seat counter,<br/>week calendar, table, …"]
-    hooks["hooks/<br/>data fetching, table sorting,<br/>theme, viewport fitting, …"]
-    state["state/<br/>shared state: chosen programs,<br/>selected courses, filters, navigation"]
-    lib["lib/<br/>pure functions: clash detection, .ics export,<br/>storage, formatting; *.test.ts beside the ones with logic"]
-    styles["styles/<br/>tokens.css is the entire visual identity"]
+```
+src/
+├── main.tsx          entry point: mounts React on index.html
+├── App.tsx           picks the screen to render
+├── api/
+│   ├── client.ts     the ONLY door to the API; nobody else calls fetch
+│   └── types.ts      what the API returns, as types
+├── views/            one screen per file: plan picker, catalog, course,
+│                     my semester, my timetable, donate
+├── components/       reusable pieces (seat counter, week calendar, table, …)
+├── hooks/            data fetching, table sorting, theme, viewport fitting, …
+├── state/            shared state: chosen programs, selected courses,
+│                     filters, navigation
+├── lib/              pure functions: clash detection, .ics export, storage,
+│                     formatting; the ones with logic have *.test.ts beside them
+└── styles/           tokens.css is the entire visual identity
 ```
 
 ## More

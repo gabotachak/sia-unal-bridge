@@ -73,7 +73,7 @@ type SIASource interface {
 	// Description come from the detail header, not the listing.
 	//
 	// ref.Name is optional and only an optimisation: with it the listing is
-	// narrowed through it11 (241 KB → 15–27 KB, docs/FASE-2.md paso 3), and a
+	// narrowed through it11 (much smaller response, docs/CONSTANTS.md), and a
 	// name that no longer matches falls back to the full listing.
 	FetchDetail(ctx context.Context, key ProgramKey, ref CourseRef, term string) (CourseOffering, error)
 
@@ -145,7 +145,7 @@ type Store interface {
 	// CoursesNeedingDetail returns the program's courses whose GLOBAL detail
 	// (max(section.fetched_at) for the course, valid for every plan) is
 	// missing or older than maxAge. It is the filter that makes the global
-	// sweep cost ~3 h instead of ~38 (docs/FASE-2.md).
+	// sweep skip what any plan already fetched.
 	CoursesNeedingDetail(ctx context.Context, programID int64, maxAge time.Duration) ([]CourseRef, error)
 
 	// CoursesNeedingVisibility is the per-plan variant: courses whose

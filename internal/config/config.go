@@ -54,9 +54,9 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("FETCH_COOLDOWN: must be >= 0, got %d", cooldown)
 	}
 
-	// 60/80, what production has run since August. The old 5/20 was sized to
+	// The production defaults (.env.example). A much smaller bucket was sized to
 	// shield the SIA pool from one client; the pool now shields itself (queue
-	// with a deadline, background lane capped at half), and 5 rps per IP was
+	// with a deadline, background lane capped at half), and a small bucket per IP was
 	// a campus-wide limit in practice — a whole campus leaves through a
 	// handful of NAT addresses. The bucket is now only a brake on abuse.
 	rateRPS, err := strconv.ParseFloat(getenv("RATE_LIMIT_RPS", "60"), 64)
@@ -104,9 +104,9 @@ func Load() (Config, error) {
 // separately so a typo in a REFRESH_* variable can never keep the API from
 // starting — the two processes share a database and an .env, not a lifecycle.
 //
-// The invariant that is not negotiable (docs/FASE-2.md): the API's pool plus
-// the job's pool must stay ≤ 8, the measured ceiling of concurrent SIA
-// sessions. SIA_POOL_SIZE is the API's and is never shared.
+// The invariant that is not negotiable: the API's pool plus the job's pool
+// must stay within the measured limit of concurrent SIA sessions
+// (docs/CONSTANTS.md). SIA_POOL_SIZE is the API's and is never shared.
 type Refresh struct {
 	Enabled       bool
 	Workers       int

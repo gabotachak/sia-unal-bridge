@@ -7,13 +7,12 @@ import (
 )
 
 // TestDomainHasNoInfraImports guards the hexagon: internal/catalog must stay
-// free of infrastructure. See docs/LAYOUT.md "La invariante que sostiene el
-// hexágono".
+// free of infrastructure. See docs/ARCH.md "La invariante".
 //
 // internal/refresher is checked here too (fase 2): it is a driving adapter,
 // so it may depend on the domain and on nothing else — the moment it imports
 // sia or store it stops entering through the use cases and becomes a second
-// path into Postgres, which is exactly what docs/FASE-2.md forbids.
+// path into Postgres, which is exactly what docs/ARCH.md forbids.
 func TestDomainHasNoInfraImports(t *testing.T) {
 	forbidden := []string{"gin-gonic", "jackc/pgx", "PuerkitoBio/goquery", "encoding/xml"}
 	for _, pkg := range []string{"./...", "../refresher/..."} {

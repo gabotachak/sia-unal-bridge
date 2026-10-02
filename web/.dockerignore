@@ -1,3 +1,14 @@
 node_modules/
 dist/
 .git/
+# Vite carga los .env* de este directorio: uno local se hornearía en el bundle de
+# producción. El build de Docker solo usa los build args de docker-compose.yml.
+.env*
+*.local
+# Ajeno al build.
+*.md
+*.log
+.vscode/
+.idea/
+.DS_Store
+coverage/

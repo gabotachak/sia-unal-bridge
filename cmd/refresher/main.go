@@ -5,7 +5,8 @@
 // Its own pool, not the API's: a detail sweep occupies its connections for
 // hours, and sharing would make every real user request compete with it and
 // come back 503 busy — the error docs/API.md reserves for spikes, served for
-// nine hours straight. The invariant is conexiones(api) + conexiones(job) ≤ 80.
+// the whole sweep. The invariant is SIA_POOL_SIZE + REFRESH_POOL_SIZE ≤
+// maxTotalConnections.
 package main
 
 import (
@@ -105,7 +106,7 @@ func main() {
 		slog.Error("sia pool", "err", err)
 		os.Exit(1)
 	}
-	// Same reason as cmd/bridge: the session dies after ~4.2 min idle, and a
+	// Same reason as cmd/bridge: the session dies after SIA_SESSION_IDLE_TIMEOUT, and a
 	// sweep has gaps — long transactions, waits on the rate limiter.
 	go pool.Keepalive(ctx)
 
@@ -124,11 +125,10 @@ func main() {
 	}
 }
 
-// maxTotalConnections is the measured optimum: 80 concurrent SIA sessions
-// run clean — no errors, no throttling, flat p50 latency — and 88 already
-// shows ~4.5% failures (docs/OPEN-QUESTIONS.md §5). It is the real edge of
-// the server, shared between the two processes, which is why crossing it is
-// a warning here and not a silent success.
+// maxTotalConnections is the measured limit of concurrent SIA sessions
+// (docs/CONSTANTS.md). It is the real edge of the server, shared between
+// the two processes, which is why crossing it is a warning here and not a
+// silent success.
 const maxTotalConnections = 80
 
 func pick(flagVal, cfgVal int) int {

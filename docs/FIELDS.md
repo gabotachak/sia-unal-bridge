@@ -146,7 +146,7 @@ código solo tampoco identifica. Ver [GOTCHAS.md §26](GOTCHAS.md).
 
 ### Censo completo de los dropdowns (2026-08-15)
 
-Recorriendo `soc1 × soc9 × soc2 × soc3`: **142 POSTs, 78 s, 1380 entradas de programa**.
+Recorriendo `soc1 × soc9 × soc2 × soc3` (costo en [CONSTANTS.md](CONSTANTS.md)):
 
 | Nivel | Facultades | Entradas de programa |
 |---|---|---|
@@ -185,7 +185,7 @@ necesitan una búsqueda por facultad y la unión de los resultados
 El orden engaña: `it10` no es el nombre.
 
 `it11` filtra en el servidor, substring e insensible a acentos (`calculo` encuentra
-`Cálculo`). Baja el payload de 241 KB a 15–27 KB. No reemplaza la carrera.
+`Cálculo`). Baja el payload de `SIA_LISTING_BYTES` a `SIA_LISTING_IT11_BYTES`. No reemplaza la carrera.
 
 ---
 
@@ -193,12 +193,12 @@ El orden engaña: `it10` no es el nombre.
 
 El formato `0-2-8-3` que usaba el proyecto anterior es simplemente:
 
-```
-soc1 - soc9 - soc2 - soc3
- │      │      │      └── carrera   (3 = Ing. Sistemas y Computación)
- │      │      └───────── facultad  (8 = Ingeniería)
- │      └──────────────── sede      (2 = Bogotá)
- └─────────────────────── nivel     (0 = Pregrado)
+```mermaid
+flowchart LR
+    id["0-2-8-3"] --> a["soc1 · nivel<br/>0 = Pregrado"]
+    id --> b["soc9 · sede<br/>2 = Bogotá"]
+    id --> c["soc2 · facultad<br/>8 = Ingeniería"]
+    id --> d["soc3 · carrera<br/>3 = Ing. Sistemas y Computación"]
 ```
 
 Son **índices posicionales** dentro de cada dropdown, no códigos institucionales.
@@ -296,5 +296,5 @@ Tipos de prerrequisito, según explica la propia página:
 | `E` | lo matricula en simultáneo, o lo ha matriculado alguna vez |
 | `A` | anulación por incompatibilidad |
 
-Ninguno de los dos bloques está en `DATA-MODEL.md`. Llegan en el mismo POST del detalle:
+Ninguno de los dos bloques se guarda. Llegan en el mismo POST del detalle:
 modelarlos no cuesta red, solo parser.

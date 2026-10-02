@@ -14,7 +14,7 @@ const KEY = 'tablero.semestre.v2';
  *  son dos cosas con vidas distintas —el plan se elige una vez, la lista
  *  cambia todo el tiempo— y guardarlas juntas obligaría a reescribir el plan
  *  en cada agregado. Se sigue LEYENDO —es el seguro de rollback de la
- *  doble titulación, ver PLAN-DOUBLE-TITULATION.md— pero ya no se escribe. */
+ *  doble titulación— pero ya no se escribe. */
 const PICK_KEY = 'tablero.plan.v1';
 
 /** v2: varios planes, en orden de elección (doble titulación). Mientras
@@ -68,7 +68,7 @@ export function loadPlan(): PlanItem[] {
         typeof x.campus === 'string' &&
         typeof x.program === 'string',
     );
-    // Cinturón de la invariante (PLAN-DOUBLE-TITULATION.md): una materia, una
+    // Cinturón de la invariante de la doble titulación: una materia, una
     // sola fila, aunque hayan quedado dos `code` iguales guardados a mano o
     // por una versión futura. No debería disparar nunca — `add()` ya lo
     // impide en origen.
@@ -99,7 +99,7 @@ export function savePlan(items: PlanItem[]): void {
 /**
  * Agregar una materia al semestre, con las dos reglas que no dependen de
  * React: el tope de materias, y la invariante de la doble titulación — una
- * asignatura, un plan (D7, PLAN-DOUBLE-TITULATION.md). Rechaza por `code`,
+ * asignatura, un plan. Rechaza por `code`,
  * NO por `itemId`: comparar por `itemId` dejaría entrar la misma asignatura
  * una vez por cada plan, que es justo lo que hay que impedir.
  *
@@ -204,8 +204,8 @@ export function loadSelection(): Selection | null {
 }
 
 /**
- * Los planes elegidos, en orden de elección (doble titulación:
- * PLAN-DOUBLE-TITULATION.md). Reglas, en este orden:
+ * Los planes elegidos, en orden de elección (uno, o dos con doble
+ * titulación). Reglas, en este orden:
  *
  *  1. Si la clave v2 EXISTE, manda ella sola — sin mirar la v1, aunque
  *     termine vacía tras validar. Cada plan se valida campo por campo.

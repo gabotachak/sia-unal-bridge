@@ -231,7 +231,7 @@ func TestReconcile_CourseProgram(t *testing.T) {
 }
 
 // TestReconcile_SectionProgram_DoesNotLeakAcrossPrograms is the regression
-// this whole plan exists to prevent (docs/PLAN-SIACHANGES.md Parte E.6):
+// reconciliation must never cause (docs/DATA-MODEL.md, decisión 10):
 // two programs seeing the SAME course with a DIFFERENT number of groups
 // (DATA-MODEL.md §2, 25 vs 23). Refreshing the small plan's detail must
 // disable ONLY its own section_program rows, never the big plan's.

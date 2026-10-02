@@ -79,8 +79,7 @@ type SIAConn struct {
 
 	// Traffic counters, atomic because Pool.Stats reads them from another
 	// goroutine while this connection is checked out. They make the sweep's
-	// bandwidth visible: "18.8 MB/min por worker" is a number this project
-	// has to keep an eye on (docs/FASE-2.md "Riesgos").
+	// bandwidth visible in refresh_run and /v1/status.
 	posts, bytes atomic.Int64
 
 	LastUsed time.Time
@@ -233,7 +232,7 @@ func (c *SIAConn) DebugRawCB1(ctx context.Context) ([]byte, error) {
 // mistaken for a live one — the bug that let a whole pool sit dead, answering
 // sia_noop to every request until the process restarted.
 //
-// An un-parked connection is pinged too: the ~4.2min idle timeout is the
+// An un-parked connection is pinged too: SIA_SESSION_IDLE_TIMEOUT is the
 // session's, not the cascade's, so a connection that only ever served
 // dropdown reads dies just the same. GOTCHAS §7.
 func (c *SIAConn) Ping(ctx context.Context) error {

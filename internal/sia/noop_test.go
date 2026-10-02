@@ -15,7 +15,7 @@ func TestIsNoop_RealListingIsNotNoop(t *testing.T) {
 }
 
 // The mute-expiry fixture is synthetic (never naturally reproduced — see
-// docs/OPEN-QUESTIONS.md §3); the explicit one below is a REAL capture.
+// docs/GOTCHAS.md §7); the explicit one below is a REAL capture.
 func TestIsNoop_SessionExpiredMute(t *testing.T) {
 	if !isNoop(fixture(t, "noop_session_expired_mute_SYNTHETIC.xml")) {
 		t.Error("mute expiry response must be detected as noop")

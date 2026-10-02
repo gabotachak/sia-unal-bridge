@@ -40,9 +40,8 @@ psql "postgres://sia:sia@localhost:${DB_PORT:-15432}/sia_bridge"
 
 `TEST_DATABASE_URL` apunta a `sia_bridge_test`, no a `sia_bridge`. No es una
 formalidad: los tests de `internal/store` y `cmd/refresher` **escriben de verdad** —es el
-tradeoff elegido frente a testcontainers ([LAYOUT.md](LAYOUT.md))— y apuntar las dos a la
-misma base metió 28 planes de sedes inventadas (`999x`) dentro de producción, con
-`/v1/status` reportando 1408 planes donde el censo real son 1380.
+tradeoff elegido frente a testcontainers— y apuntar las dos a la misma base mete planes de
+sedes inventadas (`999x`) dentro de los datos reales.
 
 La crea `deploy/initdb/01-test-database.sql` en el primer arranque del contenedor `db`. Si
 la base ya existía, a mano:
@@ -114,9 +113,22 @@ docker compose --profile jobs run --rm refresher --mode=seats --scope=hot --work
 DATABASE_URL=... go run ./cmd/refresher --mode=catalog --campus=1104 --max-duration=10m
 ```
 
-`--campus` acota el barrido a una sede, que es la forma barata de probarlo: SEDE DE LA PAZ
-(9 planes) o Palmira (27) en vez de Bogotá (505). En producción ya no corre por cron: es
-una herramienta manual, y `REFRESH_ENABLED=false` la bloquea. Ver [FASE-2.md](FASE-2.md).
+`--campus` acota el barrido a una sede, que es la forma barata de probarlo: una sede chica
+como La Paz (`--campus=1104`) en vez de Bogotá. No corre por cron: es una herramienta
+manual, y `REFRESH_ENABLED=false` la bloquea. Modos y reglas en
+[ARCH.md](ARCH.md#refresher).
+
+---
+
+## Skills de agentes
+
+`skills-lock.json` fija las skills del proyecto (nombre, origen y hash), como un lockfile.
+El contenido instalado (`.claude/skills/`, `.agents/skills/`) no se versiona:
+
+```bash
+npx skills experimental_install        # restaura lo que fija el lock
+npx skills add <repo> --skill <nombre> --agent claude-code -y   # agrega una y actualiza el lock
+```
 
 ---
 
@@ -130,7 +142,7 @@ Abre `bruno/sia-catalogo/` y selecciona el entorno **SIA**. Corre las peticiones
 orden (01 → 06 para el catálogo, 01 → 13 para electivas). Cada una imprime en consola
 el número de filas y el rango de `_afrRK`.
 
-Si una devuelve ~900 B, la consola te avisa: falta un paso, estás en la región de
+Si una devuelve un no-op (`SIA_NOOP_BYTES`), la consola te avisa: falta un paso, estás en la región de
 detalle, o caducó la sesión.
 
 ### Con curl
@@ -143,7 +155,8 @@ curl -sS -o /dev/null -w '%{http_code} %{size_download}\n' \
   'https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf?taskflowId=task-flow-AC_CatalogoAsignaturas'
 ```
 
-Esperado: `200` y ~1 MB. Si son ~7000 bytes, tu UA parece de navegador — ver
+Esperado: `200` y la página completa (`SIA_BOOTSTRAP_COST`). Si llega
+`SIA_BROWSER_UA_BYTES`, tu UA parece de navegador — ver
 [GOTCHAS.md §1](GOTCHAS.md).
 
 Extraer el ViewState:
@@ -169,30 +182,21 @@ listado completo es un `ls`; lo que importa es la convención:
   en [GOTCHAS.md](GOTCHAS.md) y su test. Es el patrón de §40.
 - **No se borran las viejas.** Sirven para detectar cuándo el SIA cambió de forma.
 
-`.gitignore` excluye `/testdata/live/` y `*.har`: las capturas crudas pesan entre 50 KB
-y 1 MB, y lo que se commitea es la respuesta mínima que reproduce el caso.
+`.gitignore` excluye `/testdata/live/` y `*.har`: las capturas crudas pesan mucho, y lo
+que se commitea es la respuesta mínima que reproduce el caso.
 
 ---
 
 ## Cuidado con el servidor
 
-Es un catálogo público de una universidad, sin `robots.txt`. Aun así:
+Es el catálogo público de una universidad. Los costos de cada operación están en
+[CONSTANTS.md](CONSTANTS.md).
 
-- **Un bootstrap por sesión**, jamás por request. Cuesta entre 0.15 s/52 KB y 7 s/4.5 MB,
-  y no lo controlas ([GOTCHAS §25](GOTCHAS.md)).
-- Reutiliza la conexión: cambiar de carrera son 2 POSTs, no 6.
-- Usa `it11` cuando busques una asignatura concreta: medido 2026-08-17, 232 KB → 17.8 KB.
-  El `Refresher` lo hace en los dos listados, y **limpia el campo** al terminar: se queda
-  pegado en el formulario y recorta la siguiente búsqueda ([GOTCHAS §34](GOTCHAS.md)).
-- El crawl completo con detalle son **30-40 h** (una carrera de 98 asignaturas = 201
-  POSTs / 99 s / 31 MB). Ya es resumible: el `Refresher` usa los marcadores de frescura
-  como checkpoint. El SIA aguantó hasta 80 conexiones en paralelo sin errores ni
-  throttling (88 ya degrada, [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md) §5), así que se
-  puede paralelizar con moderación — respetando
-  `conexiones(api) + conexiones(refresher) ≤ 80`. Los valores por defecto se quedan
-  muy por debajo de eso; el tráfico real no lo pide.
-- `REFRESH_RATE_POSTS_PER_SEC` es el techo de POSTs/s del Job, y la ventana
-  nocturna es para el barrido pesado, no para los cupos.
+- **Un bootstrap por sesión**, jamás por petición.
+- Reutiliza la conexión: moverse dentro de la misma facultad es barato.
+- Usa `it11` para buscar una asignatura concreta, y **límpialo** al terminar: se queda en
+  el formulario y recorta la siguiente búsqueda ([GOTCHAS §34](GOTCHAS.md)).
+- Respeta `SIA_POOL_SIZE + REFRESH_POOL_SIZE ≤ maxTotalConnections`.
 
 Durante el desarrollo, trabaja contra fixtures y toca el servidor real solo para
 verificar.
@@ -201,14 +205,13 @@ verificar.
 
 ## Por dónde entrar al código
 
-Ya no hay nada que arrancar de cero, pero el orden en que se construyó sigue siendo el
-orden en que se entiende:
+Este orden es el que mejor se entiende:
 
 1. **Los parsers** (`internal/sia/parse_*.go`) — la parte con más trampas, y la única
    que se prueba entera sin red. Empezar por acá con `go test ./internal/sia/`.
 2. **`SIAConn`** (`conn.go`, `cascade.go`) — bootstrap, cascada, búsqueda, detalle,
-   Volver. Los campos de estado `parkedAt` y `detailRegion` son los que ahorran POSTs;
-   `detailRegion` es un entero, no un bool: sube con cada detalle (GOTCHAS §20).
+   Volver. Los campos de estado `ParkedAt` y `DetailRegion` son los que ahorran POSTs;
+   `DetailRegion` es un entero, no un bool: sube con cada detalle (GOTCHAS §20).
 3. **El pool** (`pool.go`) — el mutex envuelve la **operación lógica** (cascada+`cb1`,
    detalle+`Volver`), no el POST. Partirlo reproduce el §28: dos peticiones a la vez
    sobre una conexión devuelven `200 OK` con la respuesta del otro hilo.

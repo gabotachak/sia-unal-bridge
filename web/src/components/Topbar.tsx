@@ -39,7 +39,7 @@ export function Topbar() {
    *  el tema— y deja el onboarding tal como se ve la primera vez.
    *
    *  Es la ÚNICA forma de declararse doble titulación tarde o de cambiar de
-   *  plan (D4, PLAN-DOUBLE-TITULATION.md): no hay "agregar un segundo plan"
+   *  plan: los planes se eligen de una sola vez, y no hay "agregar un segundo plan"
    *  en caliente, así que este mismo botón sirve para las dos cosas.
    *
    *  Confirma siempre: es la única acción de la app que destruye datos y no

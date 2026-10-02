@@ -48,7 +48,7 @@ type ClassSession struct {
 }
 
 // SeatSnapshot is a seat count with the two timestamps that answer two
-// different questions (docs/FASE-2.md "Cupos"):
+// different questions (docs/DATA-MODEL.md, decisión 4):
 //
 //	MeasuredAt — cuándo se MIRÓ (section.seats_checked_at). Frescura,
 //	             age_seconds, Cache-Control. Se actualiza en cada medición.
@@ -80,7 +80,7 @@ type CourseSeats struct {
 }
 
 // Prerequisite and Component arrive free in the same detail POST but are not
-// persisted yet (fase 1 scope). See docs/PLAN.md "Lo que no se hace en fase 1".
+// persisted yet (docs/API.md "Fuera de alcance").
 type Prerequisite struct {
 	Condition int    `json:"condition"`
 	Type      string `json:"type"` // M, O, E, A

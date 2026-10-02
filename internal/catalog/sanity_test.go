@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Paso 5's acceptance bar (docs/FASE-2.md): a listing that hits the SIA's
+// A listing that hits the SIA's
 // 1000-row cap is a TRUNCATION, and it must abort instead of being written.
 // A crawler is a machine for multiplying a parsing bug by 135 000, so this
 // check lives in the Service — the job and the API take the same path.
@@ -85,7 +85,7 @@ func TestCatalogSanity_SuspectEmptyCatalog(t *testing.T) {
 }
 
 // TestCatalogSanity_ShrunkCatalog is A1/C3's other guard rail
-// (docs/PLAN-SIACHANGES.md, shrinkFloor): a catalog that shrinks below half
+// (docs/DATA-MODEL.md, decisión 10; shrinkFloor): a catalog that shrinks below half
 // its cached size looks like a truncated listing or a dirty soc4, never a
 // real semester-to-semester drop. 98→90 (above the floor) is accepted;
 // 98→5 (below it) is rejected the same way as the all-the-way-to-0 case.

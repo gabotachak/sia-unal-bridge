@@ -13,7 +13,7 @@ import (
 const liveBaseURL = "https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf"
 
 // TestLive_NameFilterShrinksTheListingAndDoesNotStick is paso 3's acceptance
-// bar (docs/FASE-2.md), the step that pays for fase 2:
+// bar, the optimisation that pays for the Refresher:
 //
 //  1. the it11 filter cuts the cb1 from ~241 KB to ~15–27 KB, and the row it
 //     is looking for is still there;

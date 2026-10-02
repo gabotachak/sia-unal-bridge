@@ -7,12 +7,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/time/rate"
+
+	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
 
 // rateLimiter is a per-IP token bucket. The SIA pool is the real bottleneck
-// (docs/OPEN-QUESTIONS.md §5: 8 concurrent sessions measured clean, never
-// more) — this exists so one client can't exhaust it before anyone else gets
-// a turn, not to police abuse in general.
+// — this exists so one client can't exhaust it before anyone else gets a
+// turn, not to police abuse in general. laneByIP below covers what a token
+// bucket cannot see: how long each request holds a connection.
 type rateLimiter struct {
 	mu       sync.Mutex
 	visitors map[string]*visitor
@@ -78,6 +80,50 @@ func (rl *rateLimiter) middleware() gin.HandlerFunc {
 				"message": "too many requests",
 			})
 			return
+		}
+		c.Next()
+	}
+}
+
+// foregroundPerIP is how many requests one IP may have in flight before the
+// rest of its requests go to the pool's background lane. A person never has
+// more than a few pages loading at once; the web's bulk seat measurement
+// already says ?background=1.
+const foregroundPerIP = 4
+
+// laneByIP keeps one client from holding every SIA connection. The token
+// bucket above counts requests, not how long each one holds a connection: a
+// cache hit and a 10 s SIA miss cost the same token. So a client asking for
+// many distinct cold courses could fill the pool and leave everyone else
+// with 503 busy.
+//
+// It demotes instead of rejecting: past the cap a request still runs, but in
+// the background lane, which sia.Pool caps at half the pool. A whole campus
+// behind one NAT address still gets served; it just cannot take the other
+// half from everyone else.
+func laneByIP() gin.HandlerFunc {
+	var mu sync.Mutex
+	inFlight := make(map[string]int)
+	return func(c *gin.Context) {
+		if c.Query("background") == "1" {
+			c.Request = c.Request.WithContext(catalog.WithBackground(c.Request.Context()))
+			c.Next()
+			return
+		}
+		ip := c.ClientIP()
+		mu.Lock()
+		inFlight[ip]++
+		over := inFlight[ip] > foregroundPerIP
+		mu.Unlock()
+		defer func() {
+			mu.Lock()
+			if inFlight[ip]--; inFlight[ip] == 0 {
+				delete(inFlight, ip)
+			}
+			mu.Unlock()
+		}()
+		if over {
+			c.Request = c.Request.WithContext(catalog.WithBackground(c.Request.Context()))
 		}
 		c.Next()
 	}

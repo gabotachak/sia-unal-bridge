@@ -30,7 +30,7 @@ script:post-response {
   const n = (b.match(/<tr role="row" _afrRK=/g) || []).length;
   const k = [...b.matchAll(/_afrRK="(\d+)"/g)].map(x => +x[1]);
   console.log(`filas=${n}` + (k.length ? ` _afrRK ${Math.min(...k)}..${Math.max(...k)}` : "") +
-              (b.length < 1200 ? "  <<< ~900B: falta un paso o sesion caducada" : ""));
+              (b.length < 1200 ? "  <<< no-op: falta un paso, sesion caducada, o el valor ya estaba puesto (GOTCHAS §30)" : ""));
 }
 
 assert {
@@ -38,8 +38,8 @@ assert {
 }
 
 docs {
-  Boton Mostrar. Con facElect=12 devuelve ~240 asignaturas de libre eleccion
-  de toda la sede Bogota.
+  Boton Mostrar. Con facElect=12 devuelve la libre eleccion de toda la
+  sede Bogota.
 
   DELTAS es opcional aqui: el HAR del navegador no lo manda y funciona igual.
 }

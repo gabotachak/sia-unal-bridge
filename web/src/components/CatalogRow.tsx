@@ -112,8 +112,7 @@ export const CatalogRow = memo(function CatalogRow({
  *
  * `primary`/`secondary` ya vienen decididos por `attributionOf`: acá no se
  * elige nada, solo se pinta con `PlanAttributionRow` (components/), la
- * misma que usan Course.tsx y CourseCard.tsx (PLAN-DOUBLE-TITULATION.md D6
- * interfaz §7).
+ * misma que usan Course.tsx y CourseCard.tsx.
  */
 function PlanTypologyInfo({
   primary,

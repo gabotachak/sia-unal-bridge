@@ -10,6 +10,11 @@ get {
   auth: none
 }
 
+params:query {
+  ~faculty: {{faculty}}
+  ~level: pregrado
+}
+
 params:path {
   campus: {{campus}}
   program: {{program}}
@@ -20,6 +25,7 @@ assert {
 }
 
 docs {
-  Miss en frío camina facultad->programa en vivo (ResolveProgram) — barato,
-  no dispara el censo completo.
+  Resuelve el plan por código dentro de la sede. Si el código se repite
+  entre facultades de la sede responde 300 con candidates: desempatar con
+  ?faculty=.
 }

@@ -32,8 +32,8 @@ export type Screen =
       code: string;
       from?: 'semester' | 'schedule';
       /**
-       * Cómo figura esta asignatura en el OTRO plan, con doble titulación
-       * (D6, PLAN-DOUBLE-TITULATION.md). Solo se sabe si se llegó desde el
+       * Cómo figura esta asignatura en el OTRO plan, con doble titulación.
+       * Solo se sabe si se llegó desde el
        * catálogo unido (`MergedCourse.alsoIn`, Program.tsx): desde Mi
        * semestre u Horario no hay de dónde sacarlo —`PlanItem` no lo
        * guarda— y pedir el otro catálogo solo para esto sería una petición

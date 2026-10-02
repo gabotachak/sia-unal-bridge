@@ -48,6 +48,6 @@ Si el cambio no puede fallar en silencio, dilo en una línea y sigue.
 - [ ] Cambia una respuesta de la API → `docs/API.md` y `internal/httpapi/openapi.yaml` al día
 - [ ] Cambia el esquema → migración nueva en `migrations/`, nunca editar una ya aplicada
 - [ ] Rompe algo público → el commit lleva `BREAKING CHANGE:` en el footer
-- [ ] Lo que se verificó contra el SIA y lo que se asumió quedó en `docs/OPEN-QUESTIONS.md`
+- [ ] Lo que se verificó contra el SIA quedó en `docs/GOTCHAS.md` o `docs/PROTOCOL.md`; lo que se asumió, en `docs/ARCH.md` ("Lo que no sabemos")
 
 Closes #

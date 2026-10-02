@@ -31,7 +31,7 @@
 ---
 
 <div align="center">
-  <img src="docs/assets/demo.svg" alt="First call: about 8 s against the SIA. Second call: about 1 ms from Postgres." width="760">
+  <img src="docs/assets/demo.svg" alt="First call goes to the SIA and takes seconds. The same call again is served from Postgres in milliseconds." width="760">
 </div>
 
 ## What this is
@@ -79,7 +79,7 @@ actually change, are re-fetched when they expire.
   POSTs instead of 6), and was load-tested against production to find the concurrency
   ceiling.
 - **Caching tuned to how the data changes.** A program's catalog barely changes and
-  costs one upstream request for ~100 courses, so it is served stale-while-revalidate.
+  costs one upstream request for the whole program, so it is served stale-while-revalidate.
   Seat counts change by the minute and are fetched one course at a time, so every seat
   count in the API says how old it is.
 - **Hexagonal architecture.** The domain imports neither the HTTP framework, nor the
@@ -94,7 +94,7 @@ Three pieces, one repo, one `docker compose`:
 |---|---|---|
 | **API** | `cmd/bridge` + `internal/` | Translates ADF into JSON and caches it in Postgres. OpenAPI 3.1 served at `/v1/docs` |
 | **Web app** | [`web/`](web/) | React + TypeScript on top of that API. Plans the semester: catalog, timetable, seats |
-| **`Refresher`** | `cmd/refresher` | Manual cache sweep. No longer on a cron: the API serves what it has and refreshes in the background (see `docs/FASE-2.md`) |
+| **`Refresher`** | `cmd/refresher` | Manual cache sweep. No cron: the API serves what it has and refreshes in the background (see `docs/ARCH.md`) |
 
 The web app **never** touches Postgres or imports anything from `internal/`: it talks to
 the same public API as any other client. If something is on screen, it exists as an
@@ -138,22 +138,22 @@ exits. Its checkpoint is the freshness markers themselves, so **resuming means r
 it again**, and two back-to-back runs make zero upstream requests.
 
 ```bash
-docker compose --profile jobs run --rm refresher --mode=reference                 # levels, campuses, programs: 131 POSTs, 72 s
+docker compose --profile jobs run --rm refresher --mode=reference                 # levels, campuses, programs
 docker compose --profile jobs run --rm refresher --mode=catalog --workers=2       # every program's course list
 docker compose --profile jobs run --rm refresher --mode=detail --scope=global \
                                   --workers=2 --max-duration=4h    # sections, schedules and seats
 docker compose --profile jobs run --rm refresher --mode=seats --scope=hot         # warms what people look at
 ```
 
-These runs are **manual**: there is no cron and no cadence anymore (the reasoning is in
-[`docs/FASE-2.md`](docs/FASE-2.md)). `REFRESH_ENABLED=false` blocks all of them.
+These runs are **manual**: there is no cron (the reasoning is in
+[`docs/ARCH.md`](docs/ARCH.md#refresher)). `REFRESH_ENABLED=false` blocks all of them.
 `GET /v1/status` reports what the last run of each mode did.
 
 ## The web app
 
 React + TypeScript, three runtime dependencies (React, React DOM and an icon set), no
 state or component library, in [`web/`](web/). It plans the semester: a program's
-catalog, a course page with schedule and sections, "Mi semestre" to collect up to twenty
+catalog, a course page with schedule and sections, "Mi semestre" to collect candidate
 courses and measure all their seats with one button, and "Mi horario" with clash
 detection and calendar export. Students pursuing a double degree can pick two programs
 and plan both in a single timetable.
@@ -166,9 +166,7 @@ cache miss is not hidden behind a spinner: it is explained, with a stopwatch.
   <img src="docs/assets/catalog.png" alt="Catalog of program 2A74 in the web app: some 300 courses, seat counts with countdown and selection state." width="900">
 </div>
 
-How to run it, and what each dependency does: [`web/README.md`](web/README.md). The
-plan, including a crash course in frontend for reading it:
-[`docs/PLAN-FRONTEND.md`](docs/PLAN-FRONTEND.md).
+How to run it, and what each dependency does: [`web/README.md`](web/README.md).
 
 ## The API
 
@@ -216,15 +214,33 @@ Default TTLs live in one place,
 Every response carries `Age`, `Cache-Control`, `X-Cache` and, on a miss,
 `X-SIA-Fetch-Ms`. Seat counts also carry `age_seconds` **in the body**: a seat count is
 never served without saying when it was taken. They also carry `changed_at`, the last
-time the number actually moved. Those are two different questions: measured, 347
-sections showed zero changes over 35 minutes, so history only grows when seats move,
-while freshness updates on every measurement.
+time the number actually moved. Those are two different questions: seats rarely move, so history only grows when they
+do, while freshness updates on every measurement.
 
 ## Architecture
 
-<div align="center">
-  <img src="docs/assets/architecture.svg" alt="Hexagonal architecture: httpapi as the driving port; Store (Postgres) and SIASource (ADF) as driven ports." width="860">
-</div>
+```mermaid
+flowchart LR
+    subgraph driving["Driving: who asks"]
+        http["httpapi<br/>gin, /v1"]
+        ref["refresher<br/>manual sweep"]
+    end
+    subgraph core["Domain: internal/catalog"]
+        svc["catalog.Service<br/>read-through, singleflight"]
+        ports{{"Ports<br/>Store<br/>SIASource"}}
+        svc --> ports
+    end
+    subgraph driven["Driven: who is asked"]
+        store["store<br/>pgx"]
+        sia["sia<br/>ADF session pool"]
+    end
+    http --> svc
+    ref --> svc
+    ports -. implements .- store
+    ports -. implements .- sia
+    store --> pg[("Postgres")]
+    sia --> adf[["SIA · Oracle ADF"]]
+```
 
 Hexagonal. Two driving ports (`httpapi` and the `Refresher`), two driven ports (`Store`
 over Postgres, `SIASource` over ADF). The domain imports neither gin, nor pgx, nor
@@ -245,10 +261,10 @@ sequenceDiagram
     S->>P: stored? catalog_fetched_at fresh?
     alt stored and fresh
         P-->>S: courses
-        S-->>C: 200 · X-Cache: hit · ~1 ms
+        S-->>C: 200 · X-Cache: hit
     else stored but stale
         P-->>S: courses
-        S-->>C: 200 · X-Cache: stale · ~1 ms
+        S-->>C: 200 · X-Cache: stale
         S-)X: refresh in the background (same fetch as below)
     else never fetched
         S->>X: cascade + regular listing
@@ -259,13 +275,14 @@ sequenceDiagram
     end
 ```
 
-The package tree and what each package does: [`docs/LAYOUT.md`](docs/LAYOUT.md).
+What each package does, and every flow as a diagram: [`docs/ARCH.md`](docs/ARCH.md) and
+[`docs/DIAGRAMS.md`](docs/DIAGRAMS.md).
 
 ### `SIASource` is not an HTTP client
 
 It is a **pool of live ADF sessions**. Each connection:
 
-- dies after **~4.2 min** of inactivity; pinged every ≤3 min it lives indefinitely
+- dies after a few minutes of inactivity; the pool's keepalive keeps it alive
 - is **strictly sequential**: one request in flight at a time
 - is parked on a `(level, campus, faculty, program)`; moving it costs 2 POSTs
 - is either on the search page **or** on a **numbered** detail region, whose number
@@ -273,8 +290,7 @@ It is a **pool of live ADF sessions**. Each connection:
 
 The SIA tolerates much more parallelism than the pool uses; the pool stays small because
 real traffic doesn't need more, not because the server imposes a low ceiling. The
-measured number and how it was measured are in
-[`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) §5.
+measured limits are in [`docs/PROTOCOL.md`](docs/PROTOCOL.md) §10.
 
 ## What isn't obvious
 
@@ -293,11 +309,11 @@ These five come from measuring against the server, not from assuming:
 
 | | |
 |---|---|
-| **The listing returns offerings, not courses** | Codes repeat up to ×131. Natural key `(code, term, key)`, where `key` is the token in parentheses: `Grupo N` repeats between regular and PEAMA sections |
+| **The listing returns offerings, not courses** | Codes repeat. Natural key `(code, term, key)`, where `key` is the token in parentheses: `Grupo N` repeats between regular and PEAMA sections |
 | **Visible sections depend on the program** | A strict subset relation. But **seats are global**: one measurement serves every program |
-| **Course type depends on the program** | Proven: 8 codes differ between Bogotá programs. It lives in `course_program` |
+| **Course type depends on the program** | Proven, not assumed. It lives in `course_program` |
 | **A program's catalog is two queries** | `soc4=0` literally means *everything except free electives*. Free electives come from the electives search, which is per campus |
-| **A ~900 B response is not an HTTP error** | It is a no-op: a cascade step is missing, or the session expired. It is treated as an explicit error instead of returning incomplete data |
+| **A tiny 200 response is not a success** | It is a no-op: a cascade step is missing, or the session expired. It is treated as an explicit error instead of returning incomplete data |
 
 All of them, each verified against production, are in
 [`docs/GOTCHAS.md`](docs/GOTCHAS.md). Several fail **silently**: they return plausible
@@ -305,53 +321,25 @@ but wrong data.
 
 ## Documentation
 
-The rest of the documentation is in **Spanish**.
-
-**Before writing code**
+The rest of the documentation is in **Spanish**. It describes how things work today;
+each measured number lives in one place and the rest link to it.
 
 | | |
 |---|---|
 | [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **The verified traps. Read it before touching the code.** |
-| [`docs/ARCH.md`](docs/ARCH.md) | Ports, read-through, session pool, concurrency |
-| [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Postgres schema and the nine non-obvious decisions |
-| [`docs/LAYOUT.md`](docs/LAYOUT.md) | Go package tree and what lives in each package |
-| [`docs/COMMIT-CONVENTION.md`](docs/COMMIT-CONVENTION.md) | Commit format: `semantic-release` reads it |
-
-**The protocol**
-
-| | |
-|---|---|
-| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | Full ADF handshake, with real request bodies |
+| [`docs/ARCH.md`](docs/ARCH.md) | Hexagon, read-through, session pool, `Refresher`, what we don't know |
+| [`docs/DIAGRAMS.md`](docs/DIAGRAMS.md) | The whole project in Mermaid diagrams: hexagon, request flows, pool, schema |
+| [`docs/CONSTANTS.md`](docs/CONSTANTS.md) | **The only document with numbers**: the SIA's measurements and the code's constants |
+| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | The ADF handshake, POST by POST |
 | [`docs/FIELDS.md`](docs/FIELDS.md) | ADF components and the options of each dropdown |
-| [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | What is proven and what isn't |
-| [`bruno/sia-catalogo/`](bruno/sia-catalogo/) | The raw ADF flow, by hand against the SIA |
-
-**The contract and the web app**
-
-| | |
-|---|---|
 | [`docs/API.md`](docs/API.md) | HTTP contract: public IDs, freshness, errors |
-| [`bruno/bridge-api/`](bruno/bridge-api/) | This API's collection, endpoint by endpoint |
-| [`web/README.md`](web/README.md) | The web app: how to run it and what each dependency does |
-| [`docs/PLAN-FRONTEND.md`](docs/PLAN-FRONTEND.md) | Web app plan **+ a frontend crash course** |
-
-**Operations**
-
-| | |
-|---|---|
+| [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | The schema decisions that aren't obvious from the DDL |
 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Local environment, fixtures, reproducing the flow |
 | [`docs/COMMANDS.md`](docs/COMMANDS.md) | Cheat sheet: deploys, migrations, which version runs where |
-| [`docs/internal/PLAN-CI-CD.md`](docs/internal/PLAN-CI-CD.md) | Automatic deploy on merge to `main`, semver versioning |
-| [`docs/internal/PLAN-PRODUCTION.md`](docs/internal/PLAN-PRODUCTION.md) | How this went from localhost to a server |
-
-**The plans**
-
-| | |
-|---|---|
-| [`docs/PLAN.md`](docs/PLAN.md) | Phase 1: the API. Steps and acceptance criteria |
-| [`docs/FASE-2.md`](docs/FASE-2.md) | Phase 2: the `Refresher`, crawl concurrency and cadence |
-| [`docs/PLAN-SIACHANGES.md`](docs/PLAN-SIACHANGES.md) | Reconciling what the SIA stops offering |
-| [`docs/PLAN-DOUBLE-TITULATION.md`](docs/PLAN-DOUBLE-TITULATION.md) | Double degree: two programs in one timetable (frontend only) |
+| [`docs/COMMIT-CONVENTION.md`](docs/COMMIT-CONVENTION.md) | Commit format: `semantic-release` reads it |
+| [`web/README.md`](web/README.md) | The web app: how to run it and how it is built |
+| [`bruno/sia-catalogo/`](bruno/sia-catalogo/) | The raw ADF flow, by hand against the SIA |
+| [`bruno/bridge-api/`](bruno/bridge-api/) | This API's collection, endpoint by endpoint |
 
 ## Verifying against the server
 

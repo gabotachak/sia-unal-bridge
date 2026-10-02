@@ -37,7 +37,7 @@ func seatSnapshotCount(t *testing.T, s *Store, sectionID int64) int {
 	return n
 }
 
-// TestSeatsDedupe is paso 6's acceptance bar (docs/FASE-2.md): two sweeps
+// TestSeatsDedupe is decisión 4's acceptance bar (docs/DATA-MODEL.md): two sweeps
 // with no real change write 0 new snapshot rows, seats_checked_at moves
 // anyway, and the age the API publishes stays the age of the MEASUREMENT —
 // otherwise the dedupe would make the data look stale and the read-through

@@ -132,6 +132,8 @@ paths:
 
   /levels:
     get:
+      parameters:
+        - $ref: "#/components/parameters/Background"
       tags: [Referencia]
       summary: Niveles de estudio (soc1)
       description: |
@@ -159,6 +161,7 @@ paths:
       operationId: listCampuses
       parameters:
         - $ref: "#/components/parameters/Level"
+        - $ref: "#/components/parameters/Background"
       responses:
         "200":
           description: Lista de sedes
@@ -192,6 +195,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Campus"
         - $ref: "#/components/parameters/Level"
+        - $ref: "#/components/parameters/Background"
       responses:
         "200":
           description: Facultades de la sede
@@ -219,6 +223,7 @@ paths:
           description: Filtro opcional por código de facultad. Sin él salen todos los planes de la sede.
           schema: { type: string, examples: ["2055"] }
         - $ref: "#/components/parameters/Level"
+        - $ref: "#/components/parameters/Background"
       responses:
         "200":
           description: Planes
@@ -243,6 +248,7 @@ paths:
         - $ref: "#/components/parameters/Program"
         - $ref: "#/components/parameters/Faculty"
         - $ref: "#/components/parameters/Level"
+        - $ref: "#/components/parameters/Background"
       responses:
         "200":
           description: El plan
@@ -271,6 +277,7 @@ paths:
         - $ref: "#/components/parameters/Faculty"
         - $ref: "#/components/parameters/Level"
         - $ref: "#/components/parameters/MaxAge"
+        - $ref: "#/components/parameters/Background"
         - name: q
           in: query
           description: Substring del nombre, insensible a mayúsculas.
@@ -371,6 +378,7 @@ paths:
         - $ref: "#/components/parameters/Faculty"
         - $ref: "#/components/parameters/Level"
         - $ref: "#/components/parameters/MaxAge"
+        - $ref: "#/components/parameters/Background"
       responses:
         "200":
           description: Grupos visibles desde este plan
@@ -403,6 +411,7 @@ paths:
         - $ref: "#/components/parameters/Faculty"
         - $ref: "#/components/parameters/Level"
         - $ref: "#/components/parameters/MaxAge"
+        - $ref: "#/components/parameters/Background"
       responses:
         "200":
           description: El grupo
@@ -444,6 +453,7 @@ paths:
         - $ref: "#/components/parameters/Faculty"
         - $ref: "#/components/parameters/Level"
         - $ref: "#/components/parameters/MaxAge"
+        - $ref: "#/components/parameters/Background"
       responses:
         "200":
           description: Cupos, con su edad
@@ -484,6 +494,7 @@ paths:
         - $ref: "#/components/parameters/Campus"
         - $ref: "#/components/parameters/Code"
         - $ref: "#/components/parameters/MaxAge"
+        - $ref: "#/components/parameters/Background"
       responses:
         "200":
           description: La asignatura
@@ -594,8 +605,14 @@ components:
       required: false
       description: |
         `1` = esta lectura no la pidió una persona (p. ej. un cliente que recorre un
-        catálogo entero para refrescar su columna de cupos). No cuenta como demanda para
-        el hot set del Refresher. No cambia nada más de la respuesta.
+        catálogo entero para refrescar su columna de cupos). Si la petición va al SIA,
+        usa el carril de fondo del pool, que ocupa como mucho la mitad de las
+        conexiones, y no cuenta como demanda para el hot set del Refresher. La
+        respuesta es la misma.
+
+        Una IP con más de `foregroundPerIP` peticiones en vuelo (docs/CONSTANTS.md)
+        pasa al carril de fondo aunque no lo pida: no se rechaza, solo deja de poder
+        ocupar todo el pool.
       schema: { type: string, enum: ["1"] }
 
   headers:
@@ -647,9 +664,13 @@ components:
                   - { program: "2515", name: "FARMACIA", campus_code: "1102", campus_name: "SEDE MEDELLÍN", faculty_code: "3", faculty_name: "SEDE MEDELLÍN" }
     SIAError:
       description: |
-        El SIA no respondió lo esperado. `sia_noop` es una respuesta vacía de ~900 B:
-        no es un error HTTP del SIA, es un no-op que se trata como error explícito en
-        vez de devolver datos incompletos.
+        El SIA no respondió lo esperado. `sia_noop` es una respuesta vacía
+        (`SIA_NOOP_BYTES`, docs/CONSTANTS.md): no es un error HTTP del SIA, es un no-op
+        que se trata como error explícito en vez de devolver datos incompletos.
+        `sia_parse_mismatch` es un detalle cuyos grupos no cuadran con su texto: se
+        rechaza antes de guardar nada, porque guardarlo inventaría o perdería grupos.
+        `sia_error_page` es una página que el propio SIA no logra renderizar (redirige
+        a su página de error); depende de la página, así que reintentar no sirve.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -870,7 +891,7 @@ components:
 
     RefreshRun:
       type: object
-      description: Una corrida del Refresher (docs/FASE-2.md). Observabilidad, no checkpoint.
+      description: Una corrida del Refresher (docs/ARCH.md). Observabilidad, no checkpoint.
       properties:
         mode: { type: string, examples: [detail] }
         scope: { type: string, examples: [global] }
@@ -905,6 +926,8 @@ components:
             - busy
             - sia_noop
             - sia_session_lost
+            - sia_parse_mismatch
+            - sia_error_page
             - internal
         message: { type: string }
         hint: { type: string }

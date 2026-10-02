@@ -11,8 +11,7 @@ import {
 
 // Las mismas claves que storage.ts guarda por dentro — privadas ahí, pero
 // esto es exactamente lo que hay que escribir a mano para simular un
-// navegador con datos de una versión anterior (PLAN-DOUBLE-TITULATION.md,
-// "Compatibilidad con lo que ya hay en los navegadores").
+// navegador con datos de una versión anterior a la doble titulación.
 const KEY = 'tablero.semestre.v2';
 const PICK_KEY = 'tablero.plan.v1';
 const PLANS_KEY = 'tablero.planes.v2';
@@ -158,8 +157,7 @@ describe('applySelect — la regla completa, con items', () => {
 
   it('primer plan elegido (currentPlans vacío) con materias guardadas de ANTES: las conserva si son de ese plan', () => {
     // El caso que `select()` en `main` preservaba: localStorage viejo o de
-    // rollback con materias guardadas pero sin plan.v1 — PLAN-DOUBLE-TITULATION.md,
-    // "Compatibilidad", caso 3.
+    // rollback con materias guardadas pero sin plan.v1.
     const items = [item('X', { program: '2A74' }), item('Y', { program: 'OTRO' })];
     const result = applySelect([], items, [a]);
     expect(result).not.toBeNull();

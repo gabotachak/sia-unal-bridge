@@ -12,8 +12,8 @@ import (
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
 
-// TestLive_PoolConcurrency8DistinctPrograms is paso 5's acceptance bar
-// (docs/PLAN.md): 8 concurrent requests for 8 DIFFERENT programs must each
+// TestLive_PoolConcurrency8DistinctPrograms is the pool's acceptance bar:
+// 8 concurrent requests for 8 DIFFERENT programs must each
 // get their own catalog. The historical failure mode (GOTCHAS §28) is not
 // an error — it's a 200 OK with the WRONG program's course list, silently.
 // Skipped unless SIA_LIVE=1.

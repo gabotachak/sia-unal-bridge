@@ -9,6 +9,6 @@
 -- sedes falsas (999x), 21 asignaturas y filas de refresh_run con modos de
 -- prueba. `/v1/status` reportaba 1408 planes conocidos donde el censo real son
 -- 1380. Los tests de store/ y cmd/refresher/ escriben de verdad — es su
--- tradeoff elegido frente a testcontainers (docs/LAYOUT.md) — y por eso
+-- tradeoff elegido frente a testcontainers — y por eso
 -- necesitan una base propia, no una convención de nombres.
 CREATE DATABASE sia_bridge_test OWNER sia;

@@ -7,7 +7,7 @@ import (
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
 
-// Circuit breaker thresholds (docs/FASE-2.md, paso 5). Five programs failing
+// Circuit breaker thresholds. Five programs failing
 // in a row, or a fifth of the sweep failing, is the SIA having changed under
 // us — not bad luck. breakerMinSample keeps a three-program sweep from
 // tripping on its first failure.

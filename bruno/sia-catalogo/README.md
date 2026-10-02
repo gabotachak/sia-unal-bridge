@@ -7,6 +7,7 @@ Abre esta carpeta en Bruno.app y selecciona el entorno **SIA**.
 
 Referencia completa del protocolo: [`../../docs/PROTOCOL.md`](../../docs/PROTOCOL.md)
 Trampas: [`../../docs/GOTCHAS.md`](../../docs/GOTCHAS.md)
+Cifras (tamaños, tiempos, límites): [`../../docs/CONSTANTS.md`](../../docs/CONSTANTS.md)
 
 ---
 
@@ -36,13 +37,13 @@ documentar el evento `selection`, pero la ruta real es `06 → 08`.
 
 Pon `tipologia = 7` en el entorno antes del paso 09.
 
-Con `facElect = 12` (comodín "2000 SEDE BOGOTÁ") devuelve ~240 asignaturas de libre
-elección de todas las facultades de la sede.
+Con `facElect = 12` (comodín "2000 SEDE BOGOTÁ") devuelve la libre elección de todas
+las facultades de la sede.
 
 > **`facElect = 12` solo sirve para Bogotá-pregrado.** La posición del comodín cambia con
-> la sede (10 en Medellín, 3 en Palmira) y **en doctorado no existe**: `soc6` lista solo
-> facultades, así que hay que consultar una por una y unir los resultados. Medido
-> 2026-08-17, ver [GOTCHAS §32 y §35](../../docs/GOTCHAS.md).
+> la sede y **en doctorado no existe**: `soc6` lista solo facultades, así que hay que
+> consultar una por una y unir los resultados. Ver [GOTCHAS §32 y §35](../../docs/GOTCHAS.md)
+> y las posiciones en [`FIELDS.md`](../../docs/FIELDS.md).
 
 ---
 
@@ -71,11 +72,13 @@ elección de todas las facultades de la sede.
 ## Lo que tienes que saber para no perder tiempo
 
 **El User-Agent no puede parecer navegador.** Con Chrome/Firefox el servidor devuelve
-7 KB de bootstrap JS que exige ejecutar JavaScript. El UA de Bruno funciona.
+un bootstrap JS (`SIA_BROWSER_UA_BYTES`) que exige ejecutar JavaScript. El UA de Bruno funciona.
 
-**Respuesta de ~900 B = algo falta.** O te saltaste un paso de la cascada, o estás en
-la vista de detalle sin haber hecho Volver, o expiró la sesión (~4.2 min de
-inactividad). Los scripts de la colección te lo avisan en la consola.
+**Respuesta diminuta (`SIA_NOOP_BYTES`) = algo falta.** O te saltaste un paso de la cascada, o estás en
+la vista de detalle sin haber hecho Volver, o expiró la sesión
+(`SIA_SESSION_IDLE_TIMEOUT`). Los scripts de la colección te lo avisan en la consola. En el flujo B, los pasos 11 y 12
+pueden avisar no-op sin que nada falle: si el SIA ya tenía ese valor, reenviarlo no
+re-renderiza ([GOTCHAS §30](../../docs/GOTCHAS.md)). Lo que cuenta es que el 13 traiga filas.
 
 **Tras un detalle, "Volver" (14) es obligatorio antes de *cualquier* cosa** — otra
 búsqueda o el detalle de otra asignatura. No es solo entre detalles.
@@ -84,13 +87,13 @@ búsqueda o el detalle de otra asignatura. No es solo entre detalles.
 1.er detalle `pt1:r1:1`, 2.º `pt1:r1:2`, y así. El paso 08 captura el número en
 `regionDetalle` y el 14 lo usa. Verificado en la colección: `08 → 14 → 08 → 14 → 08 →
 14` da `regionDetalle` 1, 2, 3 y 98 filas en cada Volver. Con el `1` fijo que tenía
-antes, el segundo Volver devolvía 893 B y la sesión parecía muerta.
+antes, el segundo Volver era un no-op y la sesión parecía muerta.
 Ver [`GOTCHAS.md §20`](../../docs/GOTCHAS.md).
 
 **`nombre` (`it11`) filtra en el servidor.** Substring, insensible a acentos. Ojo al
 reusar la sesión a mano: el campo viaja en cada POST, así que si lo dejas puesto la
 siguiente consulta sale recortada sin avisar ([GOTCHAS §34](../../docs/GOTCHAS.md)).
-Baja el payload de 241 KB a 15-27 KB. La ruta más rápida para una asignatura concreta
+Baja el payload de `SIA_LISTING_BYTES` a `SIA_LISTING_IT11_BYTES`. La ruta más rápida para una asignatura concreta
 es `06` con `nombre` puesto, y luego `08`.
 
 **`fila` es el `_afrRK`, no la posición.** Los row keys se acumulan entre búsquedas y

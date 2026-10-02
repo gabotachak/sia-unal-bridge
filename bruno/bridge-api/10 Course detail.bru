@@ -10,6 +10,12 @@ get {
   auth: none
 }
 
+params:query {
+  ~max_age: 1800
+  ~background: 1
+  ~faculty: {{faculty}}
+}
+
 params:path {
   campus: {{campus}}
   program: {{program}}
@@ -21,6 +27,15 @@ assert {
 }
 
 docs {
-  El endpoint canónico. Correr dos veces: 1ra X-Cache: miss (con
-  X-SIA-Fetch-Ms), 2da X-Cache: hit. ?max_age=0 fuerza refetch.
+  El endpoint canónico. Correr dos veces: 1.ª X-Cache: miss (con
+  X-SIA-Fetch-Ms), 2.ª X-Cache: hit.
+
+  Como lo pide la interfaz:
+    - ficha de asignatura: ?max_age=VITE_STALE_SEATS_SECONDS
+    - medición automática del catálogo: además ?background=1 (carril de fondo
+      del pool; no cuenta como demanda)
+    - botón "medir": ?max_age=0. Repetirlo antes de FETCH_COOLDOWN responde
+      429 refresh_cooldown con Retry-After.
+
+  Errores del SIA: 502 sia_noop, sia_parse_mismatch o sia_error_page.
 }

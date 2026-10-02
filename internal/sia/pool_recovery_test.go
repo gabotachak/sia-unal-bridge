@@ -239,3 +239,27 @@ func TestDo_RebootstrapStartsFromAnEmptyCookieJar(t *testing.T) {
 		t.Fatalf("Do: the re-bootstrap kept the poisoned cookie: %v", err)
 	}
 }
+
+// The SIA's error page kills the session (GOTCHAS §39). DoAt must not retry
+// the page — it breaks the same way again — but it must hand the connection
+// back re-bootstrapped, or the next caller pays a noop and a retry for it.
+func TestDo_ErrorPageRebootstrapsWithoutRetrying(t *testing.T) {
+	f := &fakeSIA{postBody: func(int32) string { return bigRender() }}
+	p := newFakePool(t, f)
+	before := f.gets.Load()
+
+	calls := 0
+	_, err := Do(context.Background(), p, func(c *SIAConn) (string, error) {
+		calls++
+		return "", fmt.Errorf("%w (2899 bytes)", errSIAErrorPage)
+	})
+	if !errors.Is(err, catalog.ErrSIAErrorPage) {
+		t.Fatalf("got %v, want catalog.ErrSIAErrorPage", err)
+	}
+	if calls != 1 {
+		t.Fatalf("fn ran %d times, want 1 (no retry)", calls)
+	}
+	if f.gets.Load() != before+1 {
+		t.Fatalf("bootstraps = %d, want 1 (connection handed back alive)", f.gets.Load()-before)
+	}
+}

@@ -15,7 +15,7 @@ import (
 // Refresher's seats hot set is built from. It lives here because httpapi is
 // the only adapter that knows there is a person on the other side: if the job
 // fed this counter, the hot set would just be a list of everything the job
-// already swept (docs/FASE-2.md "Cupos").
+// already swept (docs/ARCH.md "Refresher").
 //
 // Best-effort on purpose: failing to count must never fail the response — and
 // "never" includes never adding latency to it either, so the write runs in
@@ -56,14 +56,9 @@ func (a *api) courseDetail(c *gin.Context) {
 		return
 	}
 
-	// ?background=1 also puts the fetch in the pool's background lane, so a
-	// catalog-wide seats sweep can never hold every SIA connection while a
-	// person waits for the page they actually opened (sia.Pool).
-	ctx := c.Request.Context()
-	if c.Query("background") == "1" {
-		ctx = catalog.WithBackground(ctx)
-	}
-	offering, res, err := a.svc.CourseDetail(ctx, program, code, maxAge)
+	// ?background=1 already put this request in the pool's background lane
+	// (laneByIP).
+	offering, res, err := a.svc.CourseDetail(c.Request.Context(), program, code, maxAge)
 	if err != nil {
 		writeError(c, err, "unknown_course")
 		return
@@ -187,7 +182,7 @@ func (a *api) sectionSeats(c *gin.Context) {
 	}
 	// measured_at/age_seconds keep their meaning — "de cuándo es este
 	// número". changed_at is the new, additive datum: when the number last
-	// actually moved (docs/FASE-2.md "Cupos").
+	// actually moved (docs/DATA-MODEL.md, decisión 4).
 	if section.Seats.ChangedAt != nil {
 		body["changed_at"] = *section.Seats.ChangedAt
 	}

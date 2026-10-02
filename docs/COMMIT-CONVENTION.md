@@ -1,8 +1,8 @@
 # Convención de commits y PRs
 
 **Toda IA que haga commits o abra PRs en este repo debe leer esto antes de escribir
-el mensaje.** No es estilo — `semantic-release` (ver [`internal/PLAN-CI-CD.md`](internal/PLAN-CI-CD.md),
-Fase 2) lee el mensaje que queda en `main` para decidir la versión (`vX.Y.Z`). Un
+el mensaje.** No es estilo — `semantic-release` (`.github/workflows/deploy.yml`) lee el
+mensaje que queda en `main` para decidir la versión (`vX.Y.Z`). Un
 mensaje fuera de formato no rompe el build, simplemente **no genera Release**: el
 deploy corre igual, pero queda sin versión ni changelog asociado.
 
@@ -70,9 +70,8 @@ pasa sus tests, tiene sentido leído aparte— va en su propio commit.** No
 entra a un commit más grande solo porque nació en la misma sesión o el mismo
 plan. Señal concreta para partir: si al escribir el mensaje hace falta un
 "y también" o una lista de bullets para lo que el commit toca, son dos
-commits, no uno. Un plan con partes A/B/C/D (`docs/PLAN-*.md`) no es un
-commit por letra: cada archivo o grupo de archivos que cambia junto por
-necesidad de compilación (una firma de interfaz y todos sus implementadores y
+commits, no uno. Un plan con partes A/B/C/D no es un commit por letra: cada
+archivo o grupo de archivos que cambia junto por necesidad de compilación (una firma de interfaz y todos sus implementadores y
 llamadores, por ejemplo) es su propio hito, aunque la letra del plan sea una
 sola.
 

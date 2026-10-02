@@ -68,8 +68,8 @@ func (r *refresher) reference(ctx context.Context) error {
 }
 
 // catalogSweep fills program.catalog_fetched_at for every program the
-// directory knows. ~2760 POSTs, ~0.7 GB, ~2.7 h serial — cheap next to the
-// detail sweep, which is why they run on different cadences.
+// directory knows. Cheap next to the detail sweep, which is why they are
+// never run together.
 func (r *refresher) catalogSweep(ctx context.Context) error {
 	programs, err := r.workList(ctx)
 	if err != nil {
@@ -97,9 +97,9 @@ func (r *refresher) catalogSweep(ctx context.Context) error {
 //
 //	--scope=global: one POST per COURSE, from whatever plan already lists it.
 //	  The section rows it writes (profesor, horario, aula, cupos) are valid
-//	  for every plan, so this covers the whole university in ~3 h.
+//	  for every plan, so this covers the whole university once.
 //	--scope=plan:   one POST per (plan, course) pair, which is the only way
-//	  to learn which groups THIS plan sees. ~38 h serial, once a semester.
+//	  to learn which groups THIS plan sees. The expensive one: once a semester.
 //
 // The global sweep does not lie about what it covered:
 // course_program.detail_fetched_at is stamped only for the plan that made the

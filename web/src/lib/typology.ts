@@ -1,5 +1,5 @@
 // La tipología del SIA, reducida a lo que hace falta para desempatar entre
-// dos planes (PLAN-DOUBLE-TITULATION.md, D6).
+// dos planes con doble titulación: gana la de mayor rango.
 
 /** La letra entre paréntesis: 'FUND. OBLIGATORIA (B)' → 'B'. Es lo estable;
  *  la frase cambia de vocabulario entre vistas del SIA (GOTCHAS.md §17).

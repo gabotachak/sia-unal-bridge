@@ -3,6 +3,7 @@ package sia
 import (
 	"bytes"
 	"errors"
+	"fmt"
 
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
@@ -28,7 +29,7 @@ var errStaleDetailRegion = errors.New("sia: connection stuck in a detail region"
 //
 // Only a full-size body counts. A dead session answers the same redirect in
 // 412–877 B, and that one IS a noop with a retry to earn. GOTCHAS §39.
-var errSIAErrorPage = errors.New("sia: the SIA redirected to errorNavegacion.jsf")
+var errSIAErrorPage = fmt.Errorf("sia: the SIA redirected to errorNavegacion.jsf: %w", catalog.ErrSIAErrorPage)
 
 // errorPageMarker is the redirect the SIA appends when its own render fails.
 var errorPageMarker = []byte("errorNavegacion.jsf")
@@ -39,11 +40,11 @@ var errorPageMarker = []byte("errorNavegacion.jsf")
 // exists to avoid.
 func isSIAErrorPage(body []byte) bool { return bytes.Contains(body, errorPageMarker) }
 
-// noopThreshold separates a real re-render from ADF's silent no-op. Measured
-// signatures: ~895B (missing cascade step / wrong detail region), ~1.2KB
-// (session just expired, mute), 419B (explicit "session has timed out").
-// The smallest real payload observed (cascade dropdown re-render) is ~2KB.
-// See docs/GOTCHAS.md §6, §7, §20.
+// noopThreshold separates a real re-render from ADF's silent no-op: the
+// three no-op signatures (missing cascade step or wrong detail region, a mute
+// expired session, an explicit "session has timed out") all fall below it,
+// and the smallest real payload (a cascade dropdown re-render) is above it.
+// Sizes in docs/CONSTANTS.md; evidence in docs/GOTCHAS.md §6, §7, §20.
 const noopThreshold = 1200
 
 // isNoop reports whether body is ADF's silent no-op: a missing cascade step,

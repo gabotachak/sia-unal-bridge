@@ -1,16 +1,17 @@
 # Protocolo SIA / Oracle ADF
 
-Handshake completo para extraer asignaturas del catálogo público.
-Todo lo aquí descrito fue verificado contra el servidor de producción el **2026-08-15**.
+Cómo se extraen asignaturas del catálogo público, POST por POST. Verificado contra el
+servidor de producción. Las trampas, con su evidencia, están en [GOTCHAS.md](GOTCHAS.md);
+los ids y opciones de cada componente, en [FIELDS.md](FIELDS.md).
+
+Las cifras (tamaños, tiempos, límites) están solo en [CONSTANTS.md](CONSTANTS.md); aquí
+se nombran.
 
 Base URL:
 
 ```
 https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf
 ```
-
-> Los literales del SIA (`Cupos disponibles:`, `LIBRE ELECCIÓN (L)`, `MIÉRCOLES de
-> 09:00 a 11:00.`) se citan tal cual: son datos, no texto nuestro.
 
 ---
 
@@ -19,21 +20,22 @@ https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf
 ADF guarda el estado de la vista **en el servidor** (`STATE_SAVING_METHOD=server`).
 El `javax.faces.ViewState` que viaja en cada POST no es el estado: es un **puntero**.
 
-```
-Cookie PortalJSESSION  →  sesión WebLogic
-                            └─ mapa de vistas
-                                 └─ "!8hb1r2yc0" → { opciones de cada dropdown,
-                                                     fila seleccionada, región activa }
+```mermaid
+flowchart LR
+    cookie["Cookie PortalJSESSION"] --> ses["sesión WebLogic"]
+    ses --> mapa["mapa de vistas"]
+    vs["ViewState !8hb1r2yc0"] --> estado
+    mapa --> estado["estado de la vista:<br/>opciones de cada dropdown,<br/>fila seleccionada, región activa"]
 ```
 
 Consecuencias:
 
-- Necesitas **cookie + ViewState de la misma sesión**. Ninguno funciona solo.
-- Cada POST **muta** ese objeto. Por eso la cascada importa: cada paso puebla las
-  opciones del siguiente.
+- Hacen falta **cookie y ViewState de la misma sesión**. Ninguno funciona solo.
+- Cada POST **muta** ese objeto. Por eso la cascada importa: cada paso llena las opciones
+  del siguiente.
 - El ViewState **no rota**. Es estable durante toda la sesión.
-- La sesión tiene **dos regiones**: `pt1:r1:0` (buscador + tabla) y `pt1:r1:1`
-  (detalle). Solo una está activa. Ver §7.
+- La sesión está en una de dos regiones: `pt1:r1:0` (buscador y tabla) o `pt1:r1:<N>`
+  (detalle). Ver §7.
 
 ---
 
@@ -44,28 +46,26 @@ GET /Catalogo/facespublico/public/servicioPublico.jsf?taskflowId=task-flow-AC_Ca
 User-Agent: <cualquier cosa que NO parezca navegador>
 ```
 
-**Crítico:** con un User-Agent de navegador el servidor devuelve ~7 KB de bootstrap
-JavaScript (`AdfLoopbackUtils.runLoopback`) que exige ejecutar JS. Con
-`Go-http-client/2.0`, `curl/8.7.1` o similar, sirve la página completa directo.
+**Crítico:** con un User-Agent de navegador, el servidor devuelve un bootstrap JavaScript
+(`AdfLoopbackUtils.runLoopback`, `SIA_BROWSER_UA_BYTES`) en vez de la página
+([GOTCHAS §1](GOTCHAS.md)). El UA por
+defecto de Go sirve.
 
-De la respuesta extraes:
+De la respuesta salen:
 
 ```html
 <input type="hidden" name="javax.faces.ViewState" value="!-nlppp4bk5">
 <input name="Adf-Window-Id" type="hidden" value="winnoloop">
 ```
 
-- `javax.faces.ViewState` → aleatorio por sesión.
-- `Adf-Window-Id` → **siempre `winnoloop`**. Constante.
+- `javax.faces.ViewState`: aleatorio por sesión.
+- `Adf-Window-Id`: **siempre `winnoloop`**.
 
 Guarda las cookies (`PortalJSESSION` y las `OAM*`).
 
-Costo: **muy variable, entre 0.15 s / 52 KB y ~7 s / 4.5 MB**, sin depender del UA ni
-del `Accept`. Sigue siendo lo más caro del flujo. Una vez por sesión, nunca por carrera.
-Ver [GOTCHAS.md §25](GOTCHAS.md).
-
-Y **no parsees la tabla de esta respuesta**: puede llegar poblada con el resultado de
-otra sesión ([GOTCHAS.md §22](GOTCHAS.md)).
+Es la operación más cara y de costo muy variable (`SIA_BOOTSTRAP_COST`). Se hace una vez por sesión, nunca
+por petición. **No parsees la tabla de esta respuesta**: puede llegar con el resultado de
+otra sesión ([GOTCHAS §22](GOTCHAS.md)).
 
 ---
 
@@ -111,84 +111,67 @@ event.<id del componente>=<payload XML>
 oracle.adf.view.rich.PROCESS=<qué procesar>
 ```
 
-`PROCESS` = el id del componente para dropdowns y selección;
-`pt1:r1,<id>` para acciones (botones y links).
+`PROCESS` es el id del componente para dropdowns, y `pt1:r1,<id>` para acciones (botones
+y links).
 
-### Los tres payloads
+### Los payloads
 
 **Dropdown** (`valueChange`):
 ```xml
 <m xmlns="http://oracle.com/richClient/comm"><k v="autoSubmit"><b>1</b></k><k v="suppressMessageShow"><s>true</s></k><k v="type"><s>valueChange</s></k></m>
 ```
 
-**Botón / link** (`action`):
+**Botón o link** (`action`):
 ```xml
 <m xmlns="http://oracle.com/richClient/comm"><k v="type"><s>action</s></k></m>
 ```
 
-**Selección de fila** (`selection`) — existe, pero resultó **innecesaria**, ver §6:
-```xml
-<m xmlns="http://oracle.com/richClient/comm"><k v="type"><s>selection</s></k></m>
-```
+Existe también `selection`, pero no hace falta: ver §6.
 
 ---
 
 ## 3. Cascada regular (asignaturas de una carrera)
 
-Los dropdowns dependientes llegan **vacíos** en la página inicial. No puedes saltar
-pasos: ADF rechazaría `soc2=8` porque esa opción todavía no existe en su modelo.
+Los dropdowns dependientes llegan **vacíos** en la página inicial. No se pueden saltar
+pasos: ADF rechaza `soc2=8` porque esa opción todavía no existe en su modelo.
 
 | # | Evento | Componente | Efecto |
 |---|---|---|---|
 | 1 | valueChange | `pt1:r1:0:soc1` | nivel de estudio |
-| 2 | valueChange | `pt1:r1:0:soc9` | sede → puebla facultad |
-| 3 | valueChange | `pt1:r1:0:soc2` | facultad → puebla carrera |
-| 4 | valueChange | `pt1:r1:0:soc3` | carrera → puebla tipología |
+| 2 | valueChange | `pt1:r1:0:soc9` | sede → llena facultad |
+| 3 | valueChange | `pt1:r1:0:soc2` | facultad → llena carrera |
+| 4 | valueChange | `pt1:r1:0:soc3` | carrera → llena tipología |
 | 5 | action | `pt1:r1:0:cb1` | botón **Mostrar** → resultados |
 
-`soc4` (tipología) puede ir vacío o en `0` — son equivalentes. Pero **`0` no significa
+`soc4` (tipología) puede ir vacío o en `0`: son equivalentes. Pero **`0` no significa
 "sin filtro"**: es `TODAS MENOS  LIBRE ELECCIÓN`. Este listado **nunca** trae las
-asignaturas de libre elección del plan; para esas hace falta §5.
-Ver [GOTCHAS.md §21](GOTCHAS.md).
+asignaturas de libre elección del plan; para esas hace falta §5
+([GOTCHAS §21](GOTCHAS.md)).
 
-### Cambiar de carrera es barato
-
-Con la sesión ya cascadeada, moverse a otra carrera de la **misma facultad** cuesta
-2 POSTs: `soc3` + `cb1`. No hay que re-bootstrapear ni rehacer la cascada.
+Con la sesión ya en una facultad, cambiar a otra carrera de la misma facultad es `soc3` +
+`cb1`. Reenviar un `valueChange` con el valor que ya tiene no re-renderiza el dropdown
+dependiente ([GOTCHAS §30](GOTCHAS.md)).
 
 ---
 
-## 4. Filtro por nombre (`it11`)
+## 4. Filtros de texto (`it11`, `it10`)
 
-`it11` filtra por nombre **en el servidor**: substring, insensible a acentos
-(`calculo` encuentra `Cálculo`).
+`it11` filtra por nombre **en el servidor**: substring, insensible a acentos (`calculo`
+encuentra `Cálculo`). Baja la respuesta de `SIA_LISTING_BYTES` a `SIA_LISTING_IT11_BYTES`. `it10` filtra por
+número de créditos.
 
-Reduce el payload de forma brutal:
-
-```
-sin filtro                241 033 B    98 filas
-it11=calculo               26 848 B     6 filas
-it11=algoritmos            15 018 B     1 fila
-```
-
-Re-medido el 2026-08-17 sobre el barrido de la fase 2: 232 675 B → 17 862 B, **13×**.
-
-`it10` filtra por **número de créditos** (no por nombre, pese a lo que sugiere el orden).
-
-**No reemplaza la carrera.** Probado: con `soc3` vacío y `it11` puesto, ADF ignora la
-consulta y re-renderiza el resultado anterior.
-
-**Y no se limpia solo.** `it11` es un input del formulario, así que viaja en **cada** POST
-junto a los nueve `soc*` (§2). Dejarlo puesto convierte el siguiente listado completo en
-uno recortado: ~3 filas plausibles donde iban 98, sin ningún error. Limpiarlo es parte de
-la operación, no cortesía del llamador ([GOTCHAS §34](GOTCHAS.md)).
+- **No reemplaza la carrera.** Con `soc3` vacío y `it11` puesto, ADF ignora la consulta y
+  re-renderiza el resultado anterior.
+- **No se limpia solo.** `it11` viaja en **cada** POST. Dejarlo puesto recorta el siguiente
+  listado completo sin ningún error ([GOTCHAS §34](GOTCHAS.md)). Limpiarlo es parte de la
+  operación.
 
 ---
 
 ## 5. Cascada de electivas (libre elección)
 
 Con `soc4=7` (LIBRE ELECCIÓN) se activa un **segundo buscador** con sus propios
-dropdowns. Son 9 pasos, verificados uno a uno contra un HAR de navegador:
+dropdowns:
 
 | # | Evento | Componente | Ejemplo | Efecto |
 |---|---|---|---|---|
@@ -198,41 +181,32 @@ dropdowns. Son 9 pasos, verificados uno a uno contra un HAR de navegador:
 | 4 | valueChange | `soc3` | `3` | carrera |
 | 5 | valueChange | `soc4` | `7` | **tipología = libre elección** |
 | 6 | valueChange | `soc5` | `0` | modo: "Por facultad y plan" |
-| 7 | valueChange | `soc10` | `2` | sede del buscador → puebla `soc6` |
-| 8 | valueChange | `soc6` | `12` | facultad → **`12` = toda la sede** (en Bogotá-pregrado) |
+| 7 | valueChange | `soc10` | `2` | sede del buscador → llena `soc6` |
+| 8 | valueChange | `soc6` | `12` | facultad, o el comodín de toda la sede |
 | 9 | action | `cb1` | — | **Mostrar** |
 
-Los pasos 8 y 9 se **repiten una vez por facultad** cuando la sede no ofrece comodín en
-ese nivel — ver el truco de abajo.
+`soc7` ("¿Por qué plan?") es opcional y puede ir vacío. **Saltarse el paso 7 produce
+basura silenciosa**: `_rowCount` inflado y `_afrRK` duplicados.
 
-`soc7` ("¿Por qué plan?") es opcional; puede ir vacío.
+### El comodín de toda la sede
 
-**Saltarse el paso 7 produce basura silenciosa:** `_rowCount` inflado y `_afrRK` no
-contiguos con duplicados. Con la cascada correcta: 240 filas limpias para Bogotá.
+Una opción de `soc6` no es una facultad sino la sede entera (`2000 SEDE BOGOTÁ`). Devuelve
+la libre elección de **toda la sede** en una sola consulta. Dos límites:
 
-### Truco: todas las facultades a la vez — cuando existe
+- **Su posición cambia con la sede.** Se busca por la etiqueta (`SEDE …`) en la respuesta
+  del paso 7, nunca por un número fijo ([GOTCHAS §32](GOTCHAS.md)).
+- **No existe en doctorado.** Ahí el listado de la sede es la unión de una búsqueda por
+  facultad: repetir los pasos 8 y 9 por cada opción y dedupear por código
+  ([GOTCHAS §35](GOTCHAS.md)).
 
-`soc6=12` no es una facultad — es la opción `2000 SEDE BOGOTÁ`, un comodín que devuelve
-las asignaturas de libre elección de **toda la sede** mezcladas.
-
-Dos límites, los dos medidos:
-
-- **La posición cambia con la sede** (`12` en Bogotá, `10` en Medellín, `3` en Palmira):
-  se lee de la respuesta del paso 7, nunca se constantiza ([GOTCHAS §32](GOTCHAS.md)).
-- **La existencia cambia con el nivel.** En doctorado no hay comodín en ninguna sede
-  (Bogotá 11 opciones, Medellín 6, Palmira 2 — todas facultades reales, 2026-08-17). Ahí
-  el listado de la sede es la **unión de una búsqueda por facultad**: repetir pasos 8-9
-  por cada opción y dedupear por código. Palmira doctorado: 186 + 21 = 207 filas, 76 tras
-  dedupe ([GOTCHAS §35](GOTCHAS.md)).
-
-No existe equivalente para el flujo regular: las obligatorias y optativas siempre
-requieren carrera concreta.
+Los `_afrRK` de esa unión no sirven para hacer clic: el detalle se abre desde la búsqueda
+de la facultad que tiene la fila ([GOTCHAS §38](GOTCHAS.md)).
 
 ---
 
 ## 6. Detalle de una asignatura (cupos, horarios, profesor)
 
-**Un solo POST.** El `selection` previo es innecesario si `DELTAS` lleva
+**Un solo POST.** No hace falta el `selection` previo si `DELTAS` lleva
 `selectedRowKeys`:
 
 ```
@@ -242,46 +216,44 @@ event.pt1:r1:0:t4:<RK>:cl2  = <payload action>
 oracle.adf.view.rich.PROCESS= pt1:r1,pt1:r1:0:t4:<RK>:cl2
 ```
 
-→ ~48 KB con grupos, profesor, horarios, aula, jornada y cupos.
+Devuelve grupos, profesor, horarios, aula, jornada y cupos.
 
-`<RK>` es el `_afrRK` leído del `<tr>` de esa fila **en la respuesta más reciente**.
-Nunca la posición. Ver [GOTCHAS.md](GOTCHAS.md) §4.
+`<RK>` es el `_afrRK` leído del `<tr>` de esa fila **en la respuesta más reciente**, nunca
+la posición ([GOTCHAS §4](GOTCHAS.md)).
 
 ---
 
 ## 7. Las dos regiones y el botón Volver
 
-La sesión está en una de dos regiones:
-
+```mermaid
+stateDiagram-v2
+    direction LR
+    Buscador: pt1:r1:0 · buscador + tabla<br/>operan cb1 y los cl2
+    Detalle: pt1:r1:N · detalle de una asignatura<br/>opera cb4 (Volver)
+    Buscador --> Detalle: click cl2 en una fila
+    Detalle --> Buscador: Volver pt1:r1:N:cb4
 ```
-pt1:r1:0     buscador + tabla de resultados   ← operan cb1 y los cl2
-pt1:r1:<N>   detalle de una asignatura        ← opera cb4 (Volver)
-```
 
-Tras abrir un detalle quedas en la de detalle. **Cualquier** acción de la región 0
-—una búsqueda nueva o el detalle de otra asignatura— devuelve ~895 B vacíos hasta
-que salgas con Volver.
+Tras abrir un detalle, la sesión queda en la región de detalle. **Cualquier** acción de la
+región 0 (otra búsqueda, otro detalle) es un no-op hasta salir con Volver
+([GOTCHAS §10](GOTCHAS.md)).
 
 ### `<N>` no es 1: crece con cada detalle
 
-Lo que más código rompe de todo este documento. El índice de la región de detalle
-**sube en cada detalle abierto** dentro de la misma sesión:
-
-```
-1.er detalle → pt1:r1:1     2.º detalle → pt1:r1:2     98.º detalle → pt1:r1:98
+```mermaid
+flowchart LR
+    d1["1.er detalle<br/>pt1:r1:1"] --> d2["2.º detalle<br/>pt1:r1:2"] --> dn["…"] --> d98["98.º detalle<br/>pt1:r1:98"]
 ```
 
-Con `pt1:r1:1:cb4` fijo, el segundo Volver devuelve 893 B y **todo lo posterior también**
-—búsquedas incluidas—, así que parece una sesión caducada que no lo está.
-Ver [GOTCHAS.md §20](GOTCHAS.md).
-
-Léelo de la respuesta del propio detalle:
+Con `pt1:r1:1:cb4` fijo, el segundo Volver es un no-op y todo lo posterior también, así
+que parece una sesión caducada que no lo está ([GOTCHAS §20](GOTCHAS.md)). `N` se lee de
+la respuesta del propio detalle:
 
 ```
 id="pt1:r1:<N>:cb4"
 ```
 
-y úsalo en el POST:
+y se usa en el POST:
 
 ```
 event                       = pt1:r1:<N>:cb4
@@ -289,38 +261,19 @@ event.pt1:r1:<N>:cb4        = <payload action>
 oracle.adf.view.rich.PROCESS= pt1:r1,pt1:r1:<N>:cb4
 ```
 
-→ ~257 KB, re-renderiza la tabla. **Los `_afrRK` se renumeran aquí.**
-
-### Bucle para varias asignaturas
+Volver re-renderiza la tabla y **renumera los `_afrRK`**. Para varias asignaturas:
 
 ```
 por cada asignatura:
-    POST click             (~48 KB)    ─┐
-    leer N de id="pt1:r1:N:cb4"         │  ~1.0 s
-    POST Volver a pt1:r1:N:cb4 (~257 KB)│
-    re-parsear _afrRK                  ─┘
+    POST click
+    leer N de id="pt1:r1:N:cb4"
+    POST Volver a pt1:r1:N:cb4
+    re-parsear _afrRK
 ```
 
-Medido con el índice dinámico: **98 asignaturas de un plan, 201 POSTs, 99 s, 31 MB,
-cero atascos.**
-
 ---
 
-## 8. Rutas mínimas medidas
-
-| Escenario | Secuencia | POSTs | Tiempo |
-|---|---|---|---|
-| Frío, sin sesión | GET + 4 cascada + `cb1` + click | 1 GET + 6 | **~10 s** |
-| Sesión viva, misma carrera, tras una búsqueda | `cb1` + click | **2** | **~1.3 s** |
-| Sesión viva, misma carrera, tras un detalle | Volver + `cb1` + click | 3 | ~1.8 s |
-| Sesión viva, otra carrera misma facultad | `soc3` + `cb1` + click | 3 | ~1.5 s |
-
-Combinar `it11` con la ruta de 2 POSTs es lo más eficiente para consultar una
-asignatura concreta.
-
----
-
-## 9. Estructura de la respuesta
+## 8. Estructura de la respuesta
 
 `Content-Type: text/xml`, un `<partial-response>`:
 
@@ -332,7 +285,9 @@ asignatura concreta.
 </changes></partial-response>
 ```
 
-El contenido útil está en el CDATA de `<update id="pt1:r1:0:pb3">`.
+El contenido útil está en el CDATA de `<update id="pt1:r1:0:pb3">`. En la página completa
+cada `<tr>` aparece varias veces: solo se parsean respuestas parciales
+([GOTCHAS §23](GOTCHAS.md)).
 
 ### Filas del listado
 
@@ -354,8 +309,7 @@ El contenido útil está en el CDATA de `<update id="pt1:r1:0:pb3">`.
 | `c6` | Tipología | `course_program.typology` |
 | `c8` | Descripción | `course.description` |
 
-El listado **no trae** grupos, profesor, horarios ni cupos. Verificado: cero
-ocurrencias de `Cupos disponibles` en una respuesta de 241 KB con 98 filas.
+El listado **no trae** grupos, profesor, horarios ni cupos. Eso solo sale del detalle.
 
 ### Detalle
 
@@ -379,74 +333,41 @@ Cupos disponibles: 32
 ...
 ```
 
-`Cupos disponibles` es **por grupo**; no hay cupo a nivel de asignatura.
-
-**El conjunto de grupos depende de la carrera desde la que consultas.** Ver
-[GOTCHAS.md](GOTCHAS.md) §16.
-
-### Delimitar los grupos: `^\(\d+\)\s*Grupo` NO basta
-
-Los grupos PEAMA llevan otra cabecera y ese regex los descarta en silencio (son ~20 %
-de los observados). Ver [GOTCHAS.md §24](GOTCHAS.md):
+- `Cupos disponibles` es **por grupo**; no hay cupo a nivel de asignatura.
+- **El conjunto de grupos depende de la carrera desde la que se consulta**
+  ([GOTCHAS §16](GOTCHAS.md)).
+- Las cabeceras de grupo no siempre son `(N) Grupo N`. Los grupos PEAMA llevan otra forma,
+  y la identidad del grupo es el token entre paréntesis ([GOTCHAS §24, §27,
+  §40](GOTCHAS.md)):
 
 ```
-(1) Grupo 1                            ← formato normal
+(1) Grupo 1
 (TUMA-01) Peama - Tumaco - Grupo 1
 (ORIN-01) Peama-Orinoquia Grupo 1
 (SUMA-01) Grupo 1
-(CARI-01) PEAMA- PAET Caribe Grupo 1
 ```
 
-Usa algo tolerante: `\([^)\n]{1,20}\)[^\n]{0,60}?Grupo\s*\S+`.
-
-Un grupo PEAMA además trae su propia sede (`Facultad: SEDE TUMACO`), distinta de la del
-plan desde el que consultas.
-
-### El detalle trae dos bloques más que no estaban documentados
-
-**Prerrequisitos** (en 22 de 36 asignaturas muestreadas), después de los grupos:
-
-```
-Prerrequisitos Condición 1 Tipo M ¿Todas? [N] Número asignaturas [1]
-1000004-B Cálculo diferencial
-2016377 Cálculo diferencial en una variable
-```
-
-`Tipo` es un enum que el propio SIA explica en la página: `M` no se puede matricular sin
-superarlo · `O` se matricula pero no se califica · `E` se puede cursar en simultáneo ·
-`A` anulación por incompatibilidad.
-
-**Contenido de la asignatura** (en 31 de 36), antes de los grupos, con los componentes:
-
-```
-Contenido de la asignatura
-CLASE TEORICA 2015555 (2015555)
-```
-
-Ninguno de los dos está en `DATA-MODEL.md`. Son gratis: vienen en el mismo POST del
-detalle. Si interesan, se modelan sin coste de red adicional.
-
-Otro marcador útil: `Horarios/Aula: No informado` para grupos sin horario asignado.
+El detalle trae además **prerrequisitos** y **contenido de la asignatura** (formato en
+[FIELDS.md](FIELDS.md)). Hoy no se guardan.
 
 ---
 
-## 10. Costos medidos
+## 9. Rutas mínimas
 
-| Operación | Tamaño | Tiempo |
+Cuántos POSTs cuesta un detalle según dónde esté la conexión:
+
+| Escenario | Secuencia | Peticiones |
 |---|---|---|
-| Bootstrap | 52 KB – 4.5 MB | 0.15 – 7 s |
-| Cascada, dropdown dependiente (`soc9`, `soc10`) | ~2 KB | ~470 ms |
-| Cascada, re-render de panel (resto) | ~33 KB | ~470 ms |
-| Consulta `cb1`, 98 filas | 241 KB | ~470 ms |
-| Consulta `cb1`, 240 filas | 514 KB | ~1 s |
-| Consulta `cb1` con `it11` | 15–27 KB | ~470 ms |
-| Volver | ~257 KB | ~470 ms |
-| Detalle (1 POST) | 8 KB–264 KB | ~500 ms |
-| Censo de dropdowns (nivel × sede × facultad) | 131 MB | 142 POSTs / 78 s |
+| Frío, sin sesión | GET + 4 de cascada + `cb1` + click | 1 GET + 6 POSTs |
+| Misma carrera, tras una búsqueda | `cb1` + click | 2 |
+| Misma carrera, tras un detalle | Volver + `cb1` + click | 3 |
+| Otra carrera, misma facultad | `soc3` + `cb1` + click | 3 |
 
-Una carrera completa (98 asignaturas con detalle) = **201 POSTs, 99 s, 31 MB**, medido
-de punta a punta con el Volver dinámico de §7.
+Lo más barato para una asignatura concreta es la ruta de 2 POSTs con `it11`.
 
-El SIA aguanta **80 sesiones concurrentes** sin errores ni throttling, y la latencia por
-búsqueda no se degrada (0.5-0.9 s con N=1 y con N=8; plana hasta N=80). En 88 ya aparece
-~4.5% de fallas — ver `OPEN-QUESTIONS.md` §5.
+---
+
+## 10. Costos y límites
+
+Están en [CONSTANTS.md](CONSTANTS.md): los medidos del SIA (`SIA_*`) y el límite de
+sesiones concurrentes (`maxTotalConnections`), compartido entre la API y el `Refresher`.

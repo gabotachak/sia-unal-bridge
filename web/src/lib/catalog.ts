@@ -1,5 +1,6 @@
-// Unir los catálogos de uno o dos planes en una sola lista
-// (PLAN-DOUBLE-TITULATION.md, D5 y D6).
+// Unir los catálogos de uno o dos planes en una sola lista, deduplicada por
+// código. Si un código está en los dos, gana el plan donde su tipología tiene
+// mayor rango (typology.ts); empate, el primer plan elegido.
 
 import { STALE_SEATS_SECONDS } from '../api/client';
 import type { CourseDetail, CourseSeats, CourseSummary } from '../api/types';

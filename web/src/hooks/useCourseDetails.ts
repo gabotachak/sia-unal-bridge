@@ -37,7 +37,7 @@ export type Row = {
   status: 'idle' | 'loading' | 'done' | 'error';
   error?: string;
   /** El `code` del ApiError, cuando lo hay. 'unknown_course' es el caso de
-   *  reconciliación (docs/PLAN-SIACHANGES.md D2): la materia se apagó del
+   *  reconciliación (docs/DATA-MODEL.md, decisión 10): la materia se apagó del
    *  catálogo del plan y reintentar nunca la va a traer de vuelta. */
   errorCode?: string;
   /**

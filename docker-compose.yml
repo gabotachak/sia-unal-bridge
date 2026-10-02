@@ -69,7 +69,7 @@ services:
   #
   # Está bajo el perfil `jobs`, así que `docker compose up -d` NO lo arranca.
   # Sin eso, levantar el stack dispararía un barrido, y `restart: unless-stopped`
-  # lo repetiría en bucle. Se invoca A MANO (su cron se abandonó, docs/FASE-2.md):
+  # lo repetiría en bucle. Se invoca A MANO (sin cron, docs/ARCH.md "Refresher"):
   #
   #   docker compose run --rm refresher --mode=catalog --workers=2
   refresher:
@@ -87,7 +87,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-sia}:${POSTGRES_PASSWORD:-sia}@db:5432/${POSTGRES_DB:-sia_bridge}?sslmode=disable
       SIA_BASE_URL: ${SIA_BASE_URL:-https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf}
       # El pool de la API, sólo para que el job pueda avisar si la suma pasa
-      # de 80 conexiones — el techo medido (docs/OPEN-QUESTIONS.md §5). No lo comparte.
+      # del límite de sesiones del SIA (docs/CONSTANTS.md). No lo comparte.
       SIA_POOL_SIZE: ${SIA_POOL_SIZE:-4}
       SIA_TERM: ${SIA_TERM:-2026-2}
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -118,8 +118,8 @@ services:
         VITE_INCIDENT_BANNER_OFF: ${VITE_INCIDENT_BANNER_OFF:-}
         # Mismo camino que FETCH_COOLDOWN: .env de la raíz, build arg acá,
         # ARG/ENV en el Dockerfile, `define` en vite.config.ts. Sin este
-        # eslabón el bundle de Docker caía al '7200' de vite.config.ts aunque
-        # .env.example diga 1800 (docs/PLAN-SIACHANGES.md A4).
+        # eslabón el bundle de Docker cae al default de vite.config.ts, no al
+        # valor de .env.
         VITE_STALE_SEATS_SECONDS: ${VITE_STALE_SEATS_SECONDS:-1800}
         GIT_TAG: ${GIT_TAG:-dev}
         GIT_SHA: ${GIT_SHA:-unknown}

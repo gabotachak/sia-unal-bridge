@@ -8,8 +8,9 @@ import "time"
 // course on its own is not a fetchable unit.
 //
 // Name rides along because the listing filter (it11) matches on it: with the
-// name, findRow narrows the ~241 KB cb1 to 15–27 KB, which is the factor of
-// 4 in bandwidth that pays for fase 2. Empty Name simply means no filter.
+// name, findRow narrows the cb1 from SIA_LISTING_BYTES to SIA_LISTING_IT11_BYTES,
+// the bandwidth saving that pays for the Refresher. Empty Name simply means no
+// filter.
 type CourseRef struct {
 	ProgramID int64
 	Code      string
@@ -24,14 +25,14 @@ type CourseRef struct {
 	// It is what separates the two ways a sweep can see "0 grupos": a sede
 	// with nothing scheduled this term (legitimate, and it is what SEDE DE LA
 	// PAZ looks like — measured 2026-08-17) from groups that used to be there
-	// and stopped parsing, which is the ×135 000 failure of docs/FASE-2.md
+	// and stopped parsing, which is the ×135 000 failure of a crawler
 	// paso 5. Only the second one may abort a sweep.
 	HadSections bool
 }
 
 // RefreshRun is one Refresher sweep, as recorded for /v1/status. It is
 // observability, NOT a checkpoint: the job never asks "where was I", it asks
-// "what is still stale" (docs/FASE-2.md "El checkpoint ya existe").
+// "what is still stale" (docs/ARCH.md "Refresher").
 type RefreshRun struct {
 	ID              int64      `json:"-"`
 	Mode            string     `json:"mode"`

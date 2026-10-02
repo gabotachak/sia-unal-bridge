@@ -10,6 +10,10 @@ get {
   auth: none
 }
 
+params:query {
+  ~max_age: 0
+}
+
 params:path {
   campus: {{campus}}
   program: {{program}}
@@ -22,5 +26,9 @@ assert {
 }
 
 docs {
-  Body siempre trae age_seconds — nunca se sirve un cupo sin decir de cuándo es.
+  El body siempre trae measured_at y age_seconds: nunca se sirve un cupo sin
+  decir de cuándo es. changed_at es cuándo cambió el número por última vez.
+
+  ?max_age=0 fuerza la medición; repetirlo antes de FETCH_COOLDOWN responde
+  429 refresh_cooldown.
 }

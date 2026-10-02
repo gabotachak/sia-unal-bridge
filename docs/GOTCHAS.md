@@ -340,19 +340,31 @@ el resultado anterior — que se parece mucho a un éxito. Cuidado.
 `PROTOCOL.md` decía que Volver es `pt1:r1:1:cb4`. Eso es cierto **solo para el primer
 detalle de la sesión**. El índice de la región sube con cada detalle abierto:
 
-```
-1.er detalle → la región es pt1:r1:1  → Volver = pt1:r1:1:cb4
-2.º  detalle → la región es pt1:r1:2  → Volver = pt1:r1:2:cb4
-98.º detalle → la región es pt1:r1:98 → Volver = pt1:r1:98:cb4
+```mermaid
+flowchart LR
+    d1["1.er detalle"] --> r1["región pt1:r1:1"] --> v1["Volver = pt1:r1:1:cb4"]
+    d2["2.º detalle"] --> r2["región pt1:r1:2"] --> v2["Volver = pt1:r1:2:cb4"]
+    d98["98.º detalle"] --> r98["región pt1:r1:98"] --> v98["Volver = pt1:r1:98:cb4"]
 ```
 
 Con el id fijo, el síntoma es este:
 
-```
-detalle 1 → 157 KB ✓     Volver (pt1:r1:1:cb4) → 257 KB, 98 filas ✓
-detalle 2 →  20 KB ✓     Volver (pt1:r1:1:cb4) →   893 B, 0 filas  ✗
-                         Volver otra vez        →   893 B          ✗
-                         búsqueda nueva         →   893 B          ✗
+```mermaid
+sequenceDiagram
+    participant C as Cliente
+    participant S as SIA
+    C->>S: detalle 1
+    S-->>C: 157 KB ✓
+    C->>S: Volver (pt1:r1:1:cb4)
+    S-->>C: 257 KB, 98 filas ✓
+    C->>S: detalle 2
+    S-->>C: 20 KB ✓
+    C->>S: Volver (pt1:r1:1:cb4)
+    S-->>C: 893 B, 0 filas ✗
+    C->>S: Volver otra vez
+    S-->>C: 893 B ✗
+    C->>S: búsqueda nueva
+    S-->>C: 893 B ✗
 ```
 
 La sesión **parece muerta y no lo está**: sigue en la región de detalle, y como el
@@ -600,20 +612,30 @@ recuperó sola. **La conexión no hay que tirarla:** re-cascadear (`soc9` → `s
 
 El mutex tiene que envolver la **operación lógica completa**:
 
-```
-    correcto                             roto
-    ────────                             ────
-    lock                                 lock; POST soc3; unlock
-      POST soc3                          lock; POST cb1;  unlock
-      POST cb1                           ↑ dos operaciones se intercalan aquí
-    unlock                                 y reproduces el caso B tal cual
+```mermaid
+sequenceDiagram
+    participant O as Operación
+    participant C as Conexión
+    rect rgba(120,220,160,0.15)
+    Note over O,C: correcto
+    O->>C: lock
+    O->>C: POST soc3
+    O->>C: POST cb1
+    O->>C: unlock
+    end
+    rect rgba(255,120,120,0.15)
+    Note over O,C: roto
+    O->>C: lock#59; POST soc3#59; unlock
+    Note over O,C: ↑ dos operaciones se intercalan aquí<br/>y reproduces el caso B tal cual
+    O->>C: lock#59; POST cb1#59; unlock
+    end
 ```
 
 Las operaciones lógicas son: *cascada + `cb1`*, y *detalle + `Volver`*. Partirlas es
 exactamente el bug.
 
 Entre conexiones distintas no hay problema hasta 80 en paralelo: 0 errores, 0
-contaminación (§ concurrencia en [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md)). En 88 empieza
+contaminación (`maxTotalConnections` en [CONSTANTS.md](CONSTANTS.md)). En 88 empieza
 a degradar. El paralelismo va **entre** conexiones, nunca dentro de una.
 
 ---

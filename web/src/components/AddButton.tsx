@@ -17,8 +17,8 @@ export function AddButton({ item, variant = 'plus' }: Props) {
   const id = itemId(item);
   const added = plan.has(id);
 
-  // El semestre es de MIS planes —uno, o dos con doble titulación
-  // (PLAN-DOUBLE-TITULATION.md). Una asignatura de un plan que no es mío
+  // El semestre es de MIS planes —uno, o dos con doble titulación—.
+  // Una asignatura de un plan que no es mío
   // traería grupos y tipología que no son los que veo, así que el botón se
   // apaga en vez de dejar mezclar. Quitar sigue permitido: sacar nunca hace
   // daño.

@@ -10,6 +10,12 @@ get {
   auth: none
 }
 
+params:query {
+  ~include: schedules
+  ~q: algoritmos
+  ~max_age: 0
+}
+
 params:path {
   campus: {{campus}}
   program: {{program}}
@@ -20,7 +26,12 @@ assert {
 }
 
 docs {
-  Miss en frío: 2 POSTs al SIA (regular + electivas), ~5-10s. Mirar
-  X-Cache/X-SIA-Fetch-Ms en la respuesta. Filtros opcionales: ?q= ?credits=
-  ?typology=
+  El catálogo del plan: las dos mitades (regular + libre elección de la
+  sede). Si nunca se trajo, espera al SIA (X-Cache: miss, X-SIA-Fetch-Ms).
+  Si existe pero está vencido (FreshnessCatalog), responde lo guardado al
+  instante (X-Cache: stale) y lo refresca por detrás. ?max_age=0 obliga a
+  esperar el SIA.
+
+  ?q=, ?credits= y ?typology= filtran el catálogo guardado. ?include=schedules
+  agrega los horarios de los grupos de cada asignatura.
 }

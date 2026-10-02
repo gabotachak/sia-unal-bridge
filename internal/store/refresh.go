@@ -126,7 +126,7 @@ func (s *Store) SeatsHotSet(ctx context.Context, campusCode string, limit int) (
 // RecordDemand is the counter the hot set is built from. Only httpapi calls
 // it: "las que tienen detail_fetched_at" works today only because a client
 // is the sole writer, and stops working the moment the global sweep stamps
-// every course (docs/FASE-2.md).
+// every course.
 func (s *Store) RecordDemand(ctx context.Context, campusCode, code string) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO course_demand (campus_code, code, hits, last_requested_at)
@@ -194,7 +194,7 @@ func (s *Store) LastRuns(ctx context.Context) ([]catalog.RefreshRun, error) {
 	return out, rows.Err()
 }
 
-// TryLock is the "no encolar corridas" rule of docs/FASE-2.md: an advisory
+// TryLock is the "no encolar corridas" rule of docs/ARCH.md: an advisory
 // lock is session-scoped, so it needs a connection held for the whole run
 // and released explicitly — not a pooled Exec that returns the connection
 // (and drops the lock) the moment it finishes.

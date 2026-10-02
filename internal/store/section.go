@@ -128,7 +128,7 @@ func (s *Store) UpsertDetail(ctx context.Context, programID int64, term string, 
 				// measurement itself is always recorded, on
 				// section.seats_checked_at — sin esa columna, no insertar
 				// haría que el dato pareciera viejo y el read-through lo
-				// volviera a pedir (docs/FASE-2.md "Cupos").
+				// volviera a pedir (docs/DATA-MODEL.md, decisión 4).
 				if _, err := tx.Exec(ctx, `
 					INSERT INTO seat_snapshot (section_id, available_seats, measured_at)
 					SELECT $1, $2, $3

@@ -32,3 +32,4 @@ node_modules/
 # tooling local de agentes, no es parte del proyecto
 .agents/
 .claude/
+graphify-out/

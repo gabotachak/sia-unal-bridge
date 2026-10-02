@@ -152,6 +152,15 @@ pool como máximo.
   `(campus_code, faculty_code, code)`.
 - `group` es **palabra reservada en SQL**. Se usa `section`.
 
+## Interfaz (`web/`)
+
+Para diseñar, revisar o arreglar UI usa la skill **`ui-ux-pro-max`**
+(accesibilidad, tipografía, color, layout responsive) y, para tokens,
+**`design-system`**: las dos están fijadas en `skills-lock.json` y se instalan con
+`npx skills experimental_install`. Ojo con lo que asumen: la interfaz **no** usa
+Tailwind ni librería de componentes; la identidad visual entera es
+`web/src/styles/tokens.css`.
+
 ## Verificar contra el servidor
 
 La colección Bruno (`bruno/sia-catalogo/`) ejecuta el flujo completo a mano. Úsala para

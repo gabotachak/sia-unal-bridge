@@ -120,6 +120,18 @@ manual, y `REFRESH_ENABLED=false` la bloquea. Modos y reglas en
 
 ---
 
+## Skills de agentes
+
+`skills-lock.json` fija las skills del proyecto (nombre, origen y hash), como un lockfile.
+El contenido instalado (`.claude/skills/`, `.agents/skills/`) no se versiona:
+
+```bash
+npx skills experimental_install        # restaura lo que fija el lock
+npx skills add <repo> --skill <nombre> --agent claude-code -y   # agrega una y actualiza el lock
+```
+
+---
+
 ## Probar el protocolo a mano
 
 Antes de depurar código propio, confirma que el SIA sigue igual.

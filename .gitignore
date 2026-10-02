@@ -30,7 +30,9 @@ vendor/
 # node: el de web/ lo ignora web/.gitignore; este cubre corridas desde la raíz
 node_modules/
 
-# tooling local de agentes, no es parte del proyecto
+# tooling local de agentes, no es parte del proyecto. Las skills instaladas viven
+# en .claude/skills/ y .agents/skills/; lo versionado es skills-lock.json (nombre,
+# origen y hash de cada una), que se restaura con `npx skills experimental_install`.
 .agents/
 .claude/
 graphify-out/

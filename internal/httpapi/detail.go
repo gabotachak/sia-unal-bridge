@@ -15,7 +15,7 @@ import (
 // Refresher's seats hot set is built from. It lives here because httpapi is
 // the only adapter that knows there is a person on the other side: if the job
 // fed this counter, the hot set would just be a list of everything the job
-// already swept (docs/FASE-2.md "Cupos").
+// already swept (docs/ARCH.md "Refresher").
 //
 // Best-effort on purpose: failing to count must never fail the response — and
 // "never" includes never adding latency to it either, so the write runs in
@@ -182,7 +182,7 @@ func (a *api) sectionSeats(c *gin.Context) {
 	}
 	// measured_at/age_seconds keep their meaning — "de cuándo es este
 	// número". changed_at is the new, additive datum: when the number last
-	// actually moved (docs/FASE-2.md "Cupos").
+	// actually moved (docs/DATA-MODEL.md, decisión 4).
 	if section.Seats.ChangedAt != nil {
 		body["changed_at"] = *section.Seats.ChangedAt
 	}

@@ -10,7 +10,7 @@ import (
 )
 
 // TestLive_98DetailsInOneSession hits the real SIA server. It is the
-// explicit acceptance bar for paso 4 (docs/PLAN.md): a full program's worth
+// explicit acceptance bar for the stateful navigation: a full program's worth
 // of details fetched back-to-back in one session must never hit a noop, and
 // DetailRegion must grow with every detail (GOTCHAS §20). Skipped unless
 // SIA_LIVE=1 — never run on a normal `go test ./...` or in CI.

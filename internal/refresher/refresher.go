@@ -9,7 +9,7 @@
 // fetch made by this job and one made by a client is WHO asked for it.
 //
 // Consequence: any persistence bug this job exposes is a bug the API already
-// had. That is a feature. See docs/FASE-2.md.
+// had. That is a feature. See docs/ARCH.md "Refresher".
 package refresher
 
 import (
@@ -26,8 +26,7 @@ import (
 )
 
 // The four sweeps. Each has its own cadence and its own cost — the catalog
-// sweep is ~14× cheaper than the detail one, so they are never run together
-// (docs/FASE-2.md "Cadencia").
+// sweep is far cheaper than the detail one, so they are never run together.
 const (
 	ModeReference = "reference"
 	ModeCatalog   = "catalog"
@@ -249,7 +248,7 @@ func (r *refresher) eachProgram(ctx context.Context, programs []catalog.Program,
 // record folds one unit's outcome into the Report and runs the circuit
 // breaker: 5 consecutive failures, or >20% of a sweep failing, is not bad
 // luck — it is the SIA having changed under us, and continuing would write
-// plausible garbage 135 000 times (docs/FASE-2.md, paso 5).
+// plausible garbage 135 000 times.
 //
 // unit is what failed, for the log: "1101/2A74" for a program, "1101/pregrado"
 // for a sede's directory.

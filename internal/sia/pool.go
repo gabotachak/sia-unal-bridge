@@ -12,11 +12,9 @@ import (
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
 
-// DefaultPoolSize is fase 1's chosen size. 80 is the measured optimum:
-// against production (2026-08-19) the SIA runs 80 concurrent sessions clean
-// with flat p50 latency, and 88 already shows ~4.5% failures
-// (docs/OPEN-QUESTIONS.md §5). 4 is sized to current real traffic; the
-// headroom up to 80 is a config decision — see docs/ARCH.md "Concurrencia".
+// DefaultPoolSize is the pool when SIA_POOL_SIZE is unset. The ceiling is
+// the measured limit of concurrent SIA sessions (docs/PROTOCOL.md §10), shared
+// with the Refresher; anything up to it is a config decision.
 const DefaultPoolSize = 4
 
 // keepaliveTick / keepaliveIdle: the session dies after ~4.2min idle, not
@@ -174,7 +172,7 @@ func (p *Pool) Ready() int {
 
 // Stats reports the traffic this pool has generated: POSTs made and bytes
 // read (bootstraps included). It is what refresh_run stores and what makes
-// the bandwidth figures of docs/FASE-2.md auditable instead of estimated.
+// the sweep's bandwidth auditable instead of estimated.
 func (p *Pool) Stats() (posts, bytes int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

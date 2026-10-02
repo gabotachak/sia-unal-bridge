@@ -19,7 +19,7 @@ import (
 // a sweep — what it skips, what it re-fetches, when it gives up — lives in
 // the SQL that answers "what is still stale", so faking the database would
 // test the fake. Same tradeoff as internal/store's tests: TEST_DATABASE_URL
-// or skip (docs/LAYOUT.md).
+// or skip.
 //
 // Test campus codes are 999x, never a real sede, so a run against the dev
 // database cannot disturb cached real data.
@@ -175,7 +175,7 @@ func opts(mode, campus string) refresher.Options {
 
 // A second consecutive sweep must make ZERO fetches: the freshness marks are
 // the checkpoint, so re-running is both how you resume and how you do
-// nothing (docs/FASE-2.md "El checkpoint ya existe").
+// nothing (docs/ARCH.md "Refresher": the checkpoint is the freshness marks).
 func TestCatalogSweep_SecondRunIsFree(t *testing.T) {
 	sia := &fakeSIA{courses: []string{"A-1", "A-2", "A-3"}}
 	svc, st := testService(t, sia)

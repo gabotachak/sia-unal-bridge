@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!--
-  SYNTHETIC — not captured from the server. See docs/OPEN-QUESTIONS.md §3:
+  SYNTHETIC — not captured from the server. See docs/GOTCHAS.md §7:
   two live probes on 2026-08-15 left a session idle 322s+ without it dying,
   contradicting the ~270s figure from the first round of experiments. This
   fixture reconstructs the documented ~1.2KB mute shape (empty re-render,

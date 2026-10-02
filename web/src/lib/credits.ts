@@ -47,8 +47,8 @@ export function creditsByTypology(items: Pick<PlanItem, 'typology' | 'credits'>[
 
 export type CreditsByPlan = { program: string; credits: number };
 
-/** El total desglosado por PLAN — solo tiene sentido con doble titulación
- *  (D9, PLAN-DOUBLE-TITULATION.md). Los mínimos de los estatutos se miden
+/** El total desglosado por PLAN — solo tiene sentido con doble titulación.
+ *  Los mínimos de los estatutos se miden
  *  por INSCRIPCIÓN completa, no por plan: esto es puramente informativo,
  *  hermano de `creditsByTypology`, misma forma y mismo orden. */
 export function creditsByPlan(items: Pick<PlanItem, 'program' | 'credits'>[]): CreditsByPlan[] {

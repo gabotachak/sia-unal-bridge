@@ -39,7 +39,7 @@ export const FETCH_COOLDOWN = Number(import.meta.env.VITE_FETCH_COOLDOWN) || 300
  *
  * NO es un umbral del cliente sobre datos que ya llegaron — eso lo decidía
  * un `useEffect` que reimplementaba en el front lo que `?max_age=` ya hace
- * en el servidor (docs/PLAN-SIACHANGES.md A3). Es la frescura que este front
+ * en el servidor. Es la frescura que este front
  * le PIDE a la API en la petición normal; la autoridad sigue siendo el
  * servidor, igual que con FETCH_COOLDOWN.
  */

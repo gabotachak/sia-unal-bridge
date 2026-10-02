@@ -398,7 +398,7 @@ func testProgram(id int64) Program {
 }
 
 // TestCourseDetail_SingleflightCollapsesConcurrentColdFetches is paso 6's
-// acceptance bar (docs/PLAN.md): two simultaneous cold requests for the
+// acceptance bar: two simultaneous cold requests for the
 // SAME (program, code) make exactly ONE SIA call.
 func TestCourseDetail_SingleflightCollapsesConcurrentColdFetches(t *testing.T) {
 	store := newFakeStore()

@@ -110,7 +110,7 @@ export function Fault({
   }
 
   // El plan que la Selection guardaba se apagó del lado del SIA (reconciliación,
-  // docs/PLAN-SIACHANGES.md D1): reintentar nunca va a arreglarlo, porque el
+  // docs/DATA-MODEL.md, decisión 10): reintentar nunca va a arreglarlo, porque el
   // 404 sale de la misma Selection en cada intento. La salida es elegir otro
   // plan, por el mismo camino que Topbar.startOver — borrar y RECARGAR, no
   // navegar, para que ninguna pantalla siga repintándose con la Selection

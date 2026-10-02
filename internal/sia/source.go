@@ -13,7 +13,7 @@ import (
 // Source implements catalog.SIASource over a Pool. It does not import
 // catalog to satisfy an interface declared there structurally — it imports
 // it for the domain types it returns, which is the allowed direction
-// (docs/LAYOUT.md).
+// (docs/ARCH.md).
 type Source struct {
 	pool *Pool
 }

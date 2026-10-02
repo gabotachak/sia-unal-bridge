@@ -13,7 +13,7 @@ import (
 
 // TestIntegration_ResolveCatalogDetail wires the real adapters together —
 // the only place the hexagon allows it — and proves fase 1's end-to-end
-// promise (docs/PLAN.md "Definición de fase 1 hecha" #1/#2): resolve a
+// promise: resolve a
 // Bogotá program by its public code, read-through its catalog, read-through
 // one course's detail with seats. Requires both SIA_LIVE=1 and
 // TEST_DATABASE_URL; skipped otherwise.

@@ -353,7 +353,7 @@ func (f *fakeSIA) FetchDetails(ctx context.Context, key catalog.ProgramKey, refs
 	return nil
 }
 
-// TestCourseDetail_MissThenHit is paso 7's acceptance bar (docs/PLAN.md):
+// TestCourseDetail_MissThenHit is the read-through's acceptance bar:
 // curl /v1/campuses/{campus}/programs/{program}/courses/{code} returns API.md's example
 // shape, with X-Cache: miss the first time and hit the second.
 func TestCourseDetail_MissThenHit(t *testing.T) {

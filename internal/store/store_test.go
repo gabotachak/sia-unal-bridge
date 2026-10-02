@@ -10,7 +10,7 @@ import (
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
 
-// testStore requires TEST_DATABASE_URL — docs/LAYOUT.md's chosen tradeoff
+// testStore requires TEST_DATABASE_URL — the chosen tradeoff
 // over testcontainers-go: point it at `docker compose up -d db` and skip
 // otherwise.
 func testStore(t *testing.T) *Store {

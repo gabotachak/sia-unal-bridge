@@ -15,7 +15,7 @@ import { MAX_ITEMS, PlanContext, type PlanApi } from './planContext';
 
 /**
  * El estado compartido de la app: la lista del semestre y los planes
- * elegidos (uno, o dos con doble titulación — PLAN-DOUBLE-TITULATION.md).
+ * elegidos (uno, o dos con doble titulación).
  *
  * Hasta acá cada pantalla se bastaba sola —pedía sus datos y los pintaba— así
  * que no hacía falta nada. Esta lista es distinta: se agrega desde el catálogo,

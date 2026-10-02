@@ -12,7 +12,7 @@ import (
 )
 
 // Detail is one course's detail page, parsed as plain text after stripping
-// tags — LAYOUT.md "goquery solo para el listado". Sections is the group
+// tags — goquery is only for the listing. Sections is the group
 // list; ProgramName/ProgramFaculty are the context the detail was fetched
 // from, not part of the persisted schema.
 type Detail struct {
@@ -244,8 +244,8 @@ func parseSection(header, body, campusCode, code, term string) catalog.Section {
 }
 
 // parsePrerequisites extracts (condition, type, code, name) tuples. Best
-// effort — extraction is required, persistence is not (fase 1 scope,
-// docs/PLAN.md).
+// effort — extraction is required, persistence is not (docs/API.md
+// "Fuera de alcance").
 func parsePrerequisites(block string) []catalog.Prerequisite {
 	if li := strings.Index(block, prereqLegend); li >= 0 {
 		block = block[:li]

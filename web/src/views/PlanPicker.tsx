@@ -42,7 +42,7 @@ import './PlanPicker.css';
  * cobrar dos clics de peaje para llegar a la única lista que de verdad hay que
  * mirar.
  *
- * Doble titulación (PLAN-DOUBLE-TITULATION.md): una casilla, sin marcar por
+ * Doble titulación: una casilla, sin marcar por
  * defecto, deja elegir DOS planes en vez de uno. Toda la elección vive en un
  * borrador local de esta pantalla (`draft`) y `plan.select()` se llama una
  * sola vez, con la lista completa — así nunca queda un estado a medias

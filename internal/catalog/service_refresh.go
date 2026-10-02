@@ -59,8 +59,8 @@ func (s *Service) suspectShrunkCatalog(ctx context.Context, program Program, off
 // RefreshDetails pulls the detail of several courses of ONE program over one
 // connection, persisting each as it arrives. Same use case as CourseDetail —
 // same fetch, same upsert, same freshness marks — with the batching the
-// Refresher needs and no second path into Postgres (docs/FASE-2.md "Qué es y
-// qué no es").
+// Refresher needs and no second path into Postgres (docs/ARCH.md "La
+// invariante").
 //
 // yield is called once per course with the persisted offering, or with the
 // error that course failed with. Returning an error from yield stops the
@@ -90,7 +90,7 @@ func (s *Service) CoursesNeedingVisibility(ctx context.Context, programID int64,
 // SeatsHotSet is the seats sweep's work list. For seats the Refresher is a
 // hot-set warmer, not a freshness guarantee: one worker measures ~1
 // course/s, the universe is ~10 000, and the TTL is 5 min — short by a
-// factor of ~8. The read-through stays the mechanism (docs/FASE-2.md).
+// factor of ~8. The read-through stays the mechanism.
 func (s *Service) SeatsHotSet(ctx context.Context, campusCode string, limit int) ([]CourseRef, error) {
 	return s.store.SeatsHotSet(ctx, campusCode, limit)
 }
@@ -116,7 +116,7 @@ func (s *Service) AllPrograms(ctx context.Context) ([]Program, error) {
 
 // Run bookkeeping and the per-mode advisory lock, passed through so
 // internal/refresher never imports store — it is a driving adapter and the
-// hexagon's rule applies to it too (docs/LAYOUT.md).
+// hexagon's rule applies to it too (docs/ARCH.md).
 func (s *Service) StartRun(ctx context.Context, mode, scope string) (int64, error) {
 	return s.store.StartRun(ctx, mode, scope)
 }

@@ -870,7 +870,7 @@ components:
 
     RefreshRun:
       type: object
-      description: Una corrida del Refresher (docs/FASE-2.md). Observabilidad, no checkpoint.
+      description: Una corrida del Refresher (docs/ARCH.md). Observabilidad, no checkpoint.
       properties:
         mode: { type: string, examples: [detail] }
         scope: { type: string, examples: [global] }

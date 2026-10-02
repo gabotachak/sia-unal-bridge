@@ -58,10 +58,9 @@ function scopeOf(s: Selection) {
 }
 
 /**
- * El catálogo de un plan — o de dos, con doble titulación
- * (PLAN-DOUBLE-TITULATION.md). Hasta ~700 asignaturas por plan (Medellín:
- * 694); la unión de dos NO es la suma (D6): comparten cientos de códigos de
- * libre elección.
+ * El catálogo de un plan — o de dos, con doble titulación. Cientos de
+ * asignaturas por plan; la unión de dos NO es la suma: comparten cientos de
+ * códigos de libre elección.
  *
  * Los filtros son en memoria a propósito: el catálogo completo ya vino en la
  * misma respuesta, así que filtrar en el servidor costaría otra consulta al
@@ -200,8 +199,8 @@ export function Program({
    * Lo que cambió es cuándo: la primera versión medía el catálogo entero al
    * montar, y como nada mantiene los cupos a menos de STALE_SEATS_SECONDS eso
    * eran TODAS las filas — 267 detalles por abrir un plan de Bogotá, ~1000
-   * POSTs al SIA, con 32 en vuelo: el pool entero de la API para una persona
-   * (docs/internal/FABLE-IMPROVEMENTS.md §3). Ahora una fila se mide cuando entra a la
+   * POSTs al SIA, con 32 en vuelo: el pool entero de la API para una persona.
+   * Ahora una fila se mide cuando entra a la
    * pantalla (el `IntersectionObserver` de más abajo), de a
    * AUTO_MEASURE_CONCURRENCY, por el carril de fondo de la API
    * (`background`), y salir del catálogo suelta lo que no había empezado.

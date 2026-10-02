@@ -30,7 +30,7 @@ export function Course({ screen }: { screen: Extract<Screen, { name: 'course' }>
   // max_age=STALE_SEATS_SECONDS, no el default del servidor: es lo que el
   // tooltip de cupos ya promete ("Ábrela para volver a preguntar"). El
   // read-through decide si eso significa cache o SIA — no hay un segundo
-  // useEffect peleando con el cooldown por su cuenta (docs/PLAN-SIACHANGES.md A3).
+  // useEffect peleando con el cooldown por su cuenta.
   const path = routes.course(scope, program, code, STALE_SEATS_SECONDS);
   const { data, freshness, error, loading, elapsed, attempt, reload } = useApi<CourseDetail>(path);
 

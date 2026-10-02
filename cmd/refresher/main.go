@@ -124,11 +124,10 @@ func main() {
 	}
 }
 
-// maxTotalConnections is the measured optimum: 80 concurrent SIA sessions
-// run clean — no errors, no throttling, flat p50 latency — and 88 already
-// shows ~4.5% failures (docs/OPEN-QUESTIONS.md §5). It is the real edge of
-// the server, shared between the two processes, which is why crossing it is
-// a warning here and not a silent success.
+// maxTotalConnections is the measured limit of concurrent SIA sessions
+// (docs/PROTOCOL.md §10). It is the real edge of the server, shared between
+// the two processes, which is why crossing it is a warning here and not a
+// silent success.
 const maxTotalConnections = 80
 
 func pick(flagVal, cfgVal int) int {

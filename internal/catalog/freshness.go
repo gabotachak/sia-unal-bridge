@@ -2,9 +2,9 @@ package catalog
 
 import "time"
 
-// Default max-age per resource type. See docs/API.md "Frescura" — the seats
-// default is a guess pending the 2026-08-27 measurement window
-// (docs/OPEN-QUESTIONS.md §2).
+// Default max-age per resource type. See docs/API.md "Frescura", which is the
+// one place the docs list these values. The seats and catalog defaults are
+// choices, not measurements (docs/ARCH.md "Lo que no sabemos").
 const (
 	FreshnessReference = 30 * 24 * time.Hour
 	FreshnessCatalog   = 7 * 24 * time.Hour

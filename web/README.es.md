@@ -71,8 +71,8 @@ Verificado: los grupos de una misma materia vuelven siempre con la edad idéntic
 
 **Doble titulación: dos planes son dos fuentes para el mismo horario, no dos catálogos.**
 No hay "plan activo" ni pestañas: con dos planes elegidos el catálogo es la unión,
-deduplicada por `code`, y el código compartido gana la tipología de mayor rango (D6,
-[`docs/PLAN-DOUBLE-TITULATION.md`](../docs/PLAN-DOUBLE-TITULATION.md)). Es lo que hace
+deduplicada por `code`, y el código compartido gana la tipología de mayor rango
+(`src/lib/typology.ts`). Es lo que hace
 que el choque de horario cruzado salga gratis, y que la feature entera sea más chica que
 la alternativa de pestañas, no más grande.
 
@@ -150,8 +150,8 @@ src/
 
 ## Más
 
-- [`docs/PLAN-FRONTEND.md`](../docs/PLAN-FRONTEND.md): el plan de la interfaz, con el
-  curso mínimo de front para leer este código.
+- [`docs/diagram.md`](../docs/diagram.md#20-la-interfaz-web): cómo está armada la
+  interfaz, en un diagrama.
 - [`../README.es.md`](../README.es.md): el proyecto entero, la API y cómo habla con el
   SIA.
 

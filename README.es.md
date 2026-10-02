@@ -74,7 +74,7 @@ Tres piezas, un solo repo y un solo `docker compose`:
 |---|---|---|
 | **API** | `cmd/bridge` + `internal/` | Traduce el ADF a JSON y lo cachea en Postgres. OpenAPI 3.1 servido en `/v1/docs` |
 | **Interfaz** | [`web/`](web/) | React + TypeScript sobre esa API. Arma el semestre: catálogo, horario, cupos |
-| **`Refresher`** | `cmd/refresher` | Barrido manual de la cache. Su cron se abandonó: la API sirve lo guardado y refresca detrás (ver `docs/FASE-2.md`) |
+| **`Refresher`** | `cmd/refresher` | Barrido manual de la cache. Sin cron: la API sirve lo guardado y refresca detrás (ver `docs/ARCH.md`) |
 
 La interfaz **nunca** toca Postgres ni importa nada de `internal/`: habla la misma API
 pública que cualquier otro cliente. Si algo se ve en pantalla, existe como endpoint.
@@ -118,16 +118,16 @@ checkpoint son los marcadores de frescura, así que **reanudar es volver a corre
 corridas seguidas no hacen ni un POST.
 
 ```bash
-docker compose --profile jobs run --rm refresher --mode=reference                 # niveles, sedes, planes: 131 POSTs, 72 s
+docker compose --profile jobs run --rm refresher --mode=reference                 # niveles, sedes, planes
 docker compose --profile jobs run --rm refresher --mode=catalog --workers=2       # la lista de asignaturas de cada plan
 docker compose --profile jobs run --rm refresher --mode=detail --scope=global \
                                   --workers=2 --max-duration=4h    # grupos, horarios y cupos
 docker compose --profile jobs run --rm refresher --mode=seats --scope=hot         # calienta lo que la gente mira
 ```
 
-Son corridas **manuales**: ya no hay cron ni cadencia (por qué, en
-[`docs/FASE-2.md`](docs/FASE-2.md)). `REFRESH_ENABLED=false` las bloquea todas.
-`GET /v1/status` cuenta qué hizo la última corrida de cada modo. Detalles y números medidos: [`docs/FASE-2.md`](docs/FASE-2.md).
+Son corridas **manuales**: no hay cron (por qué, en
+[`docs/ARCH.md`](docs/ARCH.md#refresher)). `REFRESH_ENABLED=false` las bloquea todas.
+`GET /v1/status` cuenta qué hizo la última corrida de cada modo.
 
 ## La interfaz
 
@@ -147,8 +147,6 @@ vista, y un miss frío no se esconde tras un spinner — se explica, con cronóm
 </div>
 
 Cómo correrla, qué dependencia hace qué y por qué no hay más: [`web/README.es.md`](web/README.es.md).
-El plan, con el curso mínimo de front para leerlo todo:
-[`docs/PLAN-FRONTEND.md`](docs/PLAN-FRONTEND.md).
 
 ## La API
 
@@ -239,21 +237,21 @@ sequenceDiagram
     end
 ```
 
-El árbol de paquetes y qué hace cada uno:
-[`docs/LAYOUT.md`](docs/LAYOUT.md).
+Qué hace cada paquete, y cada flujo en un diagrama: [`docs/ARCH.md`](docs/ARCH.md) y
+[`docs/diagram.md`](docs/diagram.md).
 
 ### `SIASource` no es un cliente HTTP
 
 Es un **pool de sesiones ADF vivas**. Cada conexión:
 
-- muere a los **~4.2 min** de inactividad — con ping ≤3 min vive indefinidamente
+- muere tras unos minutos de inactividad; el keepalive del pool la mantiene viva
 - es **estrictamente secuencial**: una petición en vuelo a la vez
 - está parqueada en un `(nivel, sede, facultad, plan)`; moverla cuesta 2 POSTs
 - está en el buscador **o** en una región de detalle **numerada**, cuyo número **sube**
 
 El SIA aguanta bastante más paralelismo del que el pool usa; el pool se queda corto
-porque el tráfico real no pide más, no porque el servidor imponga un techo bajo. El
-número medido y cómo se midió están en [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) §5.
+porque el tráfico real no pide más, no porque el servidor imponga un techo bajo. Los
+límites medidos están en [`docs/PROTOCOL.md`](docs/PROTOCOL.md) §10.
 
 ## Lo que no es obvio
 
@@ -285,52 +283,24 @@ plausibles y equivocados.
 
 ## Documentación
 
-**Antes de escribir código**
+Describe cómo funciona hoy, no la historia. Cada número medido vive en un solo lugar y el
+resto enlaza.
 
 | | |
 |---|---|
 | [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **Las trampas verificadas. Léelo antes de tocar el código.** |
-| [`docs/ARCH.md`](docs/ARCH.md) | Puertos, read-through, pool de sesiones, concurrencia |
-| [`docs/diagram.md`](docs/diagram.md) | Todo el proyecto en diagramas Mermaid: hexágono, flujos, pool, Refresher, esquema |
-| [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Esquema Postgres y las nueve decisiones no obvias |
-| [`docs/LAYOUT.md`](docs/LAYOUT.md) | Árbol de paquetes Go y qué vive en cada uno |
-| [`docs/COMMIT-CONVENTION.md`](docs/COMMIT-CONVENTION.md) | Formato de commits — `semantic-release` lo lee |
-
-**El protocolo**
-
-| | |
-|---|---|
-| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | Handshake ADF completo, con cuerpos reales |
-| [`docs/FIELDS.md`](docs/FIELDS.md) | Componentes ADF y opciones de cada dropdown |
-| [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | Qué está probado y qué no |
-| [`bruno/sia-catalogo/`](bruno/sia-catalogo/) | El flujo ADF crudo, a mano contra el SIA |
-
-**El contrato y la interfaz**
-
-| | |
-|---|---|
+| [`docs/ARCH.md`](docs/ARCH.md) | Hexágono, read-through, pool de sesiones, `Refresher`, lo que no sabemos |
+| [`docs/diagram.md`](docs/diagram.md) | Todo el proyecto en diagramas Mermaid: hexágono, flujos, pool, esquema |
+| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | El handshake ADF POST por POST, y los costos y límites medidos del SIA |
+| [`docs/FIELDS.md`](docs/FIELDS.md) | Componentes ADF y las opciones de cada dropdown |
 | [`docs/API.md`](docs/API.md) | Contrato HTTP: IDs públicos, frescura, errores |
+| [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Las decisiones del esquema que no son obvias leyendo el DDL |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Entorno local, fixtures, cómo reproducir el flujo |
+| [`docs/COMMANDS.md`](docs/COMMANDS.md) | Chuleta: deploys, migraciones, qué versión corre dónde |
+| [`docs/COMMIT-CONVENTION.md`](docs/COMMIT-CONVENTION.md) | Formato de commits: `semantic-release` lo lee |
+| [`web/README.es.md`](web/README.es.md) | La interfaz: cómo correrla y cómo está armada |
+| [`bruno/sia-catalogo/`](bruno/sia-catalogo/) | El flujo ADF crudo, a mano contra el SIA |
 | [`bruno/bridge-api/`](bruno/bridge-api/) | La colección de esta API, endpoint por endpoint |
-| [`web/README.es.md`](web/README.es.md) | La interfaz: cómo correrla y qué dependencia hace qué |
-| [`docs/PLAN-FRONTEND.md`](docs/PLAN-FRONTEND.md) | Plan de la interfaz **+ curso mínimo de front** |
-
-**Operación**
-
-| | |
-|---|---|
-| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Entorno local, fixtures, cómo replicar el flujo |
-| [`docs/COMMANDS.md`](docs/COMMANDS.md) | Chuleta: deploy, migraciones, qué versión corre dónde |
-| [`docs/internal/PLAN-CI-CD.md`](docs/internal/PLAN-CI-CD.md) | Deploy automático al mergear a `main`, versionado semver |
-| [`docs/internal/PLAN-PRODUCTION.md`](docs/internal/PLAN-PRODUCTION.md) | Cómo esto pasa de localhost al server |
-
-**Los planes**
-
-| | |
-|---|---|
-| [`docs/PLAN.md`](docs/PLAN.md) | Fase 1: la API. Pasos y criterios de aceptación |
-| [`docs/FASE-2.md`](docs/FASE-2.md) | Fase 2: el `Refresher`, concurrencia del crawl y cadencia |
-| [`docs/PLAN-SIACHANGES.md`](docs/PLAN-SIACHANGES.md) | Reconciliar lo que el SIA deja de ofrecer |
-| [`docs/PLAN-DOUBLE-TITULATION.md`](docs/PLAN-DOUBLE-TITULATION.md) | Doble titulación: dos planes en un solo horario (solo front) |
 
 ## Verificar contra el servidor
 

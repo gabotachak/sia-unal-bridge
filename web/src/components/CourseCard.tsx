@@ -204,7 +204,7 @@ export function CourseCard({
       {status === 'error' && (
         <p className="card__error">
           {error}
-          {/* La reconciliación (docs/PLAN-SIACHANGES.md D2) apaga la materia
+          {/* La reconciliación (DATA-MODEL.md, decisión 10) apaga la materia
               del catálogo del plan: reintentar nunca la trae de vuelta. La
               caneca de arriba ya la quita, pero acá al lado hace explícito
               QUÉ hacer con el error en vez de dejarlo en un limbo hasta que

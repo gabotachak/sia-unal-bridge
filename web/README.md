@@ -71,8 +71,7 @@ cheaper. Verified: sections of the same course always come back with identical a
 **Double degree means two sources for one timetable, not two catalogs.** There is no
 "active program" and no tabs: with two programs chosen, the catalog is their union,
 deduplicated by course code, and a shared course takes the higher-ranked course type
-(decision D6 in
-[`docs/PLAN-DOUBLE-TITULATION.md`](../docs/PLAN-DOUBLE-TITULATION.md)). That is what
+(`src/lib/typology.ts`). That is what
 makes cross-program clash detection free, and it made the feature smaller than the tabbed
 alternative, not bigger.
 
@@ -150,8 +149,8 @@ src/
 
 ## More
 
-- [`docs/PLAN-FRONTEND.md`](../docs/PLAN-FRONTEND.md): the web app's plan, including a
-  crash course in frontend for reading this code (in Spanish).
+- [`docs/diagram.md`](../docs/diagram.md#20-la-interfaz-web): how the app is wired, as a
+  diagram (in Spanish).
 - [`../README.md`](../README.md): the whole project, the API and how it talks to the
   SIA.
 

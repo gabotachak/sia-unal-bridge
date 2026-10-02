@@ -104,9 +104,9 @@ func Load() (Config, error) {
 // separately so a typo in a REFRESH_* variable can never keep the API from
 // starting — the two processes share a database and an .env, not a lifecycle.
 //
-// The invariant that is not negotiable (docs/FASE-2.md): the API's pool plus
-// the job's pool must stay ≤ 8, the measured ceiling of concurrent SIA
-// sessions. SIA_POOL_SIZE is the API's and is never shared.
+// The invariant that is not negotiable: the API's pool plus the job's pool
+// must stay within the measured limit of concurrent SIA sessions
+// (docs/PROTOCOL.md §10). SIA_POOL_SIZE is the API's and is never shared.
 type Refresh struct {
 	Enabled       bool
 	Workers       int

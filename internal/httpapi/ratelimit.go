@@ -12,9 +12,9 @@ import (
 )
 
 // rateLimiter is a per-IP token bucket. The SIA pool is the real bottleneck
-// (docs/OPEN-QUESTIONS.md §5: 8 concurrent sessions measured clean, never
-// more) — this exists so one client can't exhaust it before anyone else gets
-// a turn, not to police abuse in general.
+// — this exists so one client can't exhaust it before anyone else gets a
+// turn, not to police abuse in general. laneByIP below covers what a token
+// bucket cannot see: how long each request holds a connection.
 type rateLimiter struct {
 	mu       sync.Mutex
 	visitors map[string]*visitor

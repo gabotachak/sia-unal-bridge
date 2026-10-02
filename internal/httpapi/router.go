@@ -13,8 +13,8 @@ import (
 )
 
 // api holds the one dependency every handler needs. c.Request.Context()
-// crosses into catalog, never *gin.Context itself — LAYOUT.md's hexagon
-// rule for this adapter.
+// crosses into catalog, never *gin.Context itself — the hexagon's rule for
+// this adapter (docs/ARCH.md).
 type api struct {
 	svc *catalog.Service
 	// cooldown is the floor on how often a client may force a SIA fetch for
@@ -26,8 +26,7 @@ type api struct {
 }
 
 // NewRouter builds the /v1 router. gin.New(), not Default(): the logger is
-// slog via requestLogger, not gin's own stdout writer (docs/LAYOUT.md
-// "Gin: cuatro reglas").
+// slog via requestLogger, not gin's own stdout writer.
 func NewRouter(svc *catalog.Service, cooldown int, rateRPS float64, rateBurst, acquireTimeoutSeconds int, version, commit string) *gin.Engine {
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.ReleaseMode)

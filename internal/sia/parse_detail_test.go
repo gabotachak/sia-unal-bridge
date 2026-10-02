@@ -190,7 +190,7 @@ func TestParseSchedule_GroupWithScheduleHasSessions(t *testing.T) {
 }
 
 // TestParseDetail_ProfesorAnchorMatchesGroupCount is A1
-// (docs/PLAN-SIACHANGES.md): every detail fixture in testdata/ must parse a
+// (docs/DATA-MODEL.md, decisión 10): every detail fixture in testdata/ must parse a
 // number of sections equal to its "Profesor:" count. A future fixture that
 // breaks this invariant fails the build instead of shipping a silent
 // under- or over-count.

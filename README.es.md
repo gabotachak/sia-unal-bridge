@@ -134,7 +134,7 @@ Son corridas **manuales**: no hay cron (por qué, en
 React + TypeScript, tres dependencias de runtime (React, React DOM y un set de
 íconos), sin librería de estado ni de componentes — en [`web/`](web/). Arma el semestre:
 catálogo por plan, ficha de asignatura con horario y grupos, "Mi semestre" para juntar
-hasta veinte materias y medir sus cupos con un solo botón, y "Mi horario" con detección
+materias candidatas y medir sus cupos con un solo botón, y "Mi horario" con detección
 de choques y exportación a calendario. Con doble titulación se eligen dos planes y se
 arman en un solo horario.
 
@@ -223,10 +223,10 @@ sequenceDiagram
     S->>P: ¿guardado? ¿catalog_fetched_at fresco?
     alt guardado y fresco
         P-->>S: asignaturas
-        S-->>C: 200 · X-Cache: hit · ~1 ms
+        S-->>C: 200 · X-Cache: hit
     else guardado pero vencido
         P-->>S: asignaturas
-        S-->>C: 200 · X-Cache: stale · ~1 ms
+        S-->>C: 200 · X-Cache: stale
         S-)X: refresca por detrás (la misma consulta de abajo)
     else nunca consultado
         S->>X: cascada + listado regular
@@ -271,11 +271,11 @@ Estas cinco salen de medir contra el servidor, no de suponer:
 
 | | |
 |---|---|
-| **El listado devuelve ofertas, no asignaturas** | Los códigos se repiten hasta ×131. Clave natural `(code, term, key)`, donde `key` es el token entre paréntesis — `Grupo N` se repite entre regulares y PEAMA |
+| **El listado devuelve ofertas, no asignaturas** | Los códigos se repiten. Clave natural `(code, term, key)`, donde `key` es el token entre paréntesis — `Grupo N` se repite entre regulares y PEAMA |
 | **Los grupos visibles dependen del plan** | Relación de subconjunto estricto. Pero **los cupos son globales**: una medición sirve para todos los planes |
-| **La tipología depende del plan** | Probado: 8 códigos divergen entre planes de Bogotá. Vive en `course_program` |
+| **La tipología depende del plan** | Probado, no supuesto. Vive en `course_program` |
 | **El catálogo de un plan son dos consultas** | `soc4=0` significa literalmente *todas menos libre elección*. Las libres salen del buscador de electivas, que es por sede |
-| **Una respuesta de ~900 B no es un error HTTP** | Es un no-op: falta un paso de la cascada, o caducó la sesión. Se trata como error explícito en vez de devolver datos incompletos |
+| **Una respuesta diminuta con 200 no es un éxito** | Es un no-op: falta un paso de la cascada, o caducó la sesión. Se trata como error explícito en vez de devolver datos incompletos |
 
 Están todas, cada una verificada contra producción, en
 [`docs/GOTCHAS.md`](docs/GOTCHAS.md). Varias fallan **en silencio**: devuelven datos
@@ -291,7 +291,8 @@ resto enlaza.
 | [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **Las trampas verificadas. Léelo antes de tocar el código.** |
 | [`docs/ARCH.md`](docs/ARCH.md) | Hexágono, read-through, pool de sesiones, `Refresher`, lo que no sabemos |
 | [`docs/diagram.md`](docs/diagram.md) | Todo el proyecto en diagramas Mermaid: hexágono, flujos, pool, esquema |
-| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | El handshake ADF POST por POST, y los costos y límites medidos del SIA |
+| [`docs/CONSTANTS.md`](docs/CONSTANTS.md) | **El único documento con cifras**: medidas del SIA y constantes del código |
+| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | El handshake ADF, POST por POST |
 | [`docs/FIELDS.md`](docs/FIELDS.md) | Componentes ADF y las opciones de cada dropdown |
 | [`docs/API.md`](docs/API.md) | Contrato HTTP: IDs públicos, frescura, errores |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Las decisiones del esquema que no son obvias leyendo el DDL |

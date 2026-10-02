@@ -130,7 +130,7 @@ Abre `bruno/sia-catalogo/` y selecciona el entorno **SIA**. Corre las peticiones
 orden (01 → 06 para el catálogo, 01 → 13 para electivas). Cada una imprime en consola
 el número de filas y el rango de `_afrRK`.
 
-Si una devuelve ~900 B, la consola te avisa: falta un paso, estás en la región de
+Si una devuelve un no-op (`SIA_NOOP_BYTES`), la consola te avisa: falta un paso, estás en la región de
 detalle, o caducó la sesión.
 
 ### Con curl
@@ -143,7 +143,8 @@ curl -sS -o /dev/null -w '%{http_code} %{size_download}\n' \
   'https://sia.unal.edu.co/Catalogo/facespublico/public/servicioPublico.jsf?taskflowId=task-flow-AC_CatalogoAsignaturas'
 ```
 
-Esperado: `200` y ~1 MB. Si son ~7000 bytes, tu UA parece de navegador — ver
+Esperado: `200` y la página completa (`SIA_BOOTSTRAP_COST`). Si llega
+`SIA_BROWSER_UA_BYTES`, tu UA parece de navegador — ver
 [GOTCHAS.md §1](GOTCHAS.md).
 
 Extraer el ViewState:
@@ -169,21 +170,21 @@ listado completo es un `ls`; lo que importa es la convención:
   en [GOTCHAS.md](GOTCHAS.md) y su test. Es el patrón de §40.
 - **No se borran las viejas.** Sirven para detectar cuándo el SIA cambió de forma.
 
-`.gitignore` excluye `/testdata/live/` y `*.har`: las capturas crudas pesan entre 50 KB
-y 1 MB, y lo que se commitea es la respuesta mínima que reproduce el caso.
+`.gitignore` excluye `/testdata/live/` y `*.har`: las capturas crudas pesan mucho, y lo
+que se commitea es la respuesta mínima que reproduce el caso.
 
 ---
 
 ## Cuidado con el servidor
 
 Es el catálogo público de una universidad. Los costos de cada operación están en
-[PROTOCOL.md §10](PROTOCOL.md).
+[CONSTANTS.md](CONSTANTS.md).
 
 - **Un bootstrap por sesión**, jamás por petición.
 - Reutiliza la conexión: moverse dentro de la misma facultad es barato.
 - Usa `it11` para buscar una asignatura concreta, y **límpialo** al terminar: se queda en
   el formulario y recorta la siguiente búsqueda ([GOTCHAS §34](GOTCHAS.md)).
-- Respeta `SIA_POOL_SIZE + REFRESH_POOL_SIZE ≤` el límite de sesiones del SIA.
+- Respeta `SIA_POOL_SIZE + REFRESH_POOL_SIZE ≤ maxTotalConnections`.
 
 Durante el desarrollo, trabaja contra fixtures y toca el servidor real solo para
 verificar.

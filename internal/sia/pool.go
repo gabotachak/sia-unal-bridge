@@ -13,7 +13,7 @@ import (
 )
 
 // DefaultPoolSize is the pool when SIA_POOL_SIZE is unset. The ceiling is
-// the measured limit of concurrent SIA sessions (docs/PROTOCOL.md §10), shared
+// the measured limit of concurrent SIA sessions (docs/CONSTANTS.md), shared
 // with the Refresher; anything up to it is a config decision.
 const DefaultPoolSize = 4
 

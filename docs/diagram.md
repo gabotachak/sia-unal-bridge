@@ -5,9 +5,8 @@ cómo está armado el hexágono y por dónde viaja cada petición desde `main` h
 de vuelta.
 
 Este documento **explica**, no define. Si un diagrama y el código no coinciden, manda el
-código. Los diagramas nombran constantes en vez de repetir valores: los números medidos
-del SIA están en [PROTOCOL.md §10](PROTOCOL.md), y los TTL en
-[API.md](API.md#frescura).
+código. Los diagramas nombran constantes; sus valores están en
+[CONSTANTS.md](CONSTANTS.md).
 
 **Índice**
 
@@ -69,7 +68,7 @@ flowchart LR
 ```
 
 La regla que importa: `conexiones(api) + conexiones(refresher)` no supera el límite de
-sesiones simultáneas que aguanta el SIA ([PROTOCOL.md §10](PROTOCOL.md)).
+sesiones simultáneas que aguanta el SIA ([CONSTANTS.md](CONSTANTS.md)).
 
 ---
 
@@ -222,7 +221,7 @@ sequenceDiagram
     M->>SV: ServeStale = true
     M->>R: NewRouter(svc, cooldown, rate limit, timeouts)
     M->>H: ListenAndServe en :PORT
-    Note over M,H: SIGINT/SIGTERM: srv.Shutdown con 10 s
+    Note over M,H: SIGINT/SIGTERM: srv.Shutdown con timeout
 ```
 
 ---
@@ -808,7 +807,8 @@ Tablas de apoyo, sin relaciones de dominio:
 
 Esquema completo y sus decisiones en [DATA-MODEL.md](DATA-MODEL.md).
 
-Los TTL de cada marcador están en [API.md](API.md#frescura).
+Los TTL de cada marcador están en [API.md](API.md#frescura) y sus valores en
+[CONSTANTS.md](CONSTANTS.md).
 
 ---
 

@@ -125,7 +125,7 @@ func main() {
 }
 
 // maxTotalConnections is the measured limit of concurrent SIA sessions
-// (docs/PROTOCOL.md §10). It is the real edge of the server, shared between
+// (docs/CONSTANTS.md). It is the real edge of the server, shared between
 // the two processes, which is why crossing it is a warning here and not a
 // silent success.
 const maxTotalConnections = 80

@@ -40,7 +40,7 @@ turns that data into a planner:
 - **Catalog**: every course in a degree program, searchable and filterable by course
   type, credits and the days and hours you are free.
 - **Course page**: sections, schedules, instructors and seats for one course.
-- **Mi semestre** (*my semester*): collect up to twenty candidate courses and measure the
+- **Mi semestre** (*my semester*): collect candidate courses (up to `MAX_ITEMS`) and measure the
   seats of all of them with one button.
 - **Mi horario** (*my timetable*): pick one section per course, see clashes on a weekly
   calendar and export the result to any calendar app as an `.ics` file.
@@ -56,8 +56,8 @@ when it was measured, and the client keeps that promise: `src/api/client.ts` ret
 `{ data, freshness }` together, never the data alone. That is what lets a seat count from
 four minutes ago and one from four hours ago look different on screen.
 
-**Loading is explained, not hidden.** A cold cache miss against the SIA takes 3 to 8
-seconds, because it is up to 15 chained requests. Instead of a silent spinner there is a
+**Loading is explained, not hidden.** A cold cache miss against the SIA takes
+seconds, because it is a chain of dependent requests. Instead of a silent spinner there is a
 stopwatch and an explanation. The contrast with the second visit (milliseconds) is the
 product's whole argument.
 

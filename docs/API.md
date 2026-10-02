@@ -155,7 +155,7 @@ El atajo por código responde según cuántos planes guardados lo ofrecen:
 completo disparado por un query string. Por eso declara su cobertura:
 
 ```json
-{ "results": [ ... ], "coverage": { "programs_known": 1380, "programs_with_catalog": 49 } }
+{ "results": [ ... ], "coverage": { "programs_known": …, "programs_with_catalog": … } }
 ```
 
 ### Operación
@@ -181,24 +181,23 @@ Un solo concepto: `?max_age=<segundos>`.
 
 ```
 ?max_age=0      fuerza la consulta al SIA
-?max_age=300    sirve lo guardado si tiene menos de 5 min
+?max_age=N      sirve lo guardado si tiene menos de N segundos
 (sin parámetro)  el default del recurso
 ```
 
 | Recurso | Default | Marcador | Al vencer |
 |---|---|---|---|
-| Referencia (niveles, sedes, programas) | 30 d | `reference_fetch.fetched_at` | sirve lo guardado y refresca por detrás |
-| Catálogo | 7 d | `program.catalog_fetched_at` | sirve lo guardado y refresca por detrás |
-| Detalle (grupos y visibilidad del plan) | 24 h | `course_program.detail_fetched_at` | espera el SIA |
-| Cupos | 5 min | `section.seats_checked_at` | espera el SIA |
+| Referencia (niveles, sedes, programas) | `FreshnessReference` | `reference_fetch.fetched_at` | sirve lo guardado y refresca por detrás |
+| Catálogo | `FreshnessCatalog` | `program.catalog_fetched_at` | sirve lo guardado y refresca por detrás |
+| Detalle (grupos y visibilidad del plan) | `FreshnessDetail` | `course_program.detail_fetched_at` | espera el SIA |
+| Cupos | `FreshnessSeats` | `section.seats_checked_at` | espera el SIA |
 
-Los defaults viven en `internal/catalog/freshness.go`. **Esta tabla es la única copia en
-la documentación**: si cambian allá, se cambian aquí.
+Valores en [CONSTANTS.md](CONSTANTS.md).
 
 - **Referencia y catálogo** existentes se responden al instante con `X-Cache: stale`, y el
   SIA se consulta por detrás. Solo esperan quien abre algo que nunca se trajo y quien manda
-  `?max_age=0`. Si el refresco falla, se reintenta como mucho una vez por minuto por
-  recurso.
+  `?max_age=0`. Si el refresco falla, se reintenta como mucho una vez cada `behindRetry`
+  por recurso.
 - **Detalle**: la visibilidad es por plan, así que un plan que nunca pidió la asignatura
   paga el POST aunque otro plan ya la tenga. Pero si el plan ya conoce sus grupos (dentro
   del default) y todos tienen cupos medidos dentro del `max_age` pedido, desde cualquier
@@ -216,8 +215,8 @@ cliente podría forzar el SIA en bucle.
 
 `?background=1` marca una lectura que no pidió una persona (un cliente que recorre un
 catálogo para refrescar sus cupos). En el pool va por el **carril de fondo**, que ocupa
-como mucho la mitad, y no cuenta como demanda. Una IP con demasiadas peticiones en vuelo
-también pasa al carril de fondo ([ARCH.md](ARCH.md#quién-va-al-carril-de-fondo)).
+como mucho la mitad, y no cuenta como demanda. Una IP con más de `foregroundPerIP`
+peticiones en vuelo también pasa al carril de fondo ([ARCH.md](ARCH.md#quién-va-al-carril-de-fondo)).
 
 ### Cabeceras
 

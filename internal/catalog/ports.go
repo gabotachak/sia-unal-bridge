@@ -73,7 +73,7 @@ type SIASource interface {
 	// Description come from the detail header, not the listing.
 	//
 	// ref.Name is optional and only an optimisation: with it the listing is
-	// narrowed through it11 (much smaller response, docs/PROTOCOL.md §10), and a
+	// narrowed through it11 (much smaller response, docs/CONSTANTS.md), and a
 	// name that no longer matches falls back to the full listing.
 	FetchDetail(ctx context.Context, key ProgramKey, ref CourseRef, term string) (CourseOffering, error)
 

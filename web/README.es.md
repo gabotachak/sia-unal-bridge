@@ -40,7 +40,7 @@ SIA— y convierte esos datos en un planeador:
 - **Catálogo**: todas las asignaturas de un plan, con búsqueda y filtros por tipología,
   créditos y los días y horas en que tenés tiempo.
 - **Ficha de asignatura**: grupos, horarios, profesores y cupos de una materia.
-- **Mi semestre**: juntá hasta veinte materias candidatas y medí los cupos de todas con
+- **Mi semestre**: juntá materias candidatas (hasta `MAX_ITEMS`) y medí los cupos de todas con
   un solo botón.
 - **Mi horario**: elegí un grupo por materia, mirá los choques en un calendario semanal
   y exportá el resultado a cualquier app de calendario como `.ics`.
@@ -56,8 +56,8 @@ cliente respeta esa promesa: `src/api/client.ts` devuelve `{ data, freshness }` 
 nunca solo los datos. Es lo que hace que un cupo de hace 4 minutos y uno de hace 4 horas
 no se vean igual.
 
-**La carga se explica, no se esconde.** Un miss frío contra el SIA tarda entre 3 y 8
-segundos: son hasta 15 POSTs encadenados. En vez de un spinner mudo hay un cronómetro y
+**La carga se explica, no se esconde.** Un miss frío contra el SIA tarda
+segundos: es una cadena de POSTs dependientes. En vez de un spinner mudo hay un cronómetro y
 una explicación. El contraste con la segunda visita (milisegundos) es el argumento del
 producto.
 

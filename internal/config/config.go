@@ -106,7 +106,7 @@ func Load() (Config, error) {
 //
 // The invariant that is not negotiable: the API's pool plus the job's pool
 // must stay within the measured limit of concurrent SIA sessions
-// (docs/PROTOCOL.md §10). SIA_POOL_SIZE is the API's and is never shared.
+// (docs/CONSTANTS.md). SIA_POOL_SIZE is the API's and is never shared.
 type Refresh struct {
 	Enabled       bool
 	Workers       int

@@ -146,7 +146,7 @@ código solo tampoco identifica. Ver [GOTCHAS.md §26](GOTCHAS.md).
 
 ### Censo completo de los dropdowns (2026-08-15)
 
-Recorriendo `soc1 × soc9 × soc2 × soc3` (costo en [PROTOCOL §10](PROTOCOL.md)):
+Recorriendo `soc1 × soc9 × soc2 × soc3` (costo en [CONSTANTS.md](CONSTANTS.md)):
 
 | Nivel | Facultades | Entradas de programa |
 |---|---|---|
@@ -185,7 +185,7 @@ necesitan una búsqueda por facultad y la unión de los resultados
 El orden engaña: `it10` no es el nombre.
 
 `it11` filtra en el servidor, substring e insensible a acentos (`calculo` encuentra
-`Cálculo`). Baja el payload de 241 KB a 15–27 KB. No reemplaza la carrera.
+`Cálculo`). Baja el payload de `SIA_LISTING_BYTES` a `SIA_LISTING_IT11_BYTES`. No reemplaza la carrera.
 
 ---
 

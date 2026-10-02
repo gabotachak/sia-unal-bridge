@@ -4,8 +4,8 @@ Cómo se extraen asignaturas del catálogo público, POST por POST. Verificado c
 servidor de producción. Las trampas, con su evidencia, están en [GOTCHAS.md](GOTCHAS.md);
 los ids y opciones de cada componente, en [FIELDS.md](FIELDS.md).
 
-**Este documento es el único que fija los costos y límites medidos del SIA** (§10). Los
-demás enlazan aquí en vez de repetir números.
+Las cifras (tamaños, tiempos, límites) están solo en [CONSTANTS.md](CONSTANTS.md); aquí
+se nombran.
 
 Base URL:
 
@@ -46,7 +46,8 @@ User-Agent: <cualquier cosa que NO parezca navegador>
 ```
 
 **Crítico:** con un User-Agent de navegador, el servidor devuelve un bootstrap JavaScript
-(`AdfLoopbackUtils.runLoopback`) en vez de la página ([GOTCHAS §1](GOTCHAS.md)). El UA por
+(`AdfLoopbackUtils.runLoopback`, `SIA_BROWSER_UA_BYTES`) en vez de la página
+([GOTCHAS §1](GOTCHAS.md)). El UA por
 defecto de Go sirve.
 
 De la respuesta salen:
@@ -61,7 +62,7 @@ De la respuesta salen:
 
 Guarda las cookies (`PortalJSESSION` y las `OAM*`).
 
-Es la operación más cara y de costo muy variable (§10). Se hace una vez por sesión, nunca
+Es la operación más cara y de costo muy variable (`SIA_BOOTSTRAP_COST`). Se hace una vez por sesión, nunca
 por petición. **No parsees la tabla de esta respuesta**: puede llegar con el resultado de
 otra sesión ([GOTCHAS §22](GOTCHAS.md)).
 
@@ -155,7 +156,7 @@ dependiente ([GOTCHAS §30](GOTCHAS.md)).
 ## 4. Filtros de texto (`it11`, `it10`)
 
 `it11` filtra por nombre **en el servidor**: substring, insensible a acentos (`calculo`
-encuentra `Cálculo`). Reduce mucho el tamaño de la respuesta (§10). `it10` filtra por
+encuentra `Cálculo`). Baja la respuesta de `SIA_LISTING_BYTES` a `SIA_LISTING_IT11_BYTES`. `it10` filtra por
 número de créditos.
 
 - **No reemplaza la carrera.** Con `soc3` vacío y `it11` puesto, ADF ignora la consulta y
@@ -360,40 +361,7 @@ Lo más barato para una asignatura concreta es la ruta de 2 POSTs con `it11`.
 
 ---
 
-## 10. Costos y límites medidos
+## 10. Costos y límites
 
-**Fuente única.** Si otro documento o un comentario da un número distinto, manda este.
-
-### Por operación
-
-| Operación | Tamaño | Tiempo |
-|---|---|---|
-| Bootstrap | 52 KB – 4.5 MB | 0.15 – 7 s |
-| Cascada, dropdown dependiente (`soc9`, `soc10`) | ~2 KB | ~470 ms |
-| Cascada, re-render de panel | ~33 KB | ~470 ms |
-| Listado `cb1`, ~98 filas | ~240 KB | ~470 ms |
-| Listado `cb1` con `it11` | 15 – 27 KB | ~470 ms |
-| Listado de electivas de una sede | ~240 – 520 KB | ~1 s |
-| Detalle (1 POST) | 8 – 264 KB | ~500 ms |
-| Volver | ~257 KB | ~470 ms |
-| No-op | ~900 B | — |
-
-### Por flujo
-
-| Flujo | Costo |
-|---|---|
-| Detalle con la conexión ya en el plan | ~1.3 s |
-| Detalle en frío, sin sesión | ~10 s |
-| Las ~98 asignaturas de un plan, con detalle | 201 POSTs, 99 s, 31 MB |
-| Censo de referencia (nivel × sede × facultad) | 142 POSTs, 78 s, 1380 entradas de programa |
-
-### Límites del servidor
-
-| Límite | Valor | Evidencia |
-|---|---|---|
-| Inactividad que mata una sesión | ~4.2 min | [GOTCHAS §7](GOTCHAS.md) |
-| Sesiones concurrentes sin errores | **80** | rampa de 8 a 80 sin fallas ni throttling, con latencia p50 plana; con 88 falla ~4.5 % y con 96 ~6 % |
-| Filas máximas de un listado | 1000 en el código, no se alcanza | [GOTCHAS §14](GOTCHAS.md) |
-
-El límite de 80 es **compartido** entre todos los procesos que hablan con el SIA. De ahí
-la regla `SIA_POOL_SIZE + REFRESH_POOL_SIZE ≤ 80`.
+Están en [CONSTANTS.md](CONSTANTS.md): los medidos del SIA (`SIA_*`) y el límite de
+sesiones concurrentes (`maxTotalConnections`), compartido entre la API y el `Refresher`.

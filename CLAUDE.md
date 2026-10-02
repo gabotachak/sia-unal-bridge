@@ -33,18 +33,14 @@ cachean como cualquier otra referencia.
 
 ## Documentación: un número, un lugar
 
-La documentación describe **cómo funciona hoy**, no la historia. Cada dato tiene un solo
-hogar y los demás enlazan:
+La documentación describe **cómo funciona hoy**, no la historia. **Las cifras viven solo
+en `docs/CONSTANTS.md`** (medidas del SIA y constantes del código) y en `.env.example`
+(defaults de entorno). Todo lo demás nombra la constante: "como mucho
+`maxTotalConnections` sesiones", nunca "como mucho 80". La evidencia de cada medida está
+en `docs/GOTCHAS.md`.
 
-- Costos y límites medidos del SIA (sesiones concurrentes, expiración, tamaños,
-  tiempos): `docs/PROTOCOL.md` §10.
-- TTL por recurso: `internal/catalog/freshness.go` y la tabla de `docs/API.md`
-  ("Frescura").
-- Valores de configuración: el código (constantes con nombre) y `.env.example`.
-- Evidencia de cada trampa: `docs/GOTCHAS.md`.
-
-No copies un número a otro documento ni a un comentario: nombra la constante o enlaza la
-sección.
+`internal/config/constants_doc_test.go` falla si `CONSTANTS.md` y el código no
+coinciden. Una constante nueva que se mencione en la documentación entra a esa tabla.
 
 ## Antes de hacer commit
 
@@ -80,8 +76,9 @@ Las cuatro que más código han roto:
 |---|---|
 | `docs/ARCH.md` | **Arquitectura**: hexágono, read-through, pool de sesiones, `Refresher`, lo que no sabemos |
 | `docs/diagram.md` | Diagramas Mermaid de todo el proyecto: hexágono, flujos de cada petición, pool, esquema |
+| `docs/CONSTANTS.md` | **El único documento con cifras**: medidas del SIA y constantes del código |
 | `docs/GOTCHAS.md` | **Las trampas verificadas contra el servidor. No se edita sin evidencia nueva** |
-| `docs/PROTOCOL.md` | Handshake ADF POST por POST, y los costos y límites medidos |
+| `docs/PROTOCOL.md` | Handshake ADF, POST por POST |
 | `docs/FIELDS.md` | Componentes ADF, opciones de cada dropdown, mapeo a columnas |
 | `docs/API.md` | Contrato HTTP: identificadores, frescura, errores |
 | `docs/DATA-MODEL.md` | Las decisiones del esquema que no son obvias leyendo el DDL |
@@ -102,9 +99,9 @@ Postgres, `sia` ADF). Detalle en `docs/ARCH.md`.
 
 El `Refresher` **no escribe en la base**: entra por los mismos casos de uso que `httpapi`
 (`catalog.Service`), así que hay un solo upsert de catálogo. Levanta **su propio pool**, y
-la invariante que no se negocia es que `SIA_POOL_SIZE + REFRESH_POOL_SIZE` no pase del
-límite de sesiones del SIA. Su checkpoint son los marcadores de frescura, no un cursor:
-reanudar es volver a correr.
+la invariante que no se negocia es
+`SIA_POOL_SIZE + REFRESH_POOL_SIZE ≤ maxTotalConnections`. Su checkpoint son los
+marcadores de frescura, no un cursor: reanudar es volver a correr.
 
 Flujo principal: **read-through**. Catálogo y referencia, que casi no cambian, son
 *stale-while-revalidate*: lo guardado se responde al instante y el SIA se consulta por

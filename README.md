@@ -79,7 +79,7 @@ actually change, are re-fetched when they expire.
   POSTs instead of 6), and was load-tested against production to find the concurrency
   ceiling.
 - **Caching tuned to how the data changes.** A program's catalog barely changes and
-  costs one upstream request for ~100 courses, so it is served stale-while-revalidate.
+  costs one upstream request for the whole program, so it is served stale-while-revalidate.
   Seat counts change by the minute and are fetched one course at a time, so every seat
   count in the API says how old it is.
 - **Hexagonal architecture.** The domain imports neither the HTTP framework, nor the
@@ -153,7 +153,7 @@ These runs are **manual**: there is no cron (the reasoning is in
 
 React + TypeScript, three runtime dependencies (React, React DOM and an icon set), no
 state or component library, in [`web/`](web/). It plans the semester: a program's
-catalog, a course page with schedule and sections, "Mi semestre" to collect up to twenty
+catalog, a course page with schedule and sections, "Mi semestre" to collect candidate
 courses and measure all their seats with one button, and "Mi horario" with clash
 detection and calendar export. Students pursuing a double degree can pick two programs
 and plan both in a single timetable.
@@ -243,10 +243,10 @@ sequenceDiagram
     S->>P: stored? catalog_fetched_at fresh?
     alt stored and fresh
         P-->>S: courses
-        S-->>C: 200 · X-Cache: hit · ~1 ms
+        S-->>C: 200 · X-Cache: hit
     else stored but stale
         P-->>S: courses
-        S-->>C: 200 · X-Cache: stale · ~1 ms
+        S-->>C: 200 · X-Cache: stale
         S-)X: refresh in the background (same fetch as below)
     else never fetched
         S->>X: cascade + regular listing
@@ -291,11 +291,11 @@ These five come from measuring against the server, not from assuming:
 
 | | |
 |---|---|
-| **The listing returns offerings, not courses** | Codes repeat up to ×131. Natural key `(code, term, key)`, where `key` is the token in parentheses: `Grupo N` repeats between regular and PEAMA sections |
+| **The listing returns offerings, not courses** | Codes repeat. Natural key `(code, term, key)`, where `key` is the token in parentheses: `Grupo N` repeats between regular and PEAMA sections |
 | **Visible sections depend on the program** | A strict subset relation. But **seats are global**: one measurement serves every program |
-| **Course type depends on the program** | Proven: 8 codes differ between Bogotá programs. It lives in `course_program` |
+| **Course type depends on the program** | Proven, not assumed. It lives in `course_program` |
 | **A program's catalog is two queries** | `soc4=0` literally means *everything except free electives*. Free electives come from the electives search, which is per campus |
-| **A ~900 B response is not an HTTP error** | It is a no-op: a cascade step is missing, or the session expired. It is treated as an explicit error instead of returning incomplete data |
+| **A tiny 200 response is not a success** | It is a no-op: a cascade step is missing, or the session expired. It is treated as an explicit error instead of returning incomplete data |
 
 All of them, each verified against production, are in
 [`docs/GOTCHAS.md`](docs/GOTCHAS.md). Several fail **silently**: they return plausible
@@ -311,7 +311,8 @@ each measured number lives in one place and the rest link to it.
 | [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **The verified traps. Read it before touching the code.** |
 | [`docs/ARCH.md`](docs/ARCH.md) | Hexagon, read-through, session pool, `Refresher`, what we don't know |
 | [`docs/diagram.md`](docs/diagram.md) | The whole project in Mermaid diagrams: hexagon, request flows, pool, schema |
-| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | The ADF handshake POST by POST, and the SIA's measured costs and limits |
+| [`docs/CONSTANTS.md`](docs/CONSTANTS.md) | **The only document with numbers**: the SIA's measurements and the code's constants |
+| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | The ADF handshake, POST by POST |
 | [`docs/FIELDS.md`](docs/FIELDS.md) | ADF components and the options of each dropdown |
 | [`docs/API.md`](docs/API.md) | HTTP contract: public IDs, freshness, errors |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | The schema decisions that aren't obvious from the DDL |

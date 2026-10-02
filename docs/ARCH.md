@@ -4,9 +4,8 @@ API puente sobre el catálogo del SIA: traduce la navegación con estado de Orac
 JSON. Los diagramas de cada flujo están en [diagram.md](diagram.md); este documento
 explica las reglas que esos diagramas dibujan.
 
-Los números medidos del SIA viven solo en [PROTOCOL.md §10](PROTOCOL.md). Los valores de
-configuración viven en el código (cada sección nombra la constante) y en
-[`.env.example`](../.env.example). Aquí no se repiten.
+Aquí no hay cifras: se nombran las constantes, y sus valores están en
+[CONSTANTS.md](CONSTANTS.md).
 
 ---
 
@@ -122,7 +121,7 @@ viaje a Redis cuesta lo mismo que el viaje a Postgres que reemplazaría.
 
 Cada `SIAConn` es una sesión ADF viva:
 
-- muere tras unos minutos de inactividad ([PROTOCOL §10](PROTOCOL.md));
+- muere tras unos minutos de inactividad ([CONSTANTS.md](CONSTANTS.md));
 - es **estrictamente secuencial**: el SIA no rechaza dos peticiones simultáneas en una
   sesión, le da a una la respuesta de la otra ([GOTCHAS §28](GOTCHAS.md));
 - está **parqueada** en un `(nivel, sede, facultad, programa)`, y moverla cuesta POSTs;
@@ -190,7 +189,7 @@ Reglas:
 
 - **Pool propio.** Compartir el de la API serviría `503 busy` a los usuarios durante todo
   el barrido. La suma de los dos pools respeta el límite de sesiones del SIA
-  ([PROTOCOL §10](PROTOCOL.md)); `cmd/refresher` avisa en el log si se pasa.
+  ([CONSTANTS.md](CONSTANTS.md)); `cmd/refresher` avisa en el log si se pasa.
 - **El checkpoint son los marcadores de frescura**, no un cursor. Reanudar es volver a
   correr; dos corridas seguidas no hacen ni un POST. La unidad de commit es una
   asignatura.

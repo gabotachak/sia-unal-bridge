@@ -126,7 +126,7 @@ flowchart LR
     end
 
     subgraph driven["Adaptadores DRIVEN<br/>(a quién se le pide)"]
-        store["internal/store<br/>pgx → Postgres"]
+        store["internal/store<br/>Cached (memoria) → pgx → Postgres"]
         sia["internal/sia<br/>Source → Pool → SIAConn"]
     end
 
@@ -238,6 +238,7 @@ sequenceDiagram
     participant MW as httpapi<br/>middleware
     participant HD as httpapi<br/>courseDetail
     participant SV as catalog.Service
+    participant CA as store.Cached<br/>(memoria)
     participant ST as store (Postgres)
     participant SR as sia.Source
     participant PL as sia.Pool
@@ -248,8 +249,9 @@ sequenceDiagram
     MW->>MW: Recovery, requestID, logger,<br/>secureHeaders, rate limit por IP,<br/>timeout = SIA_ACQUIRE_TIMEOUT,<br/>laneByIP (carril de fondo)
     MW->>HD: next()
     HD->>SV: ResolveProgram(campus, faculty, code, level)
-    SV->>ST: ReferenceFetchedAt + Programs
-    ST-->>SV: Program{ID, índices de dropdown}
+    SV->>CA: ReferenceFetchedAt + Programs
+    Note over CA: hit: responde de memoria<br/>miss o vencido: lee Postgres<br/>y guarda referenceCacheTTL
+    CA-->>SV: Program{ID, índices de dropdown}
     HD->>ST: RecordDemand (vía Service)
     HD->>HD: refreshBlocked? (cooldown de max_age=0)
     HD->>SV: CourseDetail(ctx, program, code, maxAge)
@@ -323,20 +325,24 @@ POST** visto de cuatro formas, así que comparten fetch, cache y cooldown.
 
 El cliente habla en códigos (`1101`, `2A74`, `pregrado`). El SIA navega por **posiciones**
 de dropdown, que son volátiles. `Service.coordinates` es el único sitio donde un código se
-convierte en índice, y lo hace leyendo la cache de referencia. Esas lecturas pasan por
-`store.Cached`, que las guarda en memoria.
+convierte en índice, y lo hace leyendo la cache de referencia. Las lecturas en verde
+pasan por `store.Cached`, que las guarda en memoria y las invalida con cualquier escritura
+de referencia o de catálogo.
 
 ```mermaid
 flowchart TD
     req["ResolveProgram<br/>campus=1101, code=2A74, level=''"] --> ed["ensureDirectory(1101, pregrado)"]
     ed --> co["coordinates()"]
-    co --> lv["Levels(): cache 'levels'<br/>¿fresco? si no, FetchLevels (soc1)"]
+    co --> lv["Levels(): sello 'levels'<br/>¿fresco? si no, FetchLevels (soc1)"]
     lv --> rl["resolveLevel: '' → pregrado<br/>slug → índice soc1"]
-    rl --> cp["Campuses(pregrado): cache 'campuses:pregrado'<br/>¿fresco? si no, FetchCampuses (soc9)"]
+    rl --> cp["Campuses(pregrado): sello 'campuses:pregrado'<br/>¿fresco? si no, FetchCampuses (soc9)"]
     cp --> find{"¿existe campus 1101?"}
     find -- no --> nf["ErrNotFound → 404"]
     find -- sí --> dir{"ReferenceFetchedAt<br/>'programs:1101:pregrado'<br/>¿fresco (FreshnessReference)?"}
     dir -- sí --> read["store.Programs(1101, faculty, pregrado)"]
+
+    classDef cached fill:#e6f4ea,stroke:#2e7d32,color:#1b1b1b
+    class lv,cp,dir,read cached
     dir -- "no, pero hay copia" --> bg["refreshBehind: cascada<br/>en segundo plano"] --> read
     dir -- "no hay nada" --> fetch["FetchProgramDirectory<br/>cascada de TODAS las facultades"] --> up["UpsertPrograms + sello TTL"] --> read
     read --> match{"¿cuántos con code=2A74?"}

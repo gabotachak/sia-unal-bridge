@@ -30,7 +30,7 @@ script:post-response {
   const n = (b.match(/<tr role="row" _afrRK=/g) || []).length;
   const k = [...b.matchAll(/_afrRK="(\d+)"/g)].map(x => +x[1]);
   console.log(`filas=${n}` + (k.length ? ` _afrRK ${Math.min(...k)}..${Math.max(...k)}` : "") +
-              (b.length < 1200 ? "  <<< ~900B: falta un paso o sesion caducada" : ""));
+              (b.length < 1200 ? "  <<< no-op: falta un paso, sesion caducada, o el valor ya estaba puesto (GOTCHAS §30)" : ""));
 }
 
 assert {
@@ -39,17 +39,17 @@ assert {
 
 docs {
   OBLIGATORIO entre un detalle y el siguiente. Sin esto quedas atrapado en la
-  vista de detalle y el siguiente click devuelve 893 B vacios.
+  vista de detalle y el siguiente click devuelve un no-op vacio.
 
-  ~257 KB: re-renderiza la tabla completa.
+  Re-renderiza la tabla completa.
 
   OJO 1: el boton NO es pt1:r1:1:cb4 fijo. La region de detalle se numera y
   CRECE con cada detalle abierto (1er detalle -> pt1:r1:1, 2o -> pt1:r1:2,
   98o -> pt1:r1:98). Por eso el cuerpo usa {{regionDetalle}}, que el paso 08
   captura solo de la respuesta del detalle.
 
-  Con el id fijo, el segundo Volver de la sesion devuelve 893 B y a partir de
-  ahi TODO devuelve 893 B, busquedas incluidas: parece sesion caducada y no lo
+  Con el id fijo, el segundo Volver de la sesion es un no-op y a partir de
+  ahi TODO es no-op, busquedas incluidas: parece sesion caducada y no lo
   esta. Ver docs/GOTCHAS.md §20.
 
   OJO 2: los _afrRK SE RENUMERAN aqui. Hay que re-parsear la tabla antes de

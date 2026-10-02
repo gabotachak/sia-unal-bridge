@@ -66,6 +66,6 @@ docs {
   Tras esto quedas en la vista de detalle: corre el 14 (Volver) antes de
   cualquier otra cosa.
 
-  Si devuelve ~900 B en vez de ~48 KB: sesion caducada (5 min) o estabas ya en
-  la vista de detalle.
+  Si devuelve un no-op (SIA_NOOP_BYTES, docs/CONSTANTS.md): sesion caducada
+  (SIA_SESSION_IDLE_TIMEOUT) o estabas ya en la vista de detalle.
 }

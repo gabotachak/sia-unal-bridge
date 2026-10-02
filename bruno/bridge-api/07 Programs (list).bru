@@ -16,6 +16,7 @@ params:path {
 
 params:query {
   faculty: {{faculty}}
+  ~level: doctorado
 }
 
 assert {
@@ -25,5 +26,5 @@ assert {
 docs {
   faculty es un filtro OPCIONAL: quítalo y salen todos los planes de la sede.
   Sale gratis porque un miss de directorio llena todas las facultades en la
-  misma cascada.
+  misma cascada. ?level= cambia el nivel.
 }

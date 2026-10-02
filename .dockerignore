@@ -15,7 +15,10 @@ web/
 # Secretos locales: el build no los necesita y no deben quedar en una capa.
 .env
 .env.*
-# Tooling local y de CI, ajeno al binario.
+# Tooling local, de CI y del sistema, ajeno al binario.
 .github/
 .vscode/
+.idea/
+.agents/
+.DS_Store
 graphify-out/

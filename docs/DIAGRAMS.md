@@ -653,6 +653,7 @@ flowchart LR
     e5["ErrSIASessionLost"] --> s502a["502 sia_session_lost"]
     e6["ErrSIANoop"] --> s502b["502 sia_noop"]
     e8["ErrParseMismatch"] --> s502c["502 sia_parse_mismatch"]
+    e9["ErrSIAErrorPage"] --> s502d["502 sia_error_page"]
     e7["otro"] --> s500["500 internal"]
     h1["handler: cooldown"] --> s429["429 refresh_cooldown"]
     h2["handler: max_age inválido"] --> s400["400"]

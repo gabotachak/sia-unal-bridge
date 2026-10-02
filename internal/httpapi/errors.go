@@ -52,6 +52,10 @@ func writeError(c *gin.Context, err error, notFoundCode string) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "sia_session_lost", "message": err.Error()})
 	case errors.Is(err, catalog.ErrSIANoop):
 		c.JSON(http.StatusBadGateway, gin.H{"error": "sia_noop", "message": "SIA returned an empty re-render"})
+	case errors.Is(err, catalog.ErrSIAErrorPage):
+		// The SIA's own render broke on this page (GOTCHAS §39). Retrying
+		// will not help, and it is not this process's error either.
+		c.JSON(http.StatusBadGateway, gin.H{"error": "sia_error_page", "message": "SIA could not render this page"})
 	case errors.Is(err, catalog.ErrParseMismatch):
 		// The SIA answered, but with a shape the parser could not square
 		// with itself. Nothing was stored; it is the upstream page, not this

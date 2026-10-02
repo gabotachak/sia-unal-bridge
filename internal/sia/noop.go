@@ -3,6 +3,7 @@ package sia
 import (
 	"bytes"
 	"errors"
+	"fmt"
 
 	"github.com/gabotachak/sia-unal-bridge/internal/catalog"
 )
@@ -28,7 +29,7 @@ var errStaleDetailRegion = errors.New("sia: connection stuck in a detail region"
 //
 // Only a full-size body counts. A dead session answers the same redirect in
 // 412–877 B, and that one IS a noop with a retry to earn. GOTCHAS §39.
-var errSIAErrorPage = errors.New("sia: the SIA redirected to errorNavegacion.jsf")
+var errSIAErrorPage = fmt.Errorf("sia: the SIA redirected to errorNavegacion.jsf: %w", catalog.ErrSIAErrorPage)
 
 // errorPageMarker is the redirect the SIA appends when its own render fails.
 var errorPageMarker = []byte("errorNavegacion.jsf")

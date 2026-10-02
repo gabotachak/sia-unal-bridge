@@ -10,6 +10,11 @@ var (
 	ErrSIASessionLost = errors.New("sia session lost after retry")
 	ErrBusy           = errors.New("sia connection pool busy")
 
+	// ErrSIAErrorPage: the SIA gave up rendering this page and redirected to
+	// its own error page (GOTCHAS §39). It depends on the page, so retrying
+	// does not help; it is an upstream failure, not this process's.
+	ErrSIAErrorPage = errors.New("sia could not render this page")
+
 	// Sanity assertions. A crawler is a machine for multiplying a parsing
 	// bug by 135 000, and this domain's characteristic failure is data that
 	// is plausible and wrong. Both abort BEFORE

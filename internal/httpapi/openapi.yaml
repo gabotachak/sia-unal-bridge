@@ -669,6 +669,8 @@ components:
         que se trata como error explícito en vez de devolver datos incompletos.
         `sia_parse_mismatch` es un detalle cuyos grupos no cuadran con su texto: se
         rechaza antes de guardar nada, porque guardarlo inventaría o perdería grupos.
+        `sia_error_page` es una página que el propio SIA no logra renderizar (redirige
+        a su página de error); depende de la página, así que reintentar no sirve.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -925,6 +927,7 @@ components:
             - sia_noop
             - sia_session_lost
             - sia_parse_mismatch
+            - sia_error_page
             - internal
         message: { type: string }
         hint: { type: string }

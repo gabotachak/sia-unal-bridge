@@ -264,6 +264,7 @@ Son columnas distintas ([DATA-MODEL, decisión 4](DATA-MODEL.md)).
 | El SIA devolvió un no-op, incluso tras sesión nueva | `502` | `sia_noop` |
 | Sesión del SIA perdida | `502` | `sia_session_lost` |
 | El detalle del SIA no cuadra con sus propios grupos | `502` | `sia_parse_mismatch` |
+| El SIA no logra renderizar la página ([GOTCHAS §39](GOTCHAS.md)) | `502` | `sia_error_page` |
 | Pool ocupado hasta el timeout | `503` + `Retry-After` | `busy` |
 | `max_age` inválido | `400` | `bad_request` |
 | Refresco forzado antes del cooldown | `429` + `Retry-After` | `refresh_cooldown` |

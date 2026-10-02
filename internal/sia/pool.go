@@ -348,6 +348,15 @@ func DoAt[T any](ctx context.Context, p *Pool, key *catalog.ProgramKey, fn func(
 		p.noops.Add(1)
 	}
 	if !isRecoverable(err) {
+		// The error page leaves the session dead (GOTCHAS §39), and handing it
+		// back as is makes the NEXT caller pay a noop and a retry. Not
+		// retried here: the page breaks the same way on a fresh session.
+		if errors.Is(err, errSIAErrorPage) {
+			rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rebootstrapTimeout)
+			_, _ = conn.Bootstrap(rctx)
+			cancel()
+			return zero, err
+		}
 		repair(conn)
 		return zero, err
 	}

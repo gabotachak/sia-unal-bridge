@@ -17,12 +17,13 @@ import (
 // with the Refresher; anything up to it is a config decision.
 const DefaultPoolSize = 4
 
-// keepaliveTick / keepaliveIdle: the session dies after ~4.2min idle, not
-// the 5min the JS timer advertises (GOTCHAS §7). A single 3min timer is NOT
-// enough: a connection released one second after a tick is 2min59s old at
-// the next one, gets skipped, and is dead long before the tick after that.
-// So the loop runs often (keepaliveTick) and pings anything older than
-// keepaliveIdle, leaving ≥2min of slack against the 4.2min deadline.
+// keepaliveTick / keepaliveIdle: the session dies after SIA_SESSION_IDLE_TIMEOUT,
+// sooner than the JS timer advertises (GOTCHAS §7). One timer with the same
+// period as the threshold is NOT enough: a connection released just after a
+// tick is not old enough at the next one, gets skipped, and is dead long
+// before the tick after that. So the loop runs often (keepaliveTick) and pings
+// anything older than keepaliveIdle, with slack against the deadline. Values
+// in docs/CONSTANTS.md.
 const (
 	keepaliveTick = 45 * time.Second
 	keepaliveIdle = 2 * time.Minute
@@ -38,16 +39,14 @@ const rebootstrapTimeout = 45 * time.Second
 // readyBeforeServing is how many connections NewPool bootstraps before it
 // returns; the rest are filled in the background.
 //
-// Why not all of them: bootstrapping is SEQUENTIAL (see NewPool) and costs
-// 0.15–7 s each with a very wide spread (GOTCHAS §25). At size 4 that is a
-// rounding error, but the pool is a config knob now — at 32 it is up to
-// ~3.7 min during which cmd/bridge has not reached ListenAndServe and the
-// service is simply down. The startup cost stopped being proportional to
-// the pool the moment the pool stopped being 4.
+// Why not all of them: bootstrapping is SEQUENTIAL (see NewPool) and its cost
+// (SIA_BOOTSTRAP_COST) has a very wide spread (GOTCHAS §25). For a small pool
+// that is a rounding error, but for a large one it is minutes during which
+// cmd/bridge has not reached ListenAndServe and the service is simply down.
 //
 // Why not one: a single connection serves one request at a time, so the
-// first seconds after a deploy would be a queue. Four is what fase 1 ran on
-// for months — enough to serve real traffic while the rest arrive.
+// first seconds after a deploy would be a queue. A handful is enough to serve
+// real traffic while the rest arrive.
 const readyBeforeServing = 4
 
 // fillRetryDelay paces the background filler's retries. The SIA being down
@@ -198,8 +197,8 @@ func (p *Pool) Acquire(ctx context.Context) (*SIAConn, func(), error) {
 }
 
 // acquireAt is Acquire with a preference: an idle connection already parked
-// on key skips the cascade — 2 POSTs instead of 6, ~1.3 s instead of ~10 s
-// (docs/ARCH.md). The channel is FIFO and knows nothing about where each
+// on key skips the cascade (docs/PROTOCOL.md §9: SIA_DETAIL_WARM instead of
+// SIA_DETAIL_COLD). The channel is FIFO and knows nothing about where each
 // connection sits, so this looks through what is idle RIGHT NOW, keeps the
 // first match and puts the rest back. No match, or an empty pool, falls back
 // to the plain blocking Acquire: affinity is a saving, never a wait.

@@ -54,9 +54,9 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("FETCH_COOLDOWN: must be >= 0, got %d", cooldown)
 	}
 
-	// 60/80, what production has run since August. The old 5/20 was sized to
+	// The production defaults (.env.example). A much smaller bucket was sized to
 	// shield the SIA pool from one client; the pool now shields itself (queue
-	// with a deadline, background lane capped at half), and 5 rps per IP was
+	// with a deadline, background lane capped at half), and a small bucket per IP was
 	// a campus-wide limit in practice — a whole campus leaves through a
 	// handful of NAT addresses. The bucket is now only a brake on abuse.
 	rateRPS, err := strconv.ParseFloat(getenv("RATE_LIMIT_RPS", "60"), 64)

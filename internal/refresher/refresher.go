@@ -35,9 +35,9 @@ const (
 )
 
 // Detail scopes: global covers every course once from whatever plan already
-// lists it (~3 h, and the section rows it writes — profesor, horario, cupos —
-// are valid for every plan); plan covers each plan's visibility separately
-// (~38 h serial, once per semester).
+// lists it (the section rows it writes — profesor, horario, cupos — are valid
+// for every plan); plan covers each plan's visibility separately, and costs
+// far more.
 const (
 	ScopeGlobal = "global"
 	ScopePlan   = "plan"
@@ -305,8 +305,8 @@ func (r *refresher) record(unit string, courses int, skipped bool, err error) {
 
 // limiter is one shared ticker, not a token bucket, so unused capacity does
 // not accumulate into a burst that would compete with the API for the pool.
-// It costs each operation up to 1/rate of latency, which at the default 6/s
-// is ~167 ms against operations that take ~1 s.
+// It costs each operation up to 1/rate of latency, small against the
+// SIA_POST_LATENCY of the operation itself.
 type limiter struct {
 	ticker *time.Ticker
 }

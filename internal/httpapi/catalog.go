@@ -46,8 +46,8 @@ func (a *api) programCourses(c *gin.Context) {
 
 	// ?include=schedules: los horarios de los grupos de cada asignatura, en
 	// la MISMA respuesta. Sin esto, un cliente que quiera marcar choques de
-	// horario sobre el catálogo necesita un detalle por asignatura — medidos
-	// 200 para un plan de Bogotá, contra ~44 KB acá. Es opcional porque solo
+	// horario sobre el catálogo necesita un detalle por asignatura, contra unos
+	// pocos KB extra acá. Es opcional porque solo
 	// lo necesita quien ya tenga un horario armado, y no hay por qué
 	// cobrárselo a quien entra a mirar.
 	//

@@ -5,7 +5,8 @@
 // Its own pool, not the API's: a detail sweep occupies its connections for
 // hours, and sharing would make every real user request compete with it and
 // come back 503 busy — the error docs/API.md reserves for spikes, served for
-// nine hours straight. The invariant is conexiones(api) + conexiones(job) ≤ 80.
+// the whole sweep. The invariant is SIA_POOL_SIZE + REFRESH_POOL_SIZE ≤
+// maxTotalConnections.
 package main
 
 import (
@@ -105,7 +106,7 @@ func main() {
 		slog.Error("sia pool", "err", err)
 		os.Exit(1)
 	}
-	// Same reason as cmd/bridge: the session dies after ~4.2 min idle, and a
+	// Same reason as cmd/bridge: the session dies after SIA_SESSION_IDLE_TIMEOUT, and a
 	// sweep has gaps — long transactions, waits on the rate limiter.
 	go pool.Keepalive(ctx)
 

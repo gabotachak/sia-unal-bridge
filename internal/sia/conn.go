@@ -232,7 +232,7 @@ func (c *SIAConn) DebugRawCB1(ctx context.Context) ([]byte, error) {
 // mistaken for a live one — the bug that let a whole pool sit dead, answering
 // sia_noop to every request until the process restarted.
 //
-// An un-parked connection is pinged too: the ~4.2min idle timeout is the
+// An un-parked connection is pinged too: SIA_SESSION_IDLE_TIMEOUT is the
 // session's, not the cascade's, so a connection that only ever served
 // dropdown reads dies just the same. GOTCHAS §7.
 func (c *SIAConn) Ping(ctx context.Context) error {

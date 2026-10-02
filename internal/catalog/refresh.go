@@ -8,8 +8,9 @@ import "time"
 // course on its own is not a fetchable unit.
 //
 // Name rides along because the listing filter (it11) matches on it: with the
-// name, findRow narrows the ~241 KB cb1 to 15–27 KB, which is the factor of
-// 4 in bandwidth that pays for fase 2. Empty Name simply means no filter.
+// name, findRow narrows the cb1 from SIA_LISTING_BYTES to SIA_LISTING_IT11_BYTES,
+// the bandwidth saving that pays for the Refresher. Empty Name simply means no
+// filter.
 type CourseRef struct {
 	ProgramID int64
 	Code      string

@@ -1,329 +1,298 @@
 # Arquitectura
 
-API puente sobre el catálogo del SIA. Traduce la navegación con estado de Oracle ADF
-a JSON.
+API puente sobre el catálogo del SIA: traduce la navegación con estado de Oracle ADF a
+JSON. Los diagramas de cada flujo están en [diagram.md](diagram.md); este documento
+explica las reglas que esos diagramas dibujan.
 
-El código va en inglés; esta documentación en español.
+Los números medidos del SIA viven solo en [PROTOCOL.md §10](PROTOCOL.md). Los valores de
+configuración viven en el código (cada sección nombra la constante) y en
+[`.env.example`](../.env.example). Aquí no se repiten.
 
 ---
 
 ## Premisa
 
-Casi toda la información cambia muy poco: códigos, nombres, créditos, descripciones y
-horarios se fijan al abrir el semestre. **Lo único volátil son los cupos.**
+Casi todo el catálogo cambia una vez por semestre: códigos, nombres, créditos, horarios.
+**Lo único volátil son los cupos.** Consultar el SIA en cada petición daría una API de
+segundos, así que cachear no es una optimización: es la condición para que esto sea
+usable.
 
-Consultar el SIA en cada request daría una API de 10 s. Cachear no es una optimización:
-es la condición para que esto sea usable.
+La frontera no es "cupos contra todo lo demás", sino **listado contra detalle**:
 
-Pero la frontera no está donde parecía. Los cupos **no vienen solos**:
-
-| Dato | De dónde sale | Costo |
+| Dato | De dónde sale | Granularidad |
 |---|---|---|
-| código, nombre, créditos, tipología, descripción | listado (`cb1`) | 1 POST → ~98 asignaturas |
+| código, nombre, créditos, tipología, descripción | listado (`cb1`) | 1 POST → todas las asignaturas de un plan |
 | grupo, profesor, horario, aula, jornada, **cupos** | detalle (click) | 1 POST → 1 asignatura |
 
-Verificado: una respuesta de listado de 241 KB con 98 filas tiene **cero** ocurrencias
-de `Cupos disponibles`.
-
-Así que la partición real es **catálogo vs detalle**, no *cupos vs todo lo demás*.
-Cada refresco de cupos trae horarios y profesor gratis, en el mismo response.
+El listado no trae cupos. Cada medición de cupos trae horarios y profesor gratis, en la
+misma respuesta.
 
 ---
 
-## Puertos y adaptadores
+## Hexágono
 
 ```
-                        ┌───────────────────────────────┐
-   HTTP / JSON          │                               │
-  ────────────────────> │          dominio              │
-      (driving)         │   course · section · seats    │
-                        │                               │
-                        └───┬───────────────────────┬───┘
-                            │ (driven)              │ (driven)
-                            v                       v
-                     ┌─────────────┐        ┌───────────────┐
-                     │    Store    │        │   SIASource   │
-                     │  Postgres   │        │  Oracle ADF   │
-                     └─────────────┘        └───────────────┘
-                            ^
-                            │ (driving)
-                     ┌──────┴───────┐
-                     │   Refresher  │  ← cron, POOL PROPIO (fase 2)
-                     └──────────────┘
+              driving                                driven
+   ┌──────────────────────┐                    ┌──────────────────┐
+   │ internal/httpapi     │──┐              ┌─>│ internal/store   │──> Postgres
+   └──────────────────────┘  │  ┌────────┐  │  └──────────────────┘
+                             ├─>│catalog │──┤
+   ┌──────────────────────┐  │  │Service │  │  ┌──────────────────┐
+   │ internal/refresher   │──┘  └────────┘  └─>│ internal/sia     │──> SIA (ADF)
+   └──────────────────────┘                    └──────────────────┘
 ```
 
-| Puerto | Dirección | Responsabilidad |
+| Paquete | Rol | Responsabilidad |
 |---|---|---|
-| `API` | driving | expone JSON, traduce a casos de uso |
-| `Store` | driven | persistencia y cache (Postgres) |
-| `SIASource` | driven | todo lo que toca el SIA real |
-| `Refresher` | driving | llena la cache proactivamente — **implementado (fase 2)** |
+| `cmd/bridge` | composición | lee config, arma adaptadores, arranca el servidor. Sin lógica |
+| `cmd/refresher` | composición | lo mismo para el barrido manual, con **su propio pool** |
+| `internal/catalog` | dominio + puertos | tipos, frescura, read-through. Declara `Store` y `SIASource` en `ports.go` |
+| `internal/httpapi` | driving | HTTP → casos de uso; errores de dominio → status |
+| `internal/refresher` | driving | enumera trabajo y lo recorre acotado, por los mismos casos de uso |
+| `internal/store` | driven | Postgres; `Cached` guarda la referencia en memoria |
+| `internal/sia` | driven | todo lo que toca el SIA: protocolo, estado, parseo |
+| `internal/config` | — | variables de entorno → struct |
 
-`Refresher` entra por los **mismos casos de uso** que `httpapi` (`catalog.Service`) y no
-escribe en la base por su cuenta: si lo hiciera habría dos implementaciones del upsert de
-catálogo y la segunda se desincronizaría en la primera corrección de bug. La única
-diferencia entre un fetch del job y uno de un cliente es **quién lo pidió**
-([FASE-2.md](FASE-2.md)).
+### La invariante
 
-### El pool del job es suyo, no el de la API
+`internal/catalog` no importa `gin`, `pgx`, `goquery` ni `encoding/xml`. Ni `catalog` ni
+`refresher` importan `sia`, `store` o `httpapi`. `internal/catalog/hexagon_test.go` falla
+si eso se rompe.
 
-`cmd/refresher` levanta **su propio pool**. Compartirlo sería servir `503 busy` —el error
-que [API.md](API.md) reserva para picos— durante las horas que dura un barrido de detalle.
-La invariante que no se negocia es el techo medido: 80 conexiones concurrentes limpias,
-88 ya degrada (~4.5% de fallas — [OPEN-QUESTIONS.md §5](OPEN-QUESTIONS.md), medido
-2026-08-19). Los valores por defecto de `api` y `refresher` se quedan muy por debajo de
-eso a propósito — el tráfico real no lo pide, esto solo fija cuánto margen hay antes del
-borde:
-
-```
-conexiones(api) + conexiones(refresher) ≤ 80
-   4 (api, por defecto)  +  2 (refresher)  =  6   ← operación normal
-   4                     +  4              =  8   ← ventana de mantenimiento
-```
-
-Coste aceptado: dos procesos no comparten `singleflight`, así que el job y un cliente
-pueden pedir la misma asignatura a la vez y gastar dos POSTs en vez de uno. Es
-desperdicio, no incorrección — los upserts son idempotentes.
+- **El `Refresher` no escribe en la base por su cuenta.** Entra por `catalog.Service`,
+  igual que un cliente HTTP. Hay un solo upsert de catálogo.
+- `gin.Context` nunca cruza al dominio: los handlers pasan `c.Request.Context()`.
+- `sia` y `store` importan `catalog` por sus tipos, y satisfacen los puertos
+  estructuralmente.
 
 ---
 
-## Flujo principal: read-through
+## Read-through
+
+Si está en Postgres y fresco, se sirve. Si no, se consulta al SIA, se persiste y se
+responde. Cada recurso tiene su TTL (`catalog/freshness.go`, tabla en
+[API.md](API.md#frescura)) y `?max_age=` lo cambia por petición.
+
+Dos políticas, según cuánto cambia el dato:
+
+| Recurso | Al vencer | Por qué |
+|---|---|---|
+| Referencia y catálogo | **stale-while-revalidate**: responde lo guardado y refresca por detrás | casi no cambian; nadie debería esperar un fetch para recibir lo mismo |
+| Detalle y cupos | **espera** el fetch; si el SIA falla, sirve lo guardado marcado `stale` | son volátiles; un cupo viejo servido como fresco mentiría |
+
+Lo activa `Service.ServeStale`, que `cmd/bridge` enciende. El `Refresher` lo deja apagado:
+él sí necesita que el fetch haya ocurrido cuando la llamada vuelve.
+
+### Dos caches con granularidad distinta
 
 ```
-GET /v1/campuses/1101/programs/2A74/courses/2016696
-        │
-        ├── ¿está en Store y fresco?  ──sí──> responde
-        │
-        └── no
-              │
-              ├── SIASource: navega, parsea      ~1.3 s caliente / ~10 s frío
-              ├── responde al cliente
-              └── persiste en Store
+catálogo   → por PROGRAMA     1 POST trae todo el plan      casi inmutable
+detalle    → por ASIGNATURA   1 POST trae 1 asignatura      volátil (cupos)
 ```
 
-El cliente espera en el miss. Con los números medidos es aceptable, y el segundo
-consumidor de esa carrera ya tiene hit.
+- Un miss de catálogo llena el plan entero. El catálogo de un plan son **dos** consultas:
+  la regular (`soc4=0`, todo menos libre elección) y la de electivas de la sede
+  ([GOTCHAS §21](GOTCHAS.md)). `catalog_fetched_at` se sella solo con las dos.
+- El detalle es irreductiblemente unitario: no hay forma de traer los grupos de varias
+  asignaturas en un POST.
+- **La visibilidad es por plan, los cupos son globales.** Un plan que nunca pidió una
+  asignatura paga el POST aunque otro plan ya la tenga. Pero si este plan ya sabe qué
+  grupos ve y todos tienen cupos recientes, medidos desde cualquier plan, se sirve sin ir
+  al SIA.
 
-### Granularidad del miss
+### Deduplicación
 
-Un miss **no llena una fila**: llena lo que el SIA devolvió al mismo costo.
+- **`singleflight` por clave** (`catalog/service.go`, función `shared`): N clientes que
+  piden lo mismo en frío generan un fetch. Si el primero cancela, el fetch sigue con
+  `context.WithoutCancel` y su deadline, y se persiste igual.
+- **`refreshBehind`**: el refresco de fondo arranca como mucho una vez por clave cada
+  `behindRetry`, en el carril de fondo del pool.
 
-```
-miss de catálogo  →  cb1 sin filtro  →  se guardan las ~98 del programa   ~5 s
-miss de detalle   →  click           →  se guarda 1 asignatura            ~1 s
-```
+### Cache de referencia en memoria
 
-Gobernado por `program.catalog_fetched_at` y `section.fetched_at`.
-
-**El catálogo de un plan son dos consultas, no una.** `soc4=0` significa "todas menos
-libre elección" ([GOTCHAS.md §21](GOTCHAS.md)), así que las libres del plan no
-están en esas ~98 filas: salen del buscador de electivas, que es por sede y no por plan.
-Si `catalog_fetched_at` solo cubre la primera, la cache queda plausible e incompleta.
+Cada petición bajo `/programs/{program}` resuelve el programa con lecturas de referencia
+(niveles, sedes, directorio y sus sellos). `store.Cached` las guarda en memoria durante
+`referenceCacheTTL` y las invalida con cualquier escritura de referencia o de catálogo
+propia. El resto pasa directo a Postgres. No hace falta Redis: con una sola instancia, un
+viaje a Redis cuesta lo mismo que el viaje a Postgres que reemplazaría.
 
 ---
 
-## Cupos
+## `SIASource` es un pool de sesiones, no un cliente HTTP
 
-Un solo concepto de frescura, `?max_age=<segundos>`, con default por tipo de recurso.
-`?max_age=0` fuerza la consulta al SIA. Contrato completo en [docs/API.md](API.md).
+Cada `SIAConn` es una sesión ADF viva:
 
-```json
-{ "key": "1", "number": 1, "available": 32, "measured_at": "2026-08-15T16:22:03Z", "age_seconds": 47 }
-```
+- muere tras unos minutos de inactividad ([PROTOCOL §10](PROTOCOL.md));
+- es **estrictamente secuencial**: el SIA no rechaza dos peticiones simultáneas en una
+  sesión, le da a una la respuesta de la otra ([GOTCHAS §28](GOTCHAS.md));
+- está **parqueada** en un `(nivel, sede, facultad, programa)`, y moverla cuesta POSTs;
+- está en el buscador o en una región de detalle **numerada** (`DetailRegion`).
 
-Nunca se sirve un cupo sin decir de cuándo es.
+Saber dónde está cada conexión es lo que ahorra POSTs ([PROTOCOL §9](PROTOCOL.md)).
 
-Forzar los cupos cuesta exactamente lo mismo que traer el detalle completo, porque
-llegan juntos. Aprovecha: **refresca y guarda todo el grupo**, devuelve solo los cupos.
-Sale gratis y mantiene la cache caliente.
+### Reglas del pool (`internal/sia/pool.go`)
 
-`seat_snapshot` es append-only. El historial habilita alertas más adelante sin
-rediseñar nada.
-
----
-
-## SIASource es un pool, no un cliente
-
-No es un cliente HTTP sin estado. Es un **pool de sesiones ADF vivas**, y cada una:
-
-- muere a los **~4.2 min** de inactividad — renovable con tráfico; keepalive ≤3 min
-- es **estrictamente secuencial**: una petición en vuelo a la vez — y el servidor no lo
-  impone, así que el mutex es tuyo ([GOTCHAS §28](GOTCHAS.md))
-- está *parqueada* en un `(level, campus, faculty, program)`; moverla cuesta 2 POSTs
-- está en la región del buscador **o** en una región de detalle **numerada**; salir
-  cuesta 1 POST *al id correcto*
-- renumera sus `_afrRK` en cada re-render → hay que re-parsear, nunca cachear índices
-
-```go
-type SIAConn struct {
-    viewState    string
-    jar          *cookiejar.Jar
-    parkedAt     ProgramKey // cascada ya hecha para este programa
-    detailRegion int        // 0 = en el buscador; >0 = región de detalle abierta.
-                            // Volver es pt1:r1:<detailRegion>:cb4 y el número
-                            // sube con cada detalle. Ver GOTCHAS.md §20.
-    lastUsed     time.Time
-}
-```
-
-`detailRegion` no es un booleano por una razón cara: con `pt1:r1:1:cb4` fijo, el
-segundo detalle de la sesión deja la conexión inservible y **parece** una sesión
-caducada. Con el índice leído de la respuesta: 98 asignaturas seguidas, 99 s, sin un
-solo atasco.
-
-Esos campos de estado son los que ahorran POSTs: si la conexión ya está en el programa
-pedido y no está en detalle, son 2 POSTs en vez de 6.
-
-**Fase 1:** pool de **4** conexiones, cada una con su mutex. Medido: hasta 80 sesiones
-concurrentes dan 0 errores, 0 throttling y latencia plana (la búsqueda tarda lo mismo
-con N=1 que con N=80); en 88 ya aparece ~4.5% de fallas (OPEN-QUESTIONS.md §5). Con 1-2
-el `503 busy` salta con dos pestañas abiertas. El pool por defecto se queda en 4 porque
-el tráfico real no pide más, no porque el servidor lo exija. Ver *Concurrencia*.
-
-### Concurrencia: entre conexiones, nunca dentro de una
-
-"Estrictamente secuencial" dejó de ser una suposición heredada. Medido: el SIA **no
-rechaza** dos peticiones simultáneas sobre la misma sesión — devuelve `200 OK` y le da a
-un hilo la respuesta del otro ([GOTCHAS §28](GOTCHAS.md)).
-
-```
-2 búsquedas idénticas, misma conexión → las dos correctas
-2 programas distintos, misma conexión → ambas devuelven el catálogo del MISMO programa
-2 detalles, misma conexión            → uno gana, el otro recibe 895 B
-```
-
-El segundo caso es el peligroso: respuesta equivocada, bien formada, indetectable desde
-el cliente. Y no se arregla poniendo un mutex en cualquier sitio:
-
-```
-    correcto                        roto
-    lock                            lock; POST soc3; unlock
-      POST soc3                     lock; POST cb1;  unlock
-      POST cb1                      ↑ otra operación se cuela aquí
-    unlock
-```
-
-**El mutex envuelve la operación lógica** —cascada+`cb1`, detalle+`Volver`—, no el POST.
-
-Con eso, las goroutines se ganan su sitio en cuatro puntos y solo en cuatro:
-
-| Uso | Justificación medida |
+| Regla | Cómo |
 |---|---|
-| Pool como `chan *SIAConn` | canal con buffer = pool acotado; `select` con `ctx.Done()` da el `503 busy` de [API.md](API.md) |
-| Keepalive | una goroutine con ticker para todo el pool: ping ≤3 min mantiene la sesión 30 min; 5 min de silencio la mata |
-| Auto-reparación | `Pool.Do` re-bootstrapea y reintenta una vez ante un no-op: una sesión ADF muerta no revive sola |
-| `singleflight` | con pool chico es lo que evita que 3 clientes en frío hagan 3 × 10 s en cola |
-| `Refresher` | `errgroup` con `SetLimit(W)` sobre la lista de **programas** — una goroutine por programa, nunca por asignatura: la conexión queda parqueada y repartir sus 98 asignaturas reabre §30/§31/§33. `errgroup` se usa **solo** por `SetLimit`: los errores se acumulan en el `Report`, porque un no-op no puede matar un barrido de nueve horas |
+| **N peticiones concurrentes = N conexiones** | el pool es un `chan *SIAConn`; una conexión fuera del canal es de quien la tomó |
+| **El mutex envuelve la operación lógica**, no el POST | `DoAt` sostiene la conexión durante cascada + `cb1`, o detalle + Volver |
+| Afinidad | `acquireAt` prefiere una conexión libre ya parqueada en el programa pedido |
+| Pool lleno | `Acquire` espera hasta el deadline de la petición y devuelve `ErrBusy` (503) |
+| Carril de fondo | el trabajo marcado con `catalog.WithBackground` ocupa como mucho la mitad del pool |
+| Auto-reparación | un no-op re-bootstrapea y reintenta una vez; una conexión que queda en detalle sale con Volver, o con un bootstrap si falla. Nunca con el contexto del cliente |
+| Conexión sospechosa | si un no-op sobrevive a una sesión nueva, la siguiente operación re-bootstrapea antes de usarla |
+| Keepalive | cada `keepaliveTick`, ping a toda conexión libre quieta desde `keepaliveIdle`; un ping que da no-op re-bootstrapea |
+| Arranque | `NewPool` bootstrapea `readyBeforeServing` conexiones en serie y llena el resto en segundo plano, de a una |
 
-Dos trampas propias de este proyecto:
+### Quién va al carril de fondo
 
-- **Write-behind con el contexto de la request.** El read-through responde y *luego*
-  persiste. Si eso corre en una goroutine con el `Context` de la request, se cancela al
-  volver el handler y la escritura se pierde en silencio. Usa `context.WithoutCancel`.
-- **Bootstraps en fan-out.** Es la operación cara y variable (hasta 4.5 MB): arrancar 8
-  a la vez son ~35 MB de golpe. Escalona el llenado del pool en frío.
-- **Un ticker de 3 min no basta para un umbral de 4.2 min.** Una conexión liberada un
-  segundo después de un tick tiene 2 min 59 s en el siguiente, no llega al mínimo y
-  muere antes del tick posterior. El ticker corre cada 45 s y pinga todo lo que lleve
-  ≥2 min parado. Y el ping tiene que *mirar* la respuesta: un no-op de ~900 B no es un
-  ping exitoso, es la sesión muerta. Sin eso el pool se queda con cuatro conexiones
-  zombis devolviendo `sia_noop` a todo hasta reiniciar el proceso.
-- **Toda conexión necesita ping, esté parqueada o no.** El timeout es de la sesión, no
-  de la cascada: una conexión que solo sirvió dropdowns muere igual.
+`httpapi.laneByIP` (`ratelimit.go`) decide antes del handler:
 
-**Tamaño del pool en fase 1: 4.** Con 1-2 devuelves `503` en cuanto hay dos pestañas
-abiertas. El techo por arriba es **80: el óptimo medido** (rampa contra producción
-2026-08-19, [OPEN-QUESTIONS §5](OPEN-QUESTIONS.md)) — 100 % de aciertos y latencia p50
-plana hasta ahí, y 88 ya degrada ~4.5 %. 4 es lo que pide el tráfico de hoy, no un
-límite; subirlo hasta 80 menos lo que use el `Refresher` es una decisión de
-configuración, no de diseño.
+- toda petición con `?background=1`;
+- toda petición de una IP que ya tiene `foregroundPerIP` en vuelo.
 
-### Rutas mínimas medidas
+No rechaza: degrada. Un cliente que pide muchas asignaturas frías a la vez no puede tomar
+más de la mitad del pool, y una red NAT entera (un campus detrás de pocas IPs) sigue siendo
+atendida. El limitador por IP (`RATE_LIMIT_*`) cuenta peticiones; este cuenta conexiones
+retenidas.
 
-| Escenario | POSTs | Tiempo |
-|---|---|---|
-| Frío, sin sesión | 1 GET + 6 | ~10 s |
-| Caliente, mismo programa, tras búsqueda | 2 | **~1.3 s** |
-| Caliente, mismo programa, tras detalle | 3 | ~1.8 s |
-| Caliente, otro programa misma facultad | 3 | ~1.5 s |
+### Dónde hay goroutines, y por qué solo ahí
 
-Usar el filtro `it11` (nombre) baja el payload de 241 KB a 15–27 KB.
+| Uso | Motivo |
+|---|---|
+| Pool como canal con buffer | acota la concurrencia y da `ErrBusy` con `select` sobre `ctx.Done()` |
+| Keepalive | una goroutine para todo el pool |
+| Llenado del pool | una goroutine que bootstrapea de a una conexión: en paralelo serían varios MB de golpe |
+| `singleflight` y `refreshBehind` | evitan fetches repetidos; el refresco de fondo no bloquea al cliente |
+| `recordDemand` | cuenta la demanda sin sumar latencia a la respuesta |
+| `Refresher` | `errgroup.SetLimit(workers)` sobre la lista de **programas** (ver abajo) |
 
 ---
 
-## Alcance
+## `Refresher`
 
-**Todas las sedes y todos los niveles.** No hay sede ni nivel privilegiado en el
-código: las dos listas salen de sus dropdowns (`soc1`, `soc9`), se cachean como
-cualquier otra referencia, y la conversión de código público a índice de dropdown se
-hace en un solo sitio (`catalog.Service.coordinates`) leyendo esa cache. Un `campus=`
-desconocido es `404`, nunca un silencioso "te doy Bogotá".
+Barrido manual de la cache (`cmd/refresher`, `internal/refresher`). **No corre por cron**:
+el stale-while-revalidate de la API cubre lo que el cron cubría, solo para lo que alguien
+abre. Sirve para precalentar o reparar.
 
-Lo único con default es el nivel (`pregrado`), y es un default de producto —qué vista
-sirve la API si el cliente no dice nada—, no un supuesto estructural. Para sede no hay
-default ni forma de omitirla: es un segmento obligatorio de la ruta,
-`/v1/campuses/{campus}/…`.
+| Modo | Qué hace |
+|---|---|
+| `reference` | niveles → sedes → directorio de programas de cada sede |
+| `catalog` | catálogo de cada programa vencido según `REFRESH_CATALOG_MAX_AGE` |
+| `detail --scope=global` | detalle de cada asignatura cuyo detalle **global** está vencido, pedido desde un plan cualquiera |
+| `detail --scope=plan` | detalle por plan, para conocer la visibilidad de grupos de cada uno. Es el modo caro |
+| `seats --scope=hot` | detalle de las asignaturas más pedidas por clientes (`course_demand`) |
 
-- read-through de catálogo y detalle
-- endpoint de cupos en vivo
-- pool de 4 conexiones (ver *Concurrencia*)
+`--campus` acota a una sede. Las variables `REFRESH_*` están en
+[`.env.example`](../.env.example).
 
-Verificado en vivo contra Bogotá, Medellín y Amazonia.
+Reglas:
 
-**Fase 2 — `Refresher`** (`internal/refresher` + `cmd/refresher`, ver
-[FASE-2.md](FASE-2.md))
-
-- Cuatro modos con cadencias distintas: `reference` (mensual), `catalog` (semanal),
-  `detail --scope=global` (diario) y `seats --scope=hot` (cada 15 min, solo en
-  inscripciones). Medido 2026-08-17: la referencia completa son **131 POSTs / 72 s** y
-  deja 1380 entradas de programa; el catálogo de un plan, ~13 POSTs.
-- **El checkpoint son los marcadores de frescura**, no un cursor: reanudar es volver a
-  correr, y dos corridas seguidas no hacen ni un POST.
-- Un `pg_try_advisory_lock` por modo evita que dos corridas se solapen.
-
-**Después**
-
-- Otras sedes: `campus` ya está en el esquema, es iterar.
-- Alertas de cupo: el historial de `seat_snapshot` ya lo soporta.
+- **Pool propio.** Compartir el de la API serviría `503 busy` a los usuarios durante todo
+  el barrido. La suma de los dos pools respeta el límite de sesiones del SIA
+  ([PROTOCOL §10](PROTOCOL.md)); `cmd/refresher` avisa en el log si se pasa.
+- **El checkpoint son los marcadores de frescura**, no un cursor. Reanudar es volver a
+  correr; dos corridas seguidas no hacen ni un POST. La unidad de commit es una
+  asignatura.
+- **Una goroutine por programa, nunca por asignatura.** La conexión queda parqueada en el
+  programa y `FetchDetails` recorre sus asignaturas por ella. Repartirlas reabre
+  [GOTCHAS §30, §31, §33](GOTCHAS.md).
+- **Un error no mata el barrido.** Se acumula en el `Report`. Solo el circuit breaker
+  (`internal/refresher/report.go`) corta: muchas fallas seguidas son el SIA que cambió.
+- **Un advisory lock por modo** (`pg_try_advisory_lock`): si otra corrida del mismo modo
+  sigue viva, la nueva sale con código 0.
+- `REFRESH_ENABLED=false` bloquea todos los modos sin abrir una sola conexión.
+- Cada corrida queda en `refresh_run` y `/v1/status` muestra la última de cada modo. Es
+  observabilidad, no checkpoint.
 
 ---
 
 ## Restricciones heredadas del SIA
 
-Salen de [docs/GOTCHAS.md](GOTCHAS.md). Estas condicionan el diseño, no son
-detalles de implementación:
+Condicionan el diseño, no la implementación. La evidencia está en
+[GOTCHAS.md](GOTCHAS.md).
 
 | Restricción | Impacto |
 |---|---|
-| El User-Agent no puede parecer navegador | el default de Go sirve; no "mejorarlo" |
-| Sesión muere a los ~4.2 min | keepalive ≤3 min o re-bootstrap; el pool lo gestiona |
-| Bootstrap cuesta entre 0.15 s/52 KB y 7 s/4.5 MB | una vez por sesión, jamás por request |
-| **Una conexión concurrente devuelve la respuesta de otro hilo** | mutex por conexión sobre la operación lógica; N requests ⇒ N conexiones |
-| **La región de detalle está numerada y sube** | `detailRegion` en la conexión; con id fijo la 2.ª asignatura la mata |
-| `_afrRK` se renumera en cada re-render | re-parsear siempre; nunca cachear índices |
-| Sin cascada completa el botón es no-op silencioso | ~900 B = error, tratar como tal |
-| Los grupos visibles dependen del programa | `section_program`; una consulta ≠ el universo |
-| Los cupos son globales | una medición sirve para todos los programas |
-| **`soc4=0` excluye libre elección** | el catálogo de un plan son 2 consultas, no 1 |
-| **`program.code` no es único entre sedes** | identidad `(campus, faculty, code)` |
+| El User-Agent no puede parecer navegador (§1) | el default de Go sirve; no "mejorarlo" |
+| La sesión muere por inactividad (§7) | keepalive y re-bootstrap; los gestiona el pool |
+| El bootstrap es caro y variable (§25) | una vez por sesión, nunca por petición |
+| **Una sesión concurrente devuelve la respuesta de otro hilo** (§28) | mutex por conexión sobre la operación lógica |
+| **La región de detalle está numerada y sube** (§20) | `DetailRegion` en la conexión, leída de cada respuesta |
+| `_afrRK` se renumera en cada re-render (§4) | re-parsear siempre; nunca cachear row keys |
+| Sin cascada completa el botón es un no-op (§6) | una respuesta de ~900 B es un error explícito |
+| Los grupos visibles dependen del plan (§16) | `section_program`; una consulta no es el universo |
+| Los cupos son globales (§16) | una medición sirve para todos los planes |
+| **`soc4=0` excluye libre elección** (§21) | el catálogo de un plan son dos consultas |
+| **`program.code` no es único entre sedes** (§26) | identidad `(campus, faculty, code)` |
+
+### Dónde vive cada trampa en `internal/sia`
+
+`internal/sia` está partido por fase del protocolo, para que cada trampa tenga un archivo
+obvio.
+
+| Archivo | Trampas |
+|---|---|
+| `conn.go` | §1 UA · §2 `winnoloop` · §3 ViewState · §7 expiración · §8 cookie+ViewState · §10 y §20 regiones · §22 tabla ajena · §25 bootstrap · §41 cookie jar |
+| `pool.go` | §7 keepalive · §28 mutex sobre la operación lógica |
+| `form.go` | §9 `selection` · §11 `DELTAS` · §12 headers |
+| `cascade.go` | §6 cascada · §21 electivas · §30, §33, §37, §42 re-envíos · §32 y §35 comodín de sede |
+| `parse_list.go` | §4 `_afrRK` · §5 `_rowCount` · §13 dedupe · §22 tabla ajena · §29 minúsculas · §36 insignia en el nombre |
+| `parse_detail.go` | §17 tipología · §18 sin grupos · §24, §27, §40 cabeceras de grupo |
+| `parse_options.go` | §26 códigos de dropdown |
+| `source.go` | §33 y §34 limpiar `it11` · §38 clic desde la búsqueda de la facultad |
+| `noop.go` | §6 y §7 no-op y sesión muerta · §39 página de error del SIA |
+
+**`noop.go` se lee entero antes de tocar nada**: es la diferencia entre "el SIA no devolvió
+nada" y "devolví datos plausibles y equivocados".
 
 ---
 
-## Modelo de datos
+## Una sola instancia
 
-En [docs/DATA-MODEL.md](DATA-MODEL.md): esquema SQL, structs de Go, palabras
-reservadas evitadas y los casos borde que hay que soportar.
+El proceso asume que es el único servidor de la API. Este estado vive en memoria:
 
-Resumen:
+| Estado | Dónde | Con varias réplicas |
+|---|---|---|
+| Pool de sesiones ADF | `sia.Pool` | cada réplica tiene el suyo; la suma respeta el límite del SIA |
+| `singleflight` y `refreshBehind` | `catalog.Service` | dos réplicas pedirían lo mismo; idempotente, solo desperdicio |
+| Cache de referencia | `store.Cached` | cada réplica la suya; el TTL acota la diferencia |
+| Rate limit, carril por IP | `httpapi` | por réplica; el límite real se multiplica |
+| Cooldown de `max_age=0` | lee `course_program.detail_fetched_at` | ya es compartido (Postgres) |
 
-```
-course ─┬─ course_program ── program
-        └─ section ─┬─ section_program ── program
-                    ├─ class_session
-                    └─ seat_snapshot        (append-only)
-```
+Nada de esto rompe con dos réplicas: solo se vuelve menos eficiente. El `Refresher` ya
+convive así con la API.
 
-Clave natural de una oferta: `(code, term, key)`, con `key` = el token entre
-paréntesis de la cabecera del grupo (`1`, `AMAZ-07`, `TUMA-01`); `Grupo N` solo se
-repite dentro de la misma asignatura. Nunca `code` solo — el listado
-devuelve ofertas, no asignaturas.
+---
+
+## Lo que no sabemos
+
+| Pregunta | Qué hace el código mientras tanto |
+|---|---|
+| ¿Cada cuánto cambian los cupos durante inscripciones? | el TTL de cupos es una elección, no una medición |
+| ¿`course.code` es único entre sedes? | la clave es `(campus_code, code)`: si resulta global, colapsarla es borrar una columna |
+| ¿Un estudiante puede inscribir un grupo PEAMA de otra sede? | se exponen con `site` marcado, sin filtrar |
+| ¿Cada cuánto cambia el catálogo entre semestres? | el TTL de catálogo es una elección |
+
+Los ids de componente ADF (`pt1:r1:0:soc1`, `pt1:r1:0:t4`) son frágiles por diseño: si la
+UNAL repinta la página, cambian. La colección Bruno (`bruno/sia-catalogo/`) es el canario.
+Si Bruno funciona y el código no, el problema es del código. Si Bruno tampoco, toca
+re-mapear con [FIELDS.md](FIELDS.md).
+
+---
+
+## Librerías
+
+| Necesidad | Elección | Por qué |
+|---|---|---|
+| Router HTTP | `gin` | grupos de rutas; `gin.New()` con middleware propio y `slog` |
+| Postgres | `pgx/v5` + `pgxpool` | sin `database/sql` de intermediario |
+| Migraciones | `goose` | SQL plano |
+| HTML del listado | `x/net/html` + `goquery` | `_afrRK` se relee del `<tr>` en cada render; un regex es como murió el proyecto anterior |
+| Detalle | texto plano | se busca por marcadores (`Profesor:`, `Cupos disponibles:`), no por DOM |
+| Envoltorio XML | `encoding/xml` | `<partial-response>` → CDATA por id |
+| Deduplicar fetches | `x/sync/singleflight` | |
+| Rate limit | `x/time/rate` | |
+
+`gin.Context` nunca entra a `catalog`, y los errores siempre salen por `writeError`
+(`httpapi/errors.go`) con el formato de la API, nunca con el de gin.

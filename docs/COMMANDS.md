@@ -1,8 +1,8 @@
 # Comandos
 
 Chuleta de comandos del día a día — deploy, migraciones, ver qué versión corre
-dónde, y cómo tirar todo abajo si hace falta. Para el *por qué* de cada pieza ver
-[`internal/PLAN-CI-CD.md`](internal/PLAN-CI-CD.md) (deploy) y [`ARCH.md`](ARCH.md) (arquitectura).
+dónde, y cómo tirar todo abajo si hace falta. Arquitectura en [`ARCH.md`](ARCH.md); el
+flujo del deploy automático, en [`diagram.md`](diagram.md#2-despliegue-contenedores-y-cicd).
 Todo asume que estás parado en la raíz del repo, en el server (o en local con
 `docker compose` — es el mismo compose para los dos).
 
@@ -39,13 +39,11 @@ fijado en `docker-compose.yml`:
 docker inspect -f '{{.Config.Image}}' sia-unal-bridge-db-1
 ```
 
-`job` (refresher): todavía no existe como servicio (`docs/FASE-2.md`, sin
-implementar). Cuando lo esté, va a llevar el mismo `LABEL` que `api` — mismo
-comando, cambiando el nombre del contenedor.
+`refresher` no queda corriendo: es un contenedor de un solo uso (`docker compose
+--profile jobs run --rm refresher …`). Su imagen lleva el mismo `LABEL` que `api`.
 
-Ojo: como el deploy reconstruye servicios por separado (`--no-deps`, ver
-`internal/PLAN-CI-CD.md`), `api` y `web` pueden estar en versiones distintas entre sí en
-cualquier momento — es normal, no un bug.
+Ojo: como el deploy reconstruye servicios por separado (`--no-deps`), `api` y `web`
+pueden estar en versiones distintas entre sí en cualquier momento — es normal, no un bug.
 
 ---
 
@@ -65,7 +63,7 @@ docker compose build api && docker compose up -d --no-deps api
 ```
 
 `--no-deps` es a propósito — sin eso, compose reinicia también `db` si detecta
-que su config "cambió" (`internal/PLAN-CI-CD.md`, sección Riesgos).
+que su config "cambió".
 
 ## Logs
 

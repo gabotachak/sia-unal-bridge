@@ -5,8 +5,9 @@ cómo está armado el hexágono y por dónde viaja cada petición desde `main` h
 de vuelta.
 
 Este documento **explica**, no define. Si un diagrama y el código no coinciden, manda el
-código. El contrato HTTP está en `internal/httpapi/openapi.yaml` y las trampas del
-protocolo en [GOTCHAS.md](GOTCHAS.md).
+código. Los diagramas nombran constantes en vez de repetir valores: los números medidos
+del SIA están en [PROTOCOL.md §10](PROTOCOL.md), y los TTL en
+[API.md](API.md#frescura).
 
 **Índice**
 
@@ -67,8 +68,8 @@ flowchart LR
     refresher -- "SU PROPIO pool" --> sia
 ```
 
-La regla que importa: `conexiones(api) + conexiones(refresher) ≤ 80` sesiones ADF
-simultáneas. Es el techo medido del SIA ([OPEN-QUESTIONS.md](OPEN-QUESTIONS.md) §5).
+La regla que importa: `conexiones(api) + conexiones(refresher)` no supera el límite de
+sesiones simultáneas que aguanta el SIA ([PROTOCOL.md §10](PROTOCOL.md)).
 
 ---
 
@@ -192,7 +193,7 @@ Prohibido, y verificado por test:
 ## 5. Arranque: `cmd/bridge`
 
 `main.go` arma las piezas de adentro hacia afuera y arranca el servidor. El pool queda
-**usable** con 4 conexiones y termina de llenarse en segundo plano.
+**usable** con `readyBeforeServing` conexiones y termina de llenarse en segundo plano.
 
 ```mermaid
 sequenceDiagram
@@ -210,9 +211,9 @@ sequenceDiagram
     M->>S: store.New(DATABASE_URL)
     S-->>M: *Store sobre pgxpool
     M->>P: NewPool(SIA_BASE_URL, SIA_POOL_SIZE)
-    loop hasta 4 conexiones, en secuencia
+    loop readyBeforeServing conexiones, en secuencia
         P->>SIA: GET bootstrap (ViewState + cookies)
-        SIA-->>P: 52 KB a 4.5 MB
+        SIA-->>P: página completa
     end
     P-->>M: pool usable
     Note over P: go fill(): resto del pool<br/>de a una conexión
@@ -245,7 +246,7 @@ sequenceDiagram
     participant SIA as SIA ADF
 
     U->>MW: GET .../courses/2016696
-    MW->>MW: Recovery, requestID, logger,<br/>secureHeaders, rate limit por IP,<br/>timeout = SIA_ACQUIRE_TIMEOUT
+    MW->>MW: Recovery, requestID, logger,<br/>secureHeaders, rate limit por IP,<br/>timeout = SIA_ACQUIRE_TIMEOUT,<br/>laneByIP (carril de fondo)
     MW->>HD: next()
     HD->>SV: ResolveProgram(campus, faculty, code, level)
     SV->>ST: ReferenceFetchedAt + Programs
@@ -274,8 +275,8 @@ sequenceDiagram
     HD-->>U: 200 JSON + X-Cache, Age, Cache-Control
 ```
 
-Con la conexión ya parqueada en el programa son 2 POSTs y ~1.3 s. En frío son
-1 GET + 6 POSTs y ~10 s ([ARCH.md](ARCH.md), "Rutas mínimas medidas").
+Con la conexión ya parqueada en el programa son 2 POSTs; en frío, 1 GET + 6 POSTs
+([PROTOCOL.md §9](PROTOCOL.md)).
 
 ---
 
@@ -342,7 +343,8 @@ POST** visto de cuatro formas, así que comparten fetch, cache y cooldown.
 
 El cliente habla en códigos (`1101`, `2A74`, `pregrado`). El SIA navega por **posiciones**
 de dropdown, que son volátiles. `Service.coordinates` es el único sitio donde un código se
-convierte en índice, y lo hace leyendo la cache de referencia (TTL 30 días).
+convierte en índice, y lo hace leyendo la cache de referencia. Esas lecturas pasan por
+`store.Cached`, que las guarda en memoria.
 
 ```mermaid
 flowchart TD
@@ -353,10 +355,10 @@ flowchart TD
     rl --> cp["Campuses(pregrado): cache 'campuses:pregrado'<br/>¿fresco? si no, FetchCampuses (soc9)"]
     cp --> find{"¿existe campus 1101?"}
     find -- no --> nf["ErrNotFound → 404"]
-    find -- sí --> dir{"ReferenceFetchedAt<br/>'programs:1101:pregrado'<br/>¿fresco (30 d)?"}
+    find -- sí --> dir{"ReferenceFetchedAt<br/>'programs:1101:pregrado'<br/>¿fresco (FreshnessReference)?"}
     dir -- sí --> read["store.Programs(1101, faculty, pregrado)"]
     dir -- "no, pero hay copia" --> bg["refreshBehind: cascada<br/>en segundo plano"] --> read
-    dir -- "no hay nada" --> fetch["FetchProgramDirectory<br/>~15 POSTs, TODAS las facultades"] --> up["UpsertPrograms + sello TTL"] --> read
+    dir -- "no hay nada" --> fetch["FetchProgramDirectory<br/>cascada de TODAS las facultades"] --> up["UpsertPrograms + sello TTL"] --> read
     read --> match{"¿cuántos con code=2A74?"}
     match -- 0 --> nf
     match -- 1 --> ok["Program con LevelIdx, CampusIdx,<br/>FacultyIdx, ProgramIdx"]
@@ -377,7 +379,7 @@ detrás. Solo espera quien nunca abrió ese programa, o quien fuerza `?max_age=0
 ```mermaid
 flowchart TD
     in["GET …/programs/2A74/courses"] --> rp["ResolveProgram"]
-    rp --> fr{"catalog_fetched_at<br/>¿fresco? (7 d o ?max_age)"}
+    rp --> fr{"catalog_fetched_at<br/>¿fresco? (FreshnessCatalog o ?max_age)"}
     fr -- sí --> hit["store.ProgramCourses<br/>X-Cache: hit"]
     fr -- no --> forced{"¿max_age=0?"}
     forced -- no --> exists{"¿hay copia guardada?"}
@@ -411,11 +413,11 @@ Pero hay tres salidas antes de gastar un POST, y una red de seguridad si el SIA 
 ```mermaid
 flowchart TD
     in["CourseDetail(program, code, maxAge)"] --> d{"maxAge &lt; 0"}
-    d -- sí --> def["maxAge = 24 h"] --> q
+    d -- sí --> def["maxAge = FreshnessDetail"] --> q
     d -- no --> q["CourseProgramFetchedAt<br/>(programa, código)"]
     q --> f1{"¿fresco para maxAge?"}
     f1 -- sí --> hit["readCourse → hit"]
-    f1 -- no --> f2{"¿la visibilidad del programa<br/>tiene &lt; 24 h y TODOS sus grupos<br/>se midieron dentro de maxAge<br/>(desde cualquier programa)?"}
+    f1 -- no --> f2{"¿la visibilidad del programa<br/>está dentro de FreshnessDetail y TODOS sus grupos<br/>se midieron dentro de maxAge<br/>(desde cualquier programa)?"}
     f2 -- sí --> hit2["readCourse → hit<br/>los cupos son globales"]
     f2 -- no --> rd["refreshDetail<br/>(singleflight por programa:código)"]
     rd --> ok{"¿el SIA respondió?"}
@@ -425,8 +427,8 @@ flowchart TD
     keep -- no --> st["Sirve la copia vieja<br/>X-Cache: stale"]
 ```
 
-Dentro de `refreshDetail`, el nombre guardado filtra el listado por `it11` (de 241 KB
-a 15–27 KB). Si la tipología es libre elección, se busca primero en electivas.
+Dentro de `refreshDetail`, el nombre guardado filtra el listado por `it11`, que achica
+mucho la respuesta. Si la tipología es libre elección, se busca primero en electivas.
 
 Antes de todo esto, el handler aplica el **cooldown**: un `max_age` menor que
 `FETCH_COOLDOWN` sobre una asignatura recién traída responde `429 refresh_cooldown` con
@@ -436,7 +438,7 @@ Antes de todo esto, el handler aplica el **cooldown**: un `max_age` menor que
 
 ## 11. Flujo de cupos
 
-Los cupos son el único dato volátil (TTL 5 min). Pero nunca llegan solos: traerlos cuesta
+Los cupos son el único dato volátil (`FreshnessSeats`). Pero nunca llegan solos: traerlos cuesta
 el detalle completo. Por eso un miss de cupos **guarda todo** y devuelve solo la sección
 pedida.
 
@@ -454,7 +456,7 @@ sequenceDiagram
     H->>H: recordDemand + cooldown
     H->>S: SectionSeats(program, code, key=1, maxAge)
     S->>ST: Sections (vía section_program)
-    alt medición de menos de 5 min
+    alt medición dentro de FreshnessSeats
         ST-->>S: sección con Seats fresco
         S-->>H: hit
     else vieja o no visible desde este programa
@@ -482,8 +484,8 @@ Dos piezas en `catalog/service.go` evitan pedir al SIA lo mismo dos veces.
   cliente cancela, el fetch sigue: corre con `context.WithoutCancel` y el *deadline*
   original.
 - **`refreshBehind`**: la mitad *revalidate* del SWR. Como mucho un arranque por clave por
-  minuto. Corre en el carril de fondo del pool (`WithBackground`) con su propio timeout de
-  3 min.
+  `behindRetry`. Corre en el carril de fondo del pool (`WithBackground`) con su propio
+  timeout, `behindTimeout`.
 
 ```mermaid
 sequenceDiagram
@@ -533,7 +535,7 @@ flowchart TD
     run --> res{"resultado"}
     res -- ok --> rel["release: vuelve al canal"]
     res -- "error no recuperable" --> rep["repair: Volver o Bootstrap"] --> rel
-    res -- "noop o región vieja" --> boot["Bootstrap (contexto propio, 45 s)"]
+    res -- "noop o región vieja" --> boot["Bootstrap (contexto propio,<br/>rebootstrapTimeout)"]
     boot --> retry["fn(conn) una vez más"]
     retry -- ok --> rel
     retry -- "otra vez noop" --> mark["conn.suspect = true<br/>repair"] --> rel
@@ -545,6 +547,9 @@ Reglas que el pool impone:
   SIA no lo rechaza, le da a un hilo la respuesta del otro (GOTCHAS §28).
 - La reparación **nunca** usa el contexto del cliente: un cliente que cancela es justo el
   caso en que la conexión queda a mitad de operación.
+- `IsBackground` lo marca `httpapi.laneByIP`: toda petición con `?background=1`, y toda
+  petición de una IP que ya tiene `foregroundPerIP` en vuelo. Así ningún cliente toma más
+  de la mitad del pool.
 
 ---
 
@@ -567,8 +572,8 @@ stateDiagram-v2
     ListadoRegular --> Parqueada
     ListadoElectivas --> Parqueada
 
-    Bootstrapped --> Muerta: ~4.2 min sin tráfico
-    Parqueada --> Muerta: ~4.2 min sin tráfico
+    Bootstrapped --> Muerta: inactividad
+    Parqueada --> Muerta: inactividad
     Muerta --> Bootstrapped: Bootstrap (keepalive o Do)
 
     note right of Detalle_N
@@ -579,7 +584,8 @@ stateDiagram-v2
     end note
 ```
 
-En la región de detalle, cualquier acción del buscador es un **no-op de ~900 B**.
+En la región de detalle, cualquier acción del buscador es un **no-op**: una respuesta
+diminuta con status 200.
 `noop.go` lo convierte en `ErrSIANoop`. Nunca se trata como éxito.
 
 ---
@@ -608,7 +614,7 @@ sequenceDiagram
     Note over C,SIA: Cascada regular (FetchCatalog)
     C->>SIA: valueChange soc4=0 (si no está ahí)
     C->>SIA: action cb1 (viewportSize=999)
-    SIA-->>C: tabla t4, ~98 filas, 241 KB
+    SIA-->>C: tabla t4, todo el plan
     end
 
     rect rgba(120,220,160,0.12)
@@ -635,18 +641,20 @@ sequenceDiagram
 
 ## 16. Keepalive
 
-Una sesión muere a los ~4.2 min de silencio. Un ticker de 3 min no alcanza: una conexión
-liberada justo después de un tick llega al siguiente con 2:59 y se salta. Por eso el
-ticker corre cada **45 s** y hace ping a todo lo que lleve **≥ 2 min** quieto.
+Una sesión muere tras unos minutos de silencio ([GOTCHAS §7](GOTCHAS.md)). Un ticker con
+el mismo período que el umbral no alcanza: una conexión liberada justo después de un tick
+llega al siguiente sin haber cumplido el umbral, se salta, y muere antes del tick
+posterior. Por eso el ticker corre seguido (`keepaliveTick`) y hace ping a todo lo que
+lleve `keepaliveIdle` quieto, con margen contra el límite.
 
 ```mermaid
 flowchart LR
-    t["ticker 45 s"] --> drain["Saca del canal las conexiones LIBRES<br/>(las ocupadas no están ahí)"]
-    drain --> each{"por cada una:<br/>¿LastUsed ≥ 2 min?"}
+    t["ticker keepaliveTick"] --> drain["Saca del canal las conexiones LIBRES<br/>(las ocupadas no están ahí)"]
+    drain --> each{"por cada una:<br/>¿quieta desde keepaliveIdle?"}
     each -- no --> back["la devuelve al canal"]
     each -- sí --> ping["Ping: POST liviano"]
     ping -- ok --> back
-    ping -- "error o no-op ~900 B" --> boot["Bootstrap"] --> back
+    ping -- "error o no-op" --> boot["Bootstrap"] --> back
 ```
 
 ---
@@ -674,9 +682,10 @@ flowchart LR
 
 ## 18. El `Refresher`
 
-Hoy es una **herramienta manual**. Su cron se abandonó el 2026-09-21, porque el SWR de la
-API cubre lo que el cron cubría. Levanta su **propio pool** y entra por el mismo
-`catalog.Service` (con `ServeStale` apagado: él sí quiere esperar el fetch).
+Es una **herramienta manual**, sin cron: el stale-while-revalidate de la API cubre lo que
+un barrido periódico cubría. Levanta su **propio pool** y entra por el mismo
+`catalog.Service`, con `ServeStale` apagado: él sí quiere esperar el fetch. Reglas en
+[ARCH.md](ARCH.md#refresher).
 
 ```mermaid
 flowchart TD
@@ -685,7 +694,7 @@ flowchart TD
     en -- true --> st["store.New"]
     st --> lock{"pg_try_advisory_lock<br/>'refresh:mode'"}
     lock -- "ocupado" --> skip["exit 0: ya hay una corrida"]
-    lock -- ok --> pool["sia.NewPool PROPIO<br/>aviso si api + job &gt; 80"]
+    lock -- ok --> pool["sia.NewPool PROPIO<br/>aviso si api + job supera<br/>el límite del SIA"]
     pool --> svc["catalog.NewService<br/>(ServeStale = false)"]
     svc --> run["refresher.Run: StartRun en refresh_run"]
     run --> mode{"modo"}
@@ -799,16 +808,7 @@ Tablas de apoyo, sin relaciones de dominio:
 
 Esquema completo y sus decisiones en [DATA-MODEL.md](DATA-MODEL.md).
 
-### Frescura por recurso
-
-| Recurso | TTL por defecto | Marcador | Comportamiento al vencer |
-|---|---|---|---|
-| Referencia (niveles, sedes, programas) | 30 d | `reference_fetch.fetched_at` | SWR |
-| Catálogo de un programa | 7 d | `program.catalog_fetched_at` | SWR |
-| Detalle de una asignatura | 24 h | `course_program.detail_fetched_at` | espera; copia vieja si el SIA falla |
-| Cupos | 5 min | `seat_snapshot.measured_at` | espera |
-
-`?max_age=<segundos>` cambia el TTL de una petición. `?max_age=0` fuerza el SIA.
+Los TTL de cada marcador están en [API.md](API.md#frescura).
 
 ---
 

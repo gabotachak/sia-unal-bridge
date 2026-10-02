@@ -146,7 +146,7 @@ código solo tampoco identifica. Ver [GOTCHAS.md §26](GOTCHAS.md).
 
 ### Censo completo de los dropdowns (2026-08-15)
 
-Recorriendo `soc1 × soc9 × soc2 × soc3`: **142 POSTs, 78 s, 1380 entradas de programa**.
+Recorriendo `soc1 × soc9 × soc2 × soc3` (costo en [PROTOCOL §10](PROTOCOL.md)):
 
 | Nivel | Facultades | Entradas de programa |
 |---|---|---|
@@ -296,5 +296,5 @@ Tipos de prerrequisito, según explica la propia página:
 | `E` | lo matricula en simultáneo, o lo ha matriculado alguna vez |
 | `A` | anulación por incompatibilidad |
 
-Ninguno de los dos bloques está en `DATA-MODEL.md`. Llegan en el mismo POST del detalle:
+Ninguno de los dos bloques se guarda. Llegan en el mismo POST del detalle:
 modelarlos no cuesta red, solo parser.

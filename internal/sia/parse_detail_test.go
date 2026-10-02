@@ -74,6 +74,34 @@ func TestParseDetail_GroupLabelWithoutGrupoWord(t *testing.T) {
 	}
 }
 
+// TestParseDetail_SubtitleAfterGroupLabel: a group label followed by a
+// subtitle with digits — "(1) Grupo 1 - (Psioanálisis y psicoterapias -
+// 2021485)" — must stay ONE group with key "1". Before the fix the subtitle
+// matched groupHeaderRe's fallback arm as a second group and the whole
+// detail failed with ErrParseMismatch. Found live 2026-10-02 on 2A74/2021485.
+func TestParseDetail_SubtitleAfterGroupLabel(t *testing.T) {
+	d, err := ParseDetail(fixture(t, "detalle_2021485_subtitulo_tras_grupo_2026-10-02.xml"), "1101", "2021485", "2026-2")
+	if err != nil {
+		t.Fatalf("ParseDetail: %v", err)
+	}
+	if len(d.Sections) != 1 {
+		t.Fatalf("got %d sections, want 1", len(d.Sections))
+	}
+	s := d.Sections[0]
+	if s.Key != "1" || s.Number != 1 {
+		t.Errorf("got key %q number %d, want key 1 number 1", s.Key, s.Number)
+	}
+	if s.Instructor == "" {
+		t.Error("Instructor must not be empty")
+	}
+	if s.Seats == nil || s.Seats.Available != 9 {
+		t.Errorf("got seats %+v, want 9 (fixture: 'Cupos disponibles: 9')", s.Seats)
+	}
+	if len(s.Schedule) != 1 {
+		t.Errorf("got %d schedule sessions, want 1 (MARTES 08:00-11:00)", len(s.Schedule))
+	}
+}
+
 func TestParseDetail_2027641ZeroGroups(t *testing.T) {
 	d, err := ParseDetail(fixture(t, "detalle_2027641_0grupos_2026-08-15.xml"), "1101", "2027641", "2026-2")
 	// A course with no offering this term is VALID, not an error: the whole

@@ -123,20 +123,35 @@ func ParseDetail(raw []byte, campusCode, code, term string) (Detail, error) {
 		groupsEnd = prereqStart
 	}
 
-	locs := groupHeaderRe.FindAllStringIndex(text[:groupsEnd], -1)
-	sections := make([]catalog.Section, 0, len(locs))
-	for i, loc := range locs {
-		blockEnd := groupsEnd
-		if i+1 < len(locs) {
-			blockEnd = locs[i+1][0]
+	// A match that starts before the previous header has reached its
+	// "Profesor:" is part of that header, not a new group. Some groups carry
+	// a subtitle with digits right after the label — "(1) Grupo 1 -
+	// (Psioanálisis y psicoterapias - 2021485)" — and the fallback arm read
+	// it as a second group (found live 2026-10-02, 2A74/2021485). The key
+	// still comes from the FIRST match: the subtitle's paren is not a key.
+	type groupHeader struct{ start, keyEnd, end int }
+	var headers []groupHeader
+	for _, loc := range groupHeaderRe.FindAllStringIndex(text[:groupsEnd], -1) {
+		if n := len(headers); n > 0 && !strings.Contains(text[headers[n-1].start:loc[0]], profesorAnchor) {
+			headers[n-1].end = loc[1]
+			continue
 		}
-		header := text[loc[0]:loc[1]]
-		bodyStart := loc[1]
+		headers = append(headers, groupHeader{loc[0], loc[1], loc[1]})
+	}
+
+	sections := make([]catalog.Section, 0, len(headers))
+	for i, h := range headers {
+		blockEnd := groupsEnd
+		if i+1 < len(headers) {
+			blockEnd = headers[i+1].start
+		}
+		header := text[h.start:h.keyEnd]
+		bodyStart := h.end
 		// The fallback arm of groupHeaderRe consumes "Profesor:" as its
 		// anchor (RE2 has no lookahead) — hand it back to the body so
 		// profesorRe still finds it there.
-		if strings.HasSuffix(header, profesorAnchor) {
-			header = header[:len(header)-len(profesorAnchor)]
+		header = strings.TrimSuffix(header, profesorAnchor)
+		if strings.HasSuffix(text[h.start:h.end], profesorAnchor) {
 			bodyStart -= len(profesorAnchor)
 		}
 		body := text[bodyStart:blockEnd]

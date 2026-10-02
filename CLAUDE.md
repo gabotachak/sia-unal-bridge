@@ -42,6 +42,13 @@ en `docs/GOTCHAS.md`.
 `internal/config/constants_doc_test.go` falla si `CONSTANTS.md` y el código no
 coinciden. Una constante nueva que se mencione en la documentación entra a esa tabla.
 
+**Diagramas: Mermaid casi siempre.** Flujos, arquitectura, secuencias, estados y esquemas
+van en bloques ` ```mermaid `, nunca como dibujo ASCII ni como imagen. La excepción es
+**listar archivos o carpetas**: eso va como árbol de texto en un bloque de código (estilo
+`tree`, con un comentario corto por línea), porque se lee de arriba abajo igual que en el
+editor. Antes de hacer commit de un diagrama, renderízalo y míralo: si las flechas se
+cruzan o el orden sale invertido, reordénalo.
+
 ## Antes de hacer commit
 
 Lee **`docs/COMMIT-CONVENTION.md`**. `semantic-release` lee el mensaje del commit de
@@ -75,7 +82,7 @@ Las cuatro que más código han roto:
 | Ruta | Qué hay |
 |---|---|
 | `docs/ARCH.md` | **Arquitectura**: hexágono, read-through, pool de sesiones, `Refresher`, lo que no sabemos |
-| `docs/diagram.md` | Diagramas Mermaid de todo el proyecto: hexágono, flujos de cada petición, pool, esquema |
+| `docs/DIAGRAMS.md` | Diagramas Mermaid de todo el proyecto: hexágono, flujos de cada petición, pool, esquema |
 | `docs/CONSTANTS.md` | **El único documento con cifras**: medidas del SIA y constantes del código |
 | `docs/GOTCHAS.md` | **Las trampas verificadas contra el servidor. No se edita sin evidencia nueva** |
 | `docs/PROTOCOL.md` | Handshake ADF, POST por POST |

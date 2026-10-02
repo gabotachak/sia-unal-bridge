@@ -256,7 +256,7 @@ sequenceDiagram
 ```
 
 Qué hace cada paquete, y cada flujo en un diagrama: [`docs/ARCH.md`](docs/ARCH.md) y
-[`docs/diagram.md`](docs/diagram.md).
+[`docs/DIAGRAMS.md`](docs/DIAGRAMS.md).
 
 ### `SIASource` no es un cliente HTTP
 
@@ -308,7 +308,7 @@ resto enlaza.
 |---|---|
 | [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **Las trampas verificadas. Léelo antes de tocar el código.** |
 | [`docs/ARCH.md`](docs/ARCH.md) | Hexágono, read-through, pool de sesiones, `Refresher`, lo que no sabemos |
-| [`docs/diagram.md`](docs/diagram.md) | Todo el proyecto en diagramas Mermaid: hexágono, flujos, pool, esquema |
+| [`docs/DIAGRAMS.md`](docs/DIAGRAMS.md) | Todo el proyecto en diagramas Mermaid: hexágono, flujos, pool, esquema |
 | [`docs/CONSTANTS.md`](docs/CONSTANTS.md) | **El único documento con cifras**: medidas del SIA y constantes del código |
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | El handshake ADF, POST por POST |
 | [`docs/FIELDS.md`](docs/FIELDS.md) | Componentes ADF y las opciones de cada dropdown |

@@ -2,7 +2,7 @@
 
 Chuleta de comandos del día a día — deploy, migraciones, ver qué versión corre
 dónde, y cómo tirar todo abajo si hace falta. Arquitectura en [`ARCH.md`](ARCH.md); el
-flujo del deploy automático, en [`diagram.md`](diagram.md#2-despliegue-contenedores-y-cicd).
+flujo del deploy automático, en [`DIAGRAMS.md`](DIAGRAMS.md#2-despliegue-contenedores-y-cicd).
 Todo asume que estás parado en la raíz del repo, en el server (o en local con
 `docker compose` — es el mismo compose para los dos).
 

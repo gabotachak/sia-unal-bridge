@@ -149,7 +149,7 @@ src/
 
 ## More
 
-- [`docs/diagram.md`](../docs/diagram.md#20-la-interfaz-web): how the app is wired, as a
+- [`docs/DIAGRAMS.md`](../docs/DIAGRAMS.md#20-la-interfaz-web): how the app is wired, as a
   diagram (in Spanish).
 - [`../README.md`](../README.md): the whole project, the API and how it talks to the
   SIA.

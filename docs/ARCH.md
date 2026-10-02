@@ -1,7 +1,7 @@
 # Arquitectura
 
 API puente sobre el catálogo del SIA: traduce la navegación con estado de Oracle ADF a
-JSON. Los diagramas de cada flujo están en [diagram.md](diagram.md); este documento
+JSON. Los diagramas de cada flujo están en [DIAGRAMS.md](DIAGRAMS.md); este documento
 explica las reglas que esos diagramas dibujan.
 
 Aquí no hay cifras: se nombran las constantes, y sus valores están en

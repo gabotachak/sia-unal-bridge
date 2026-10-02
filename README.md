@@ -276,7 +276,7 @@ sequenceDiagram
 ```
 
 What each package does, and every flow as a diagram: [`docs/ARCH.md`](docs/ARCH.md) and
-[`docs/diagram.md`](docs/diagram.md).
+[`docs/DIAGRAMS.md`](docs/DIAGRAMS.md).
 
 ### `SIASource` is not an HTTP client
 
@@ -328,7 +328,7 @@ each measured number lives in one place and the rest link to it.
 |---|---|
 | [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | **The verified traps. Read it before touching the code.** |
 | [`docs/ARCH.md`](docs/ARCH.md) | Hexagon, read-through, session pool, `Refresher`, what we don't know |
-| [`docs/diagram.md`](docs/diagram.md) | The whole project in Mermaid diagrams: hexagon, request flows, pool, schema |
+| [`docs/DIAGRAMS.md`](docs/DIAGRAMS.md) | The whole project in Mermaid diagrams: hexagon, request flows, pool, schema |
 | [`docs/CONSTANTS.md`](docs/CONSTANTS.md) | **The only document with numbers**: the SIA's measurements and the code's constants |
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | The ADF handshake, POST by POST |
 | [`docs/FIELDS.md`](docs/FIELDS.md) | ADF components and the options of each dropdown |

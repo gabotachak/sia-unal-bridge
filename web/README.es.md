@@ -150,7 +150,7 @@ src/
 
 ## Más
 
-- [`docs/diagram.md`](../docs/diagram.md#20-la-interfaz-web): cómo está armada la
+- [`docs/DIAGRAMS.md`](../docs/DIAGRAMS.md#20-la-interfaz-web): cómo está armada la
   interfaz, en un diagrama.
 - [`../README.es.md`](../README.es.md): el proyecto entero, la API y cómo habla con el
   SIA.

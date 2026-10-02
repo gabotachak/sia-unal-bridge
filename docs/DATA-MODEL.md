@@ -24,7 +24,7 @@ Tablas de apoyo, sin relaciones de dominio:
 | `refresh_run` | la bitácora del `Refresher` |
 
 El diagrama entidad-relación con las columnas clave está en
-[diagram.md](diagram.md#19-modelo-de-datos).
+[DIAGRAMS.md](DIAGRAMS.md#19-modelo-de-datos).
 
 ---
 

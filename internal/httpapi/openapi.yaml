@@ -664,9 +664,11 @@ components:
                   - { program: "2515", name: "FARMACIA", campus_code: "1102", campus_name: "SEDE MEDELLÍN", faculty_code: "3", faculty_name: "SEDE MEDELLÍN" }
     SIAError:
       description: |
-        El SIA no respondió lo esperado. `sia_noop` es una respuesta vacía de ~900 B:
-        no es un error HTTP del SIA, es un no-op que se trata como error explícito en
-        vez de devolver datos incompletos.
+        El SIA no respondió lo esperado. `sia_noop` es una respuesta vacía
+        (`SIA_NOOP_BYTES`, docs/CONSTANTS.md): no es un error HTTP del SIA, es un no-op
+        que se trata como error explícito en vez de devolver datos incompletos.
+        `sia_parse_mismatch` es un detalle cuyos grupos no cuadran con su texto: se
+        rechaza antes de guardar nada, porque guardarlo inventaría o perdería grupos.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -922,6 +924,7 @@ components:
             - busy
             - sia_noop
             - sia_session_lost
+            - sia_parse_mismatch
             - internal
         message: { type: string }
         hint: { type: string }

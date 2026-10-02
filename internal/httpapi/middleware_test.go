@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -94,5 +96,18 @@ func TestLaneByIP_DemotesPastTheCapAndForgetsTheIP(t *testing.T) {
 	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/?background=1", nil))
 	if !<-lanes {
 		t.Fatal("?background=1 not in the background lane")
+	}
+}
+
+func TestWriteError_ParseMismatchIsBadGateway(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/", func(c *gin.Context) {
+		writeError(c, fmt.Errorf("%w: 2021485", catalog.ErrParseMismatch), "unknown_course")
+	})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+	if w.Code != http.StatusBadGateway || !strings.Contains(w.Body.String(), "sia_parse_mismatch") {
+		t.Fatalf("got %d %s, want 502 sia_parse_mismatch", w.Code, w.Body.String())
 	}
 }

@@ -52,6 +52,12 @@ func writeError(c *gin.Context, err error, notFoundCode string) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "sia_session_lost", "message": err.Error()})
 	case errors.Is(err, catalog.ErrSIANoop):
 		c.JSON(http.StatusBadGateway, gin.H{"error": "sia_noop", "message": "SIA returned an empty re-render"})
+	case errors.Is(err, catalog.ErrParseMismatch):
+		// The SIA answered, but with a shape the parser could not square
+		// with itself. Nothing was stored; it is the upstream page, not this
+		// process, that needs looking at.
+		slog.Warn("sia: detail did not parse cleanly", "err", err, "request_id", c.GetString("request_id"))
+		c.JSON(http.StatusBadGateway, gin.H{"error": "sia_parse_mismatch", "message": "SIA detail did not parse consistently"})
 	default:
 		slog.Error("unhandled error", "err", err, "request_id", c.GetString("request_id"))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal", "message": "internal server error"})

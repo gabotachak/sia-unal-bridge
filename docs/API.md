@@ -258,11 +258,12 @@ Son columnas distintas ([DATA-MODEL, decisión 4](DATA-MODEL.md)).
 
 | Situación | Código | `error` |
 |---|---|---|
-| Programa, asignatura o grupo desconocido | `404` | `unknown_program` · `unknown_course` · `unknown_section` |
+| Sede, nivel, programa, asignatura o grupo desconocido | `404` | `unknown_campus` · `unknown_level` · `unknown_program` · `unknown_course` · `unknown_section` |
 | Código ambiguo | `300` | `ambiguous_program` · `ambiguous_course` |
 | Existe pero **sin grupos** | `200` | — (`"sections": []`) |
 | El SIA devolvió un no-op, incluso tras sesión nueva | `502` | `sia_noop` |
 | Sesión del SIA perdida | `502` | `sia_session_lost` |
+| El detalle del SIA no cuadra con sus propios grupos | `502` | `sia_parse_mismatch` |
 | Pool ocupado hasta el timeout | `503` + `Retry-After` | `busy` |
 | `max_age` inválido | `400` | `bad_request` |
 | Refresco forzado antes del cooldown | `429` + `Retry-After` | `refresh_cooldown` |

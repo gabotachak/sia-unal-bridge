@@ -91,6 +91,7 @@ Las cuatro que más código han roto:
 | `docs/DATA-MODEL.md` | Las decisiones del esquema que no son obvias leyendo el DDL |
 | `docs/DEVELOPMENT.md` | Entorno: Docker, Postgres, fixtures, cómo replicar el flujo |
 | `docs/COMMANDS.md` | Chuleta: deploy, migraciones, qué versión corre dónde, cómo borrar todo |
+| `docs/TRABAJO-DE-GRADO.md` | Plan del Trabajo de Grado que usa este sistema como objeto de estudio. No describe el sistema |
 | `docs/COMMIT-CONVENTION.md` | **Formato de commits — leer antes de hacer commit** |
 | `web/README.md` | La interfaz: cómo correrla y cómo está armada |
 | `internal/httpapi/openapi.yaml` | **El contrato que manda.** `docs/API.md` explica el porqué, no la forma |

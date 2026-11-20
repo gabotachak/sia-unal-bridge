@@ -91,6 +91,9 @@ Las cuatro que más código han roto:
 | `docs/DATA-MODEL.md` | Las decisiones del esquema que no son obvias leyendo el DDL |
 | `docs/DEVELOPMENT.md` | Entorno: Docker, Postgres, fixtures, cómo replicar el flujo |
 | `docs/COMMANDS.md` | Chuleta: deploy, migraciones, qué versión corre dónde, cómo borrar todo |
+| `docs/trabajo-de-grado/README.md` | Plan del Trabajo de Grado (evaluación de calidad ISO/IEC 25010 y 25012 con mejora del sistema) que usa este sistema como objeto de estudio: objetivos, datos y sus límites, cronograma, riesgos. No describe el sistema |
+| `docs/trabajo-de-grado/METODOLOGIA.md` | Detalle de la metodología del Trabajo de Grado que no va en el registro: cada actividad, medidas, simulador, límites |
+| `docs/trabajo-de-grado/PLAN-2027-1S.md` | Plan de la fase 0: lo que hay que dejar listo antes de la inscripción de 2027-1S |
 | `docs/COMMIT-CONVENTION.md` | **Formato de commits — leer antes de hacer commit** |
 | `web/README.md` | La interfaz: cómo correrla y cómo está armada |
 | `internal/httpapi/openapi.yaml` | **El contrato que manda.** `docs/API.md` explica el porqué, no la forma |
